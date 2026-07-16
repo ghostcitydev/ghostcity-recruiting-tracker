@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Team {
+  id           String @id @default(cuid())
+  name         String @unique
+  shortName    String?
+  nickname     String?
+  conference   String
+  division     String?
+  logoUrl      String?
+  primaryColor String?
+
+  stats TeamSeasonStat[]
+}
+
+model Season {
+  id         String   @id @default(cuid())
+  year       Int      @unique
+  label      String
+  importedAt DateTime @default(now())
+  sourceFile String?
+
+  stats TeamSeasonStat[]
+}
+
+model TeamSeasonStat {
+  id       String @id @default(cuid())
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId   String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId String
+
+  overall        Int?
+  prestige       Int?
+  prestigeRank   Int?
+  recruitingRank Int?
+  teamRank       Int?
+
+  wins   Int?
+  losses Int?
+
+  transfersIn  Int?
+  transfersOut Int?
+
+  recruitCount     Int?
+  unsignedRecruits Int?
+  rosterSize       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, seasonId])
+}
