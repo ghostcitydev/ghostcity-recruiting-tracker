@@ -37,11 +37,15 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <h1 className="text-xl font-semibold text-zinc-100">Import a Dynasty Save</h1>
-      <p className="mt-2 text-sm text-zinc-400">
-        Point this at your CFB 27 DYNASTY save file. It&apos;s read-only — the file is only read, never modified.
-        Typical location: <code className="rounded bg-zinc-900 px-1 py-0.5 text-zinc-300">Documents\EA SPORTS College Football 27\saves\DYNASTY-...</code>
+    <div className="mx-auto max-w-2xl px-6 py-12">
+      <h1 className="text-xl font-bold" style={{ color: 'var(--ocean-100)' }}>Import Dynasty Save</h1>
+      <p className="mt-2 text-sm" style={{ color: 'var(--ocean-400)' }}>
+        Point this at your CFB 27 DYNASTY save file. Read-only — the file is never modified.
+        <br />
+        Typical location: <code
+          className="rounded px-1.5 py-0.5 text-xs"
+          style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}
+        >Documents\EA SPORTS College Football 27\saves\DYNASTY-...</code>
       </p>
 
       <form onSubmit={handleImport} className="mt-6 flex flex-col gap-3">
@@ -50,32 +54,41 @@ export default function ImportPage() {
           value={path}
           onChange={(e) => setPath(e.target.value)}
           placeholder={String.raw`C:\Users\you\Documents\EA SPORTS College Football 27\saves\DYNASTY-...`}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600"
+          className="rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors"
+          style={{
+            background: 'var(--ocean-900)',
+            borderColor: 'var(--ocean-700)',
+            color: 'var(--ocean-100)',
+          }}
         />
         <button
           type="submit"
           disabled={status === 'loading' || !path}
-          className="self-start rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
+          style={{ background: 'var(--ocean-600)' }}
         >
-          {status === 'loading' ? 'Importing…' : 'Import'}
+          {status === 'loading' ? 'Importing…' : 'Import Save'}
         </button>
       </form>
 
       {status === 'error' && (
-        <p className="mt-4 rounded-md border border-rose-800 bg-rose-950/50 px-3 py-2 text-sm text-rose-300">{error}</p>
+        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: '#991b1b', background: 'rgba(153,27,27,0.15)', color: '#fca5a5' }}>
+          {error}
+        </div>
       )}
 
       {status === 'done' && result && (
-        <div className="mt-4 rounded-md border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
-          <p>Imported season <strong>{result.seasonYear}</strong> — {result.teamsImported} teams.</p>
+        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
+          <p>Imported season <strong style={{ color: 'var(--ocean-100)' }}>{result.seasonYear}</strong> — {result.teamsImported} teams with recruit breakdowns.</p>
           {result.teamsSkipped.length > 0 && (
-            <p className="mt-1 text-emerald-400/70">Skipped (not real programs): {result.teamsSkipped.join(', ')}</p>
+            <p className="mt-1" style={{ color: 'var(--ocean-400)' }}>Skipped: {result.teamsSkipped.join(', ')}</p>
           )}
           <button
             onClick={() => router.push('/')}
-            className="mt-3 rounded-md bg-emerald-700 px-3 py-1.5 text-white hover:bg-emerald-600"
+            className="mt-3 rounded-lg px-4 py-2 text-sm font-medium text-white"
+            style={{ background: 'var(--ocean-600)' }}
           >
-            View dashboard
+            View Dashboard
           </button>
         </div>
       )}

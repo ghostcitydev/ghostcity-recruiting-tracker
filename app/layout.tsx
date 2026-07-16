@@ -28,19 +28,37 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
-        <header className="border-b border-zinc-800 bg-zinc-900/60">
-          <div className="mx-auto flex max-w-7xl items-center gap-6 px-6 py-3">
-            <span className="font-semibold tracking-tight text-zinc-100">CFB 27 Dynasty Tracker</span>
-            <nav className="flex gap-4 text-sm text-zinc-400">
-              <Link href="/" className="hover:text-zinc-100">Dashboard</Link>
-              <Link href="/charts" className="hover:text-zinc-100">Charts</Link>
-              <Link href="/import" className="hover:text-zinc-100">Import Save</Link>
+      <body className="min-h-full flex flex-col" style={{ background: 'var(--ocean-950)' }}>
+        <header
+          className="border-b"
+          style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+        >
+          <div className="mx-auto flex max-w-[1600px] items-center gap-8 px-6 py-3">
+            <span className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--ocean-300)' }}>
+              CFB 27 Tracker
+            </span>
+            <nav className="flex gap-1 text-sm">
+              <NavLink href="/">Dashboard</NavLink>
+              <NavLink href="/charts">Charts</NavLink>
+              <NavLink href="/import">Import</NavLink>
             </nav>
           </div>
         </header>
         <main className="flex-1">{children}</main>
       </body>
     </html>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+      style={{ color: 'var(--ocean-300)' }}
+      // hover handled via className
+    >
+      {children}
+    </Link>
   );
 }

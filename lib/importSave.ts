@@ -58,37 +58,70 @@ async function resolveConferences(franchise: any, teamTable: any): Promise<Map<s
   return mapping;
 }
 
-// Counts committed recruits per team for the current recruiting class by
-// resolving each Recruit board entry's Player reference and reading its
-// TeamIndex (255 = not yet committed to any school).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function countRecruitsByTeamIndex(franchise: any): Promise<Map<number, number>> {
-  const recruitTable = tableByName(franchise, 'Recruit');
-  await recruitTable.readRecords(['Player']);
+type RecruitBreakdown = {
+  total: number;
+  fiveStars: number;
+  fourStars: number;
+  threeStars: number;
+  twoStars: number;
+  oneStars: number;
+  hs: number;
+  transfer: number;
+};
 
-  const byPlayerTable = new Map<number, number[]>();
+function emptyBreakdown(): RecruitBreakdown {
+  return { total: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, hs: 0, transfer: 0 };
+}
+
+const STAR_MAP: Record<string, keyof RecruitBreakdown> = {
+  FIVE_STAR: 'fiveStars',
+  FOUR_STAR: 'fourStars',
+  THREE_STAR: 'threeStars',
+  TWO_STAR: 'twoStars',
+  ONE_STAR: 'oneStars',
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function analyzeRecruits(franchise: any): Promise<Map<number, RecruitBreakdown>> {
+  const recruitTable = tableByName(franchise, 'Recruit');
+  await recruitTable.readRecords(['Player', 'Class']);
+
+  const entries: { tableId: number; row: number; isTransfer: boolean }[] = [];
   for (const rec of recruitTable.records) {
     if (rec.isEmpty) continue;
     const ref = parseRef(rec.Player);
     if (!ref) continue;
-    if (!byPlayerTable.has(ref.tableId)) byPlayerTable.set(ref.tableId, []);
-    byPlayerTable.get(ref.tableId)!.push(ref.row);
+    const cls: string = rec.Class ?? '';
+    entries.push({ ...ref, isTransfer: cls.startsWith('JuniorCollege') });
   }
 
-  const counts = new Map<number, number>();
-  for (const [tableId, rows] of byPlayerTable) {
+  const byTable = new Map<number, typeof entries>();
+  for (const e of entries) {
+    if (!byTable.has(e.tableId)) byTable.set(e.tableId, []);
+    byTable.get(e.tableId)!.push(e);
+  }
+
+  const result = new Map<number, RecruitBreakdown>();
+  for (const [tableId, rows] of byTable) {
     const pt = franchise.getTableById(tableId);
-    await pt.readRecords(['TeamIndex']);
-    for (const row of rows) {
-      const prec = pt.records[row];
+    await pt.readRecords(['TeamIndex', 'ProspectStarRating']);
+    for (const entry of rows) {
+      const prec = pt.records[entry.row];
       if (!prec || prec.isEmpty) continue;
       let teamIndex: number;
       try { teamIndex = prec.TeamIndex; } catch { continue; }
-      if (teamIndex === 255 || teamIndex == null) continue; // uncommitted
-      counts.set(teamIndex, (counts.get(teamIndex) ?? 0) + 1);
+      if (teamIndex === 255 || teamIndex == null) continue;
+
+      if (!result.has(teamIndex)) result.set(teamIndex, emptyBreakdown());
+      const b = result.get(teamIndex)!;
+      b.total++;
+      if (entry.isTransfer) b.transfer++; else b.hs++;
+
+      const starField = STAR_MAP[prec.ProspectStarRating as string];
+      if (starField) (b[starField] as number)++;
     }
   }
-  return counts;
+  return result;
 }
 
 export type ImportResult = {
@@ -117,7 +150,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
   ]);
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const recruitCounts = await countRecruitsByTeamIndex(franchise);
+  const recruitData = await analyzeRecruits(franchise);
 
   const season = await prisma.season.upsert({
     where: { year },
@@ -158,36 +191,32 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
 
     const wins = (rec.ConfWin ?? 0) + (rec.NonConfWin ?? 0);
     const losses = (rec.ConfLoss ?? 0) + (rec.NonConfLoss ?? 0);
-    const recruitCount = recruitCounts.get(rec.TeamIndex) ?? 0;
+    const rb = recruitData.get(rec.TeamIndex) ?? emptyBreakdown();
+
+    const statPayload = {
+      overall: rec.TEAM_RATINGOVR ?? null,
+      prestige: rec.TeamPrestige ?? null,
+      prestigeRank: rec.PrestigeRank ?? null,
+      recruitingRank: rec.TopClassRank ?? null,
+      teamRank: rec.TeamRank ?? null,
+      wins, losses,
+      transfersIn: rec.LastSeasonTransfersSigned ?? null,
+      transfersOut: rec.LastSeasonTransfersLost ?? null,
+      recruitCount: rb.total,
+      rosterSize: rec.ActiveRosterSize ?? null,
+      fiveStars: rb.fiveStars,
+      fourStars: rb.fourStars,
+      threeStars: rb.threeStars,
+      twoStars: rb.twoStars,
+      oneStars: rb.oneStars,
+      hsRecruits: rb.hs,
+      transferRecruits: rb.transfer,
+    };
 
     await prisma.teamSeasonStat.upsert({
       where: { teamId_seasonId: { teamId: team.id, seasonId: season.id } },
-      update: {
-        overall: rec.TEAM_RATINGOVR ?? null,
-        prestige: rec.TeamPrestige ?? null,
-        prestigeRank: rec.PrestigeRank ?? null,
-        recruitingRank: rec.TopClassRank ?? null,
-        teamRank: rec.TeamRank ?? null,
-        wins, losses,
-        transfersIn: rec.LastSeasonTransfersSigned ?? null,
-        transfersOut: rec.LastSeasonTransfersLost ?? null,
-        recruitCount,
-        rosterSize: rec.ActiveRosterSize ?? null,
-      },
-      create: {
-        teamId: team.id,
-        seasonId: season.id,
-        overall: rec.TEAM_RATINGOVR ?? null,
-        prestige: rec.TeamPrestige ?? null,
-        prestigeRank: rec.PrestigeRank ?? null,
-        recruitingRank: rec.TopClassRank ?? null,
-        teamRank: rec.TeamRank ?? null,
-        wins, losses,
-        transfersIn: rec.LastSeasonTransfersSigned ?? null,
-        transfersOut: rec.LastSeasonTransfersLost ?? null,
-        recruitCount,
-        rosterSize: rec.ActiveRosterSize ?? null,
-      },
+      update: statPayload,
+      create: { teamId: team.id, seasonId: season.id, ...statPayload },
     });
 
     teamsImported++;

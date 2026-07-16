@@ -21,6 +21,8 @@ type HistoryRow = {
   transfersIn: number | null;
   transfersOut: number | null;
   recruitCount: number | null;
+  fiveStars: number | null;
+  fourStars: number | null;
   team: { id: string; name: string; conference: string };
   season: { id: string; year: number };
 };
@@ -32,6 +34,8 @@ const INDICATORS = [
   { key: 'transfersIn', label: 'Transfers In' },
   { key: 'transfersOut', label: 'Transfers Out' },
   { key: 'recruitCount', label: 'Recruits Signed' },
+  { key: 'fiveStars', label: '5-Star Recruits' },
+  { key: 'fourStars', label: '4-Star Recruits' },
 ] as const;
 type IndicatorKey = (typeof INDICATORS)[number]['key'];
 
@@ -67,7 +71,6 @@ export default function ChartsPage() {
   }, [history, conferenceFilter]);
 
   useEffect(() => {
-    // default-select first 5 teams whenever the conference filter changes
     setSelectedTeams(teamsInConference.slice(0, 5).map(([id]) => id));
   }, [teamsInConference]);
 
@@ -100,35 +103,40 @@ export default function ChartsPage() {
     setSelectedTeams((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
 
-  if (loading) return <div className="p-6 text-zinc-400">Loading…</div>;
+  if (loading) return <div className="p-8" style={{ color: 'var(--ocean-400)' }}>Loading…</div>;
 
   if (!history.length) {
-    return <div className="mx-auto max-w-2xl px-6 py-16 text-center text-zinc-400">No data yet — import a save first.</div>;
+    return <div className="mx-auto max-w-2xl px-6 py-20 text-center" style={{ color: 'var(--ocean-400)' }}>No data yet — import a save first.</div>;
   }
 
   const indicatorLabel = INDICATORS.find((i) => i.key === indicator)?.label ?? indicator;
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        <div>
-          <label className="mr-2 text-sm text-zinc-400">Indicator</label>
+    <div className="mx-auto max-w-[1600px] px-6 py-5">
+      <div
+        className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3"
+        style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Indicator</span>
           <select
             value={indicator}
             onChange={(e) => setIndicator(e.target.value as IndicatorKey)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+            className="rounded-md border px-2.5 py-1.5 text-sm font-medium outline-none"
+            style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
           >
             {INDICATORS.map((i) => (
               <option key={i.key} value={i.key}>{i.label}</option>
             ))}
           </select>
         </div>
-        <div>
-          <label className="mr-2 text-sm text-zinc-400">Conference</label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Conference</span>
           <select
             value={conferenceFilter}
             onChange={(e) => setConferenceFilter(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+            className="rounded-md border px-2.5 py-1.5 text-sm font-medium outline-none"
+            style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
           >
             {conferences.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -137,34 +145,48 @@ export default function ChartsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-300">{indicatorLabel} by Season</h2>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+        <div
+          className="rounded-lg border p-5"
+          style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+        >
+          <h2 className="mb-4 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>{indicatorLabel} by Season</h2>
           <Line
             data={chartData}
             options={{
               responsive: true,
               scales: {
-                x: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                x: {
+                  ticks: { color: '#5a9ad4' },
+                  grid: { color: 'rgba(19,45,84,0.8)' },
+                },
                 y: {
                   reverse: indicator === 'recruitingRank',
-                  ticks: { color: '#a1a1aa' },
-                  grid: { color: '#27272a' },
+                  ticks: { color: '#5a9ad4' },
+                  grid: { color: 'rgba(19,45,84,0.8)' },
                 },
               },
               plugins: {
-                legend: { labels: { color: '#d4d4d8' } },
+                legend: { labels: { color: '#b8d8f2' } },
               },
             }}
           />
         </div>
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-300">Teams</h2>
-          <div className="flex max-h-96 flex-col gap-1 overflow-y-auto text-sm">
+        <div
+          className="rounded-lg border p-4"
+          style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+        >
+          <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>Teams</h2>
+          <div className="flex max-h-[500px] flex-col gap-1 overflow-y-auto text-sm">
             {teamsInConference.map(([id, name]) => (
-              <label key={id} className="flex items-center gap-2 text-zinc-300">
-                <input type="checkbox" checked={selectedTeams.includes(id)} onChange={() => toggleTeam(id)} />
+              <label key={id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 transition-colors" style={{ color: 'var(--ocean-200)' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedTeams.includes(id)}
+                  onChange={() => toggleTeam(id)}
+                  className="accent-blue-500"
+                />
                 {name}
               </label>
             ))}

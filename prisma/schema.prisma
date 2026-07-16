@@ -53,6 +53,15 @@ model TeamSeasonStat {
   unsignedRecruits Int?
   rosterSize       Int?
 
+  fiveStars  Int?
+  fourStars  Int?
+  threeStars Int?
+  twoStars   Int?
+  oneStars   Int?
+
+  hsRecruits       Int?
+  transferRecruits Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -16,7 +16,13 @@ type TeamStat = {
   transfersIn: number | null;
   transfersOut: number | null;
   recruitCount: number | null;
-  unsignedRecruits: number | null;
+  fiveStars: number | null;
+  fourStars: number | null;
+  threeStars: number | null;
+  twoStars: number | null;
+  oneStars: number | null;
+  hsRecruits: number | null;
+  transferRecruits: number | null;
   rosterSize: number | null;
   team: {
     id: string;
@@ -27,14 +33,18 @@ type TeamStat = {
   };
 };
 
-type SortKey = 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank' | 'record' | 'transfersIn' | 'transfersOut' | 'recruitCount';
+type SortKey =
+  | 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank'
+  | 'record' | 'transfersIn' | 'transfersOut' | 'recruitCount'
+  | 'fiveStars' | 'fourStars' | 'threeStars';
 
 export default function Dashboard() {
   const [seasons, setSeasons] = useState<Season[]>([]);
-  const [seasonId, setSeasonId] = useState<string>('');
+  const [seasonId, setSeasonId] = useState('');
   const [stats, setStats] = useState<TeamStat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [conferenceFilter, setConferenceFilter] = useState<string>('All');
+  const [conferenceFilter, setConferenceFilter] = useState('All');
+  const [recruitTypeFilter, setRecruitTypeFilter] = useState<'all' | 'hs' | 'transfer'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -67,47 +77,52 @@ export default function Dashboard() {
         case 'prestige': return dir * ((a.prestige ?? -1) - (b.prestige ?? -1));
         case 'recruitingRank': {
           const av = a.recruitingRank ?? 9999, bv = b.recruitingRank ?? 9999;
-          return -dir * (av - bv); // lower rank number = better, so invert
+          return -dir * (av - bv);
         }
         case 'record': return dir * ((a.wins ?? 0) - (a.losses ?? 0) - ((b.wins ?? 0) - (b.losses ?? 0)));
         case 'transfersIn': return dir * ((a.transfersIn ?? -1) - (b.transfersIn ?? -1));
         case 'transfersOut': return dir * ((a.transfersOut ?? -1) - (b.transfersOut ?? -1));
         case 'recruitCount': return dir * ((a.recruitCount ?? -1) - (b.recruitCount ?? -1));
+        case 'fiveStars': return dir * ((a.fiveStars ?? -1) - (b.fiveStars ?? -1));
+        case 'fourStars': return dir * ((a.fourStars ?? -1) - (b.fourStars ?? -1));
+        case 'threeStars': return dir * ((a.threeStars ?? -1) - (b.threeStars ?? -1));
         default: return 0;
       }
     });
     return filtered;
   }, [stats, conferenceFilter, sortKey, sortDir]);
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
+  const totals = useMemo(() => {
+    let five = 0, four = 0, three = 0, two = 0, one = 0;
+    for (const r of rows) {
+      five += r.fiveStars ?? 0;
+      four += r.fourStars ?? 0;
+      three += r.threeStars ?? 0;
+      two += r.twoStars ?? 0;
+      one += r.oneStars ?? 0;
     }
+    return { five, four, three, two, one, total: five + four + three + two + one };
+  }, [rows]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('desc'); }
   }
 
-  function Th({ label, sortKeyName }: { label: string; sortKeyName: SortKey }) {
-    const active = sortKey === sortKeyName;
-    return (
-      <th
-        onClick={() => toggleSort(sortKeyName)}
-        className={`cursor-pointer select-none px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide ${active ? 'text-zinc-100' : 'text-zinc-500'} hover:text-zinc-200`}
-      >
-        {label}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-      </th>
-    );
-  }
-
-  if (loading) return <div className="p-6 text-zinc-400">Loading…</div>;
+  if (loading) return <div className="p-8" style={{ color: 'var(--ocean-400)' }}>Loading…</div>;
 
   if (!seasons.length) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-16 text-center">
-        <h1 className="text-xl font-semibold text-zinc-100">No seasons imported yet</h1>
-        <p className="mt-2 text-zinc-400">Import your CFB 27 dynasty save to see team overalls, recruiting ranks, transfers, and more.</p>
-        <Link href="/import" className="mt-6 inline-block rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500">
+      <div className="mx-auto max-w-2xl px-6 py-20 text-center">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--ocean-100)' }}>No seasons imported yet</h1>
+        <p className="mt-3 text-sm" style={{ color: 'var(--ocean-400)' }}>
+          Import your CFB 27 dynasty save to see team overalls, recruiting ranks, transfers, and more.
+        </p>
+        <Link
+          href="/import"
+          className="mt-8 inline-block rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
+          style={{ background: 'var(--ocean-600)' }}
+        >
           Import a save file
         </Link>
       </div>
@@ -115,74 +130,181 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <div>
-          <label className="mr-2 text-sm text-zinc-400">Season</label>
-          <select
-            value={seasonId}
-            onChange={(e) => setSeasonId(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
-          >
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>{s.label}</option>
-            ))}
-          </select>
+    <div className="mx-auto max-w-[1600px] px-6 py-5">
+      {/* Controls bar */}
+      <div
+        className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3"
+        style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+      >
+        <ControlGroup label="Season">
+          <Select value={seasonId} onChange={setSeasonId}>
+            {seasons.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </Select>
+        </ControlGroup>
+
+        <ControlGroup label="Conference">
+          <Select value={conferenceFilter} onChange={setConferenceFilter}>
+            {conferences.map((c) => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </ControlGroup>
+
+        <ControlGroup label="Recruits">
+          <Select value={recruitTypeFilter} onChange={(v) => setRecruitTypeFilter(v as 'all' | 'hs' | 'transfer')}>
+            <option value="all">All</option>
+            <option value="hs">High School</option>
+            <option value="transfer">Transfers</option>
+          </Select>
+        </ControlGroup>
+
+        <div className="ml-auto flex items-center gap-4 text-xs" style={{ color: 'var(--ocean-400)' }}>
+          <span>{rows.length} teams</span>
         </div>
-        <div>
-          <label className="mr-2 text-sm text-zinc-400">Conference</label>
-          <select
-            value={conferenceFilter}
-            onChange={(e) => setConferenceFilter(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
-          >
-            {conferences.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-        <span className="text-sm text-zinc-500">{rows.length} teams</span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-800">
+      {/* Star summary cards */}
+      <div className="mb-4 grid grid-cols-6 gap-2">
+        <StarCard label="5-Star" count={totals.five} color="#fbbf24" />
+        <StarCard label="4-Star" count={totals.four} color="#a78bfa" />
+        <StarCard label="3-Star" count={totals.three} color="#60a5fa" />
+        <StarCard label="2-Star" count={totals.two} color="#34d399" />
+        <StarCard label="1-Star" count={totals.one} color="#94a3b8" />
+        <StarCard label="Total" count={totals.total} color="var(--ocean-300)" />
+      </div>
+
+      {/* Table */}
+      <div
+        className="overflow-x-auto rounded-lg border"
+        style={{ borderColor: 'var(--ocean-800)' }}
+      >
         <table className="w-full border-collapse text-sm">
-          <thead className="bg-zinc-900">
-            <tr>
-              <th className="px-3 py-2"></th>
-              <Th label="Team" sortKeyName="name" />
-              <Th label="Conference" sortKeyName="conference" />
-              <Th label="OVR" sortKeyName="overall" />
-              <Th label="Prestige" sortKeyName="prestige" />
-              <Th label="Recruit Rank" sortKeyName="recruitingRank" />
-              <Th label="Record" sortKeyName="record" />
-              <Th label="Transfers In" sortKeyName="transfersIn" />
-              <Th label="Transfers Out" sortKeyName="transfersOut" />
-              <Th label="Recruits Signed" sortKeyName="recruitCount" />
+          <thead>
+            <tr style={{ background: 'var(--ocean-900)' }}>
+              <th className="w-10 px-3 py-2.5"></th>
+              <Th label="Team" k="name" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Conf" k="conference" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="OVR" k="overall" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Prestige" k="prestige" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Rank" k="recruitingRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Record" k="record" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="In" k="transfersIn" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Out" k="transfersOut" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="★5" k="fiveStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="★4" k="fourStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="★3" k="threeStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              {recruitTypeFilter !== 'all' ? null : (
+                <>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.id} className={i % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/40'}>
+              <tr
+                key={r.id}
+                className="transition-colors"
+                style={{
+                  background: i % 2 === 0 ? 'var(--ocean-950)' : 'rgba(13,31,60,0.5)',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--ocean-800)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'var(--ocean-950)' : 'rgba(13,31,60,0.5)'}
+              >
                 <td className="px-3 py-2">
                   {r.team.logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.team.logoUrl} alt="" className="h-6 w-6 object-contain" />
-                  ) : null}
+                  ) : <div className="h-6 w-6 rounded" style={{ background: 'var(--ocean-800)' }} />}
                 </td>
-                <td className="px-3 py-2 font-medium text-zinc-100">{r.team.name}</td>
-                <td className="px-3 py-2 text-zinc-400">{r.team.conference}</td>
-                <td className="px-3 py-2 tabular-nums text-zinc-200">{r.overall ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums text-zinc-200">{r.prestige ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums text-zinc-200">{r.recruitingRank ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums text-zinc-200">{r.wins ?? 0}-{r.losses ?? 0}</td>
-                <td className="px-3 py-2 tabular-nums text-emerald-400">{r.transfersIn ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums text-rose-400">{r.transfersOut ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums text-zinc-200">{r.recruitCount ?? '—'}</td>
+                <td className="px-3 py-2 font-medium" style={{ color: 'var(--ocean-100)' }}>{r.team.name}</td>
+                <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-400)' }}>{r.team.conference}</td>
+                <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: ovrColor(r.overall) }}>{r.overall ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.recruitingRank ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{r.transfersIn ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: '#fb7185' }}>{r.transfersOut ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: '#fbbf24' }}>{r.fiveStars || '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: '#a78bfa' }}>{r.fourStars || '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: '#60a5fa' }}>{r.threeStars || '—'}</td>
+                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: 'var(--ocean-200)' }}>{r.recruitCount ?? '—'}</td>
+                {recruitTypeFilter !== 'all' ? null : (
+                  <>
+                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.hsRecruits ?? '—'}</td>
+                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.transferRecruits ?? '—'}</td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function ovrColor(ovr: number | null): string {
+  if (ovr == null) return 'var(--ocean-400)';
+  if (ovr >= 88) return '#34d399';
+  if (ovr >= 80) return '#60a5fa';
+  if (ovr >= 72) return '#fbbf24';
+  return '#fb7185';
+}
+
+function ControlGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function Select({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-md border px-2.5 py-1.5 text-sm font-medium outline-none"
+      style={{
+        background: 'var(--ocean-800)',
+        borderColor: 'var(--ocean-700)',
+        color: 'var(--ocean-100)',
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
+function StarCard({ label, count, color }: { label: string; count: number; color: string }) {
+  return (
+    <div
+      className="flex flex-col items-center rounded-lg border px-3 py-2.5"
+      style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
+    >
+      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>{label}</span>
+      <span className="mt-0.5 text-xl font-bold tabular-nums" style={{ color }}>{count}</span>
+    </div>
+  );
+}
+
+function Th({ label, k, sortKey, sortDir, onClick }: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  sortDir: 'asc' | 'desc';
+  onClick: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <th
+      onClick={() => onClick(k)}
+      className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide transition-colors"
+      style={{ color: active ? 'var(--ocean-100)' : 'var(--ocean-500)' }}
+    >
+      {label}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+    </th>
   );
 }
