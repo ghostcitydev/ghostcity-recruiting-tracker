@@ -17,8 +17,9 @@ model Team {
   logoUrl      String?
   primaryColor String?
 
-  stats     TeamSeasonStat[]
-  pipelines TeamPipeline[]
+  stats            TeamSeasonStat[]
+  pipelines        TeamPipeline[]
+  pipelineRecruits TeamPipelineRecruit[]
 }
 
 model Season {
@@ -28,9 +29,10 @@ model Season {
   importedAt DateTime @default(now())
   sourceFile String?
 
-  stats     TeamSeasonStat[]
-  settings  SeasonSettings?
-  pipelines TeamPipeline[]
+  stats            TeamSeasonStat[]
+  settings         SeasonSettings?
+  pipelines        TeamPipeline[]
+  pipelineRecruits TeamPipelineRecruit[]
 }
 
 model SeasonSettings {
@@ -172,6 +174,23 @@ model TeamPipeline {
   pipeline String
   level    String
   value    Int
+
+  @@unique([teamId, seasonId, pipeline])
+}
+
+model TeamPipelineRecruit {
+  id         String @id @default(cuid())
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId     String
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId   String
+  pipeline   String
+  fiveStars  Int @default(0)
+  fourStars  Int @default(0)
+  threeStars Int @default(0)
+  twoStars   Int @default(0)
+  oneStars   Int @default(0)
+  total      Int @default(0)
 
   @@unique([teamId, seasonId, pipeline])
 }

@@ -14,6 +14,20 @@ type PipelineRow = {
   team: { name: string; conference: string; logoUrl: string | null };
 };
 
+type RecruitRow = {
+  id: string;
+  teamId: string;
+  seasonId: string;
+  pipeline: string;
+  fiveStars: number;
+  fourStars: number;
+  threeStars: number;
+  twoStars: number;
+  oneStars: number;
+  total: number;
+  team: { name: string; conference: string; logoUrl: string | null };
+};
+
 const PIPELINE_LABELS: Record<string, string> = {
   Alabama: 'Alabama', Arizona: 'Arizona', Arkansas: 'Arkansas',
   BigApple: 'New York Metro', BigSky: 'Big Sky (MT/ID/WY)', CentralFlorida: 'Central Florida',
@@ -61,19 +75,33 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
+function StarCell({ n, color }: { n: number; color: string }) {
+  if (n === 0) return <span style={{ color: 'var(--ocean-600)', fontVariantNumeric: 'tabular-nums' }}>—</span>;
+  return <span style={{ color, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{n}</span>;
+}
+
 type ViewMode = 'team' | 'region';
-type SortKey = 'team' | 'conference' | 'value' | 'level';
+type DataMode = 'influence' | 'recruits';
+type SortKey = 'team' | 'conference' | 'value' | 'level' | 'total' | 'fiveStars' | 'fourStars' | 'threeStars';
 
 const P4 = new Set(['ACC', 'Big 12', 'Big Ten', 'SEC']);
 const G5 = new Set(['American', 'CUSA', 'MAC', 'MWC', 'Sun Belt', 'Pac-12']);
+
+const TH_STYLE = {
+  padding: '8px 12px', textAlign: 'left' as const,
+  color: 'var(--ocean-400)', fontWeight: 400,
+  fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase' as const,
+};
 
 export default function PipelinesPage() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [rows, setRows] = useState<PipelineRow[]>([]);
+  const [recruitRows, setRecruitRows] = useState<RecruitRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('team');
+  const [dataMode, setDataMode] = useState<DataMode>('influence');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('');
   const [conferenceFilter, setConferenceFilter] = useState('All');
@@ -91,19 +119,21 @@ export default function PipelinesPage() {
   useEffect(() => {
     if (!selectedSeasonId) return;
     setLoading(true);
-    fetch(`/api/pipelines?seasonId=${selectedSeasonId}`)
-      .then(r => r.json())
-      .then((data: PipelineRow[]) => { setRows(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch(`/api/pipelines?seasonId=${selectedSeasonId}`).then(r => r.json()),
+      fetch(`/api/pipeline-recruits?seasonId=${selectedSeasonId}`).then(r => r.json()),
+    ]).then(([pipelineData, recruitData]: [PipelineRow[], RecruitRow[]]) => {
+      setRows(pipelineData);
+      setRecruitRows(recruitData);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [selectedSeasonId]);
 
-  // All unique team names for the team selector
   const teamNames = useMemo(() => {
     const names = [...new Set(rows.map(r => r.team.name))].sort();
     return names;
   }, [rows]);
 
-  // All unique region keys present in data
   const regionKeys = useMemo(() => {
     const keys = [...new Set(rows.map(r => r.pipeline))].sort((a, b) =>
       (PIPELINE_LABELS[a] ?? a).localeCompare(PIPELINE_LABELS[b] ?? b)
@@ -111,7 +141,6 @@ export default function PipelinesPage() {
     return keys;
   }, [rows]);
 
-  // Initialize selectors when data loads
   useEffect(() => {
     if (teamNames.length && !selectedTeam) setSelectedTeam(teamNames[0]);
   }, [teamNames, selectedTeam]);
@@ -120,7 +149,13 @@ export default function PipelinesPage() {
     if (regionKeys.length && !selectedRegion) setSelectedRegion(regionKeys[0]);
   }, [regionKeys, selectedRegion]);
 
-  // Team view: pipelines for selected team
+  // Reset sort key when switching data modes
+  useEffect(() => {
+    if (dataMode === 'influence') setSortKey('value');
+    else setSortKey('total');
+    setSortAsc(false);
+  }, [dataMode]);
+
   const teamViewRows = useMemo(() => {
     if (viewMode !== 'team' || !selectedTeam) return [];
     return rows
@@ -128,8 +163,16 @@ export default function PipelinesPage() {
       .sort((a, b) => b.value - a.value);
   }, [rows, viewMode, selectedTeam]);
 
-  // Region view: all teams ranked in selected region
+  // Team recruit view: per-pipeline breakdown for selected team
+  const teamRecruitRows = useMemo(() => {
+    if (viewMode !== 'team' || !selectedTeam) return [];
+    return recruitRows
+      .filter(r => r.team.name === selectedTeam)
+      .sort((a, b) => b.total - a.total);
+  }, [recruitRows, viewMode, selectedTeam]);
+
   const minLevelOrder = LEVEL_ORDER[minLevel] ?? 2;
+
   const regionViewRows = useMemo(() => {
     if (viewMode !== 'region' || !selectedRegion) return [];
     let filtered = rows.filter(r =>
@@ -152,7 +195,28 @@ export default function PipelinesPage() {
     return filtered;
   }, [rows, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc, minLevelOrder]);
 
-  // All conferences for the filter
+  // Region recruit view: all schools that recruited from selected region
+  const regionRecruitRows = useMemo(() => {
+    if (viewMode !== 'region' || !selectedRegion) return [];
+    let filtered = recruitRows.filter(r => r.pipeline === selectedRegion);
+
+    if (conferenceFilter === 'Power 4') filtered = filtered.filter(r => P4.has(r.team.conference));
+    else if (conferenceFilter === 'Group of 5') filtered = filtered.filter(r => G5.has(r.team.conference));
+    else if (conferenceFilter !== 'All') filtered = filtered.filter(r => r.team.conference === conferenceFilter);
+
+    filtered.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'total') cmp = a.total - b.total;
+      else if (sortKey === 'fiveStars') cmp = a.fiveStars - b.fiveStars;
+      else if (sortKey === 'fourStars') cmp = a.fourStars - b.fourStars;
+      else if (sortKey === 'threeStars') cmp = a.threeStars - b.threeStars;
+      else if (sortKey === 'team') cmp = a.team.name.localeCompare(b.team.name);
+      else if (sortKey === 'conference') cmp = a.team.conference.localeCompare(b.team.conference);
+      return sortAsc ? cmp : -cmp;
+    });
+    return filtered;
+  }, [recruitRows, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc]);
+
   const conferences = useMemo(() => {
     return [...new Set(rows.map(r => r.team.conference))].sort();
   }, [rows]);
@@ -162,92 +226,86 @@ export default function PipelinesPage() {
     else { setSortKey(key); setSortAsc(false); }
   }
 
-  function SortHeader({ label, k }: { label: string; k: SortKey }) {
+  function SortHeader({ label, k, right }: { label: string; k: SortKey; right?: boolean }) {
     const active = sortKey === k;
     return (
       <th
         onClick={() => toggleSort(k)}
-        style={{ cursor: 'pointer', userSelect: 'none', padding: '8px 12px', textAlign: 'left',
-          color: active ? 'var(--ocean-100)' : 'var(--ocean-400)', fontWeight: active ? 700 : 400,
-          fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+        style={{
+          cursor: 'pointer', userSelect: 'none', padding: '8px 12px',
+          textAlign: right ? 'right' : 'left',
+          color: active ? 'var(--ocean-100)' : 'var(--ocean-400)',
+          fontWeight: active ? 700 : 400,
+          fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase',
+        }}
       >
         {label} {active ? (sortAsc ? '▲' : '▼') : ''}
       </th>
     );
   }
 
+  const selStyle = {
+    background: 'var(--ocean-800)', color: 'var(--ocean-100)',
+    border: '1px solid var(--ocean-700)', borderRadius: 6,
+    padding: '6px 10px', fontSize: '0.875rem',
+  };
+
+  const toggleBtnStyle = (active: boolean) => ({
+    padding: '6px 16px', fontSize: '0.8rem', fontWeight: 600,
+    background: active ? 'var(--ocean-600)' : 'var(--ocean-800)',
+    color: active ? 'var(--ocean-100)' : 'var(--ocean-400)',
+    border: 'none', cursor: 'pointer',
+  });
+
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-6">
       {/* Header controls */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <select
-          value={selectedSeasonId}
-          onChange={e => setSelectedSeasonId(e.target.value)}
-          style={{ background: 'var(--ocean-800)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-700)',
-            borderRadius: 6, padding: '6px 10px', fontSize: '0.875rem' }}
-        >
+        <select value={selectedSeasonId} onChange={e => setSelectedSeasonId(e.target.value)} style={selStyle}>
           {seasons.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
 
         {/* View mode toggle */}
         <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--ocean-700)' }}>
           {(['team', 'region'] as ViewMode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => setViewMode(m)}
-              style={{
-                padding: '6px 16px', fontSize: '0.8rem', fontWeight: 600,
-                background: viewMode === m ? 'var(--ocean-600)' : 'var(--ocean-800)',
-                color: viewMode === m ? 'var(--ocean-100)' : 'var(--ocean-400)',
-                border: 'none', cursor: 'pointer',
-              }}
-            >
+            <button key={m} onClick={() => setViewMode(m)} style={toggleBtnStyle(viewMode === m)}>
               {m === 'team' ? 'By Team' : 'By Region'}
             </button>
           ))}
         </div>
 
+        {/* Data mode toggle */}
+        <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--ocean-700)' }}>
+          {([['influence', 'Pipeline Influence'], ['recruits', 'HS Recruits']] as [DataMode, string][]).map(([m, label]) => (
+            <button key={m} onClick={() => setDataMode(m)} style={toggleBtnStyle(dataMode === m)}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {viewMode === 'team' && (
-          <select
-            value={selectedTeam}
-            onChange={e => setSelectedTeam(e.target.value)}
-            style={{ background: 'var(--ocean-800)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-700)',
-              borderRadius: 6, padding: '6px 10px', fontSize: '0.875rem' }}
-          >
+          <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} style={selStyle}>
             {teamNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         )}
 
         {viewMode === 'region' && (
           <>
-            <select
-              value={selectedRegion}
-              onChange={e => setSelectedRegion(e.target.value)}
-              style={{ background: 'var(--ocean-800)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-700)',
-                borderRadius: 6, padding: '6px 10px', fontSize: '0.875rem' }}
-            >
+            <select value={selectedRegion} onChange={e => setSelectedRegion(e.target.value)} style={selStyle}>
               {regionKeys.map(k => <option key={k} value={k}>{PIPELINE_LABELS[k] ?? k}</option>)}
             </select>
 
-            <select
-              value={minLevel}
-              onChange={e => setMinLevel(e.target.value)}
-              style={{ background: 'var(--ocean-800)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-700)',
-                borderRadius: 6, padding: '6px 10px', fontSize: '0.875rem' }}
-            >
-              <option value="CulturalPillar">Cultural Pillar+</option>
-              <option value="HouseholdName">Household Name+</option>
-              <option value="Popular">Popular+</option>
-              <option value="Respected">Respected+</option>
-              <option value="NicheInterest">Niche Interest+</option>
-            </select>
+            {dataMode === 'influence' && (
+              <select value={minLevel} onChange={e => setMinLevel(e.target.value)} style={selStyle}>
+                <option value="CulturalPillar">Cultural Pillar+</option>
+                <option value="HouseholdName">Household Name+</option>
+                <option value="Popular">Popular+</option>
+                <option value="Respected">Respected+</option>
+                <option value="NicheInterest">Niche Interest+</option>
+              </select>
+            )}
 
-            <select
-              value={conferenceFilter}
-              onChange={e => setConferenceFilter(e.target.value)}
-              style={{ background: 'var(--ocean-800)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-700)',
-                borderRadius: 6, padding: '6px 10px', fontSize: '0.875rem' }}
-            >
+            <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)} style={selStyle}>
               <option value="All">All Conferences</option>
               <option value="Power 4">Power 4</option>
               <option value="Group of 5">Group of 5</option>
@@ -263,19 +321,19 @@ export default function PipelinesPage() {
         <p style={{ color: 'var(--ocean-400)' }}>No pipeline data found. Re-import your save to populate this data.</p>
       )}
 
-      {/* Team view */}
-      {viewMode === 'team' && teamViewRows.length > 0 && (
+      {/* Team / Influence view */}
+      {viewMode === 'team' && dataMode === 'influence' && teamViewRows.length > 0 && (
         <div>
           <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
-            {selectedTeam} — Pipeline Profile
+            {selectedTeam} — Pipeline Influence
           </h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--ocean-400)', fontWeight: 400, fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Region</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--ocean-400)', fontWeight: 400, fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Tier</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--ocean-400)', fontWeight: 400, fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Influence</th>
+                  <th style={TH_STYLE}>Region</th>
+                  <th style={TH_STYLE}>Tier</th>
+                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>Influence</th>
                 </tr>
               </thead>
               <tbody>
@@ -292,8 +350,49 @@ export default function PipelinesPage() {
         </div>
       )}
 
-      {/* Region view */}
-      {viewMode === 'region' && (
+      {/* Team / Recruits view */}
+      {viewMode === 'team' && dataMode === 'recruits' && (
+        <div>
+          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
+            {selectedTeam} — HS Recruits by Pipeline
+          </h2>
+          {teamRecruitRows.length === 0 ? (
+            <p style={{ color: 'var(--ocean-400)' }}>No HS recruit data for this team. Re-import your save to populate.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
+                    <th style={TH_STYLE}>Region</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★★</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamRecruitRows.map(r => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                      <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Region / Influence view */}
+      {viewMode === 'region' && dataMode === 'influence' && (
         <div>
           <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
             {PIPELINE_LABELS[selectedRegion] ?? selectedRegion} — School Rankings
@@ -305,11 +404,11 @@ export default function PipelinesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--ocean-400)', fontWeight: 400, fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase', width: 30 }}>#</th>
+                  <th style={{ ...TH_STYLE, width: 30 }}>#</th>
                   <SortHeader label="School" k="team" />
                   <SortHeader label="Conference" k="conference" />
                   <SortHeader label="Tier" k="level" />
-                  <SortHeader label="Influence" k="value" />
+                  <SortHeader label="Influence" k="value" right />
                 </tr>
               </thead>
               <tbody>
@@ -328,11 +427,67 @@ export default function PipelinesPage() {
                     </td>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-300)' }}>{r.team.conference}</td>
                     <td style={{ padding: '7px 12px' }}><LevelBadge level={r.level} /></td>
-                    <td style={{ padding: '7px 12px', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.value}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.value}</td>
                   </tr>
                 ))}
                 {regionViewRows.length === 0 && (
                   <tr><td colSpan={5} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No schools at or above selected tier in this region.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Region / Recruits view */}
+      {viewMode === 'region' && dataMode === 'recruits' && (
+        <div>
+          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
+            {PIPELINE_LABELS[selectedRegion] ?? selectedRegion} — HS Recruits by School
+            <span style={{ color: 'var(--ocean-400)', fontWeight: 400, fontSize: '0.8rem', marginLeft: 10 }}>
+              ({regionRecruitRows.length} schools)
+            </span>
+          </h2>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
+                  <th style={{ ...TH_STYLE, width: 30 }}>#</th>
+                  <SortHeader label="School" k="team" />
+                  <SortHeader label="Conference" k="conference" />
+                  <SortHeader label="★★★★★" k="fiveStars" right />
+                  <SortHeader label="★★★★" k="fourStars" right />
+                  <SortHeader label="★★★" k="threeStars" right />
+                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
+                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
+                  <SortHeader label="Total" k="total" right />
+                </tr>
+              </thead>
+              <tbody>
+                {regionRecruitRows.map((r, i) => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                    <td style={{ padding: '7px 12px', color: 'var(--ocean-500)', fontSize: '0.75rem' }}>{i + 1}</td>
+                    <td style={{ padding: '7px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {r.team.logoUrl && (
+                          <div style={{ width: 22, height: 22, flexShrink: 0 }}>
+                            <img src={r.team.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.3))' }} />
+                          </div>
+                        )}
+                        <span style={{ color: 'var(--ocean-100)' }}>{r.team.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '7px 12px', color: 'var(--ocean-300)' }}>{r.team.conference}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
+                  </tr>
+                ))}
+                {regionRecruitRows.length === 0 && (
+                  <tr><td colSpan={9} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
                 )}
               </tbody>
             </table>

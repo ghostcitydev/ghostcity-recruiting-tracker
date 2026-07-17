@@ -84,8 +84,10 @@ const XFER_STAR_MAP: Record<string, keyof RecruitBreakdown> = {
   FIVE_STAR: 'fiveStarsXfer', FOUR_STAR: 'fourStarsXfer', THREE_STAR: 'threeStarsXfer', TWO_STAR: 'twoStarsXfer', ONE_STAR: 'oneStarsXfer',
 };
 
+type PipelineRecruitStar = { fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
 type RecruitAnalysis = {
   byTeam: Map<string, RecruitBreakdown>;
+  pipelineRecruitsByTeam: Map<string, Map<string, PipelineRecruitStar>>;
   unsigned: RecruitBreakdown;
   unsignedHSStars: RecruitBreakdown;
   unsignedXferStars: RecruitBreakdown;
@@ -98,7 +100,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
   const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex']);
+  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline']);
 
   // Build player-row → Recruit record map for Class lookups
   const playerToRecruit = new Map<number, { isTransfer: boolean }>();
@@ -124,6 +126,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
 
   // Read per-team recruits from CommittedPlayers array on each team
   const byTeam = new Map<string, RecruitBreakdown>();
+  const pipelineRecruitsByTeam = new Map<string, Map<string, PipelineRecruitStar>>();
   for (const teamRec of teamTable.records) {
     if (teamRec.isEmpty || !teamRec.DisplayName) continue;
     const teamName: string = teamRec.DisplayName;
@@ -133,6 +136,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     const cpTable = await getTable(cpRef.tableId);
     const cpRec = cpTable.records[cpRef.row];
     const breakdown = emptyBreakdown();
+    const pipelineMap = new Map<string, PipelineRecruitStar>();
 
     for (const f of Object.keys(cpRec.fields)) {
       try {
@@ -156,11 +160,26 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
           breakdown.hs++;
           const hf = HS_STAR_MAP[starRating];
           if (hf) (breakdown[hf] as number)++;
+          // Track pipeline breakdown for HS/JUCO only
+          const homePipeline = prec.HomePipeline as string;
+          if (homePipeline && homePipeline !== 'Invalid_') {
+            if (!pipelineMap.has(homePipeline)) {
+              pipelineMap.set(homePipeline, { fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, total: 0 });
+            }
+            const pb = pipelineMap.get(homePipeline)!;
+            pb.total++;
+            if (starRating === 'FIVE_STAR') pb.fiveStars++;
+            else if (starRating === 'FOUR_STAR') pb.fourStars++;
+            else if (starRating === 'THREE_STAR') pb.threeStars++;
+            else if (starRating === 'TWO_STAR') pb.twoStars++;
+            else if (starRating === 'ONE_STAR') pb.oneStars++;
+          }
         }
       } catch { /* skip unreadable slots */ }
     }
 
     if (breakdown.total > 0) byTeam.set(teamName, breakdown);
+    if (pipelineMap.size > 0) pipelineRecruitsByTeam.set(teamName, pipelineMap);
   }
 
   // Transfers out: count by PrevTeamIndex of all Transfer-class recruits
@@ -203,7 +222,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
   }
 
-  return { byTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
+  return { byTeam, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -388,7 +407,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
   } catch { /* pipeline table absent — skip */ }
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
+  const { byTeam: recruitData, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
   const settings = await extractSettings(franchise);
 
   const season = await prisma.season.upsert({
@@ -530,13 +549,23 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       create: { teamId: team.id, seasonId: season.id, ...statPayload },
     });
 
-    // Upsert pipeline records for this team/season
+    // Upsert pipeline influence records for this team/season
     const pipelines = pipelineMap.get(teamIdx) ?? [];
     for (const p of pipelines) {
       await prisma.teamPipeline.upsert({
         where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline: p.pipeline } },
         update: { level: p.level, value: p.value },
         create: { teamId: team.id, seasonId: season.id, pipeline: p.pipeline, level: p.level, value: p.value },
+      });
+    }
+
+    // Upsert pipeline recruit counts (HS/JUCO only) for this team/season
+    const pipelineRecruits = pipelineRecruitsByTeam.get(name) ?? new Map();
+    for (const [pipeline, counts] of pipelineRecruits) {
+      await prisma.teamPipelineRecruit.upsert({
+        where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline } },
+        update: counts,
+        create: { teamId: team.id, seasonId: season.id, pipeline, ...counts },
       });
     }
 

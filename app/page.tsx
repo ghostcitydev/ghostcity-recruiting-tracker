@@ -67,9 +67,16 @@ type TeamStat = {
 
 type SortKey =
   | 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank'
-  | 'record' | 'transfersIn' | 'transfersOut' | 'netTransfers' | 'recruitCount'
+  | 'record' | 'wins' | 'losses' | 'transfersIn' | 'transfersOut' | 'netTransfers'
+  | 'recruitCount' | 'hsRecruits' | 'transferRecruits'
   | 'fiveStars' | 'fourStars' | 'threeStars' | 'twoStars' | 'oneStars'
-  | 'avgGrade';
+  | 'avgGrade'
+  | 'gradeAtmosphere' | 'gradeBrand' | 'gradeBudget' | 'gradeTraditions' | 'gradeConference'
+  | 'gradeFacilities' | 'gradeAcademic' | 'gradeCampus' | 'gradeChampion'
+  | 'gradeCoachStability' | 'gradeCoachPrestige'
+  | 'gradeProQB' | 'gradeProRB' | 'gradeProWR' | 'gradeProTE' | 'gradeProOL'
+  | 'gradeProDL' | 'gradeProLB' | 'gradeProDB' | 'gradeProK' | 'gradeProP'
+  | 'coachLevel';
 
 export default function Dashboard() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -128,12 +135,38 @@ export default function Dashboard() {
         case 'transfersOut': return dir * ((a.transfersOut ?? -1) - (b.transfersOut ?? -1));
         case 'netTransfers': return dir * (((a.transfersIn ?? 0) - (a.transfersOut ?? 0)) - ((b.transfersIn ?? 0) - (b.transfersOut ?? 0)));
         case 'recruitCount': return dir * ((a.recruitCount ?? -1) - (b.recruitCount ?? -1));
+        case 'wins': return dir * ((a.wins ?? -1) - (b.wins ?? -1));
+        case 'losses': return dir * ((a.losses ?? -1) - (b.losses ?? -1));
+        case 'hsRecruits': return dir * ((a.hsRecruits ?? -1) - (b.hsRecruits ?? -1));
+        case 'transferRecruits': return dir * ((a.transferRecruits ?? -1) - (b.transferRecruits ?? -1));
         case 'fiveStars': return dir * ((a.fiveStars ?? -1) - (b.fiveStars ?? -1));
         case 'fourStars': return dir * ((a.fourStars ?? -1) - (b.fourStars ?? -1));
         case 'threeStars': return dir * ((a.threeStars ?? -1) - (b.threeStars ?? -1));
         case 'twoStars': return dir * ((a.twoStars ?? -1) - (b.twoStars ?? -1));
         case 'oneStars': return dir * ((a.oneStars ?? -1) - (b.oneStars ?? -1));
         case 'avgGrade': return dir * ((a.avgGrade ?? -1) - (b.avgGrade ?? -1));
+        case 'gradeAtmosphere': return dir * (gv(a.gradeAtmosphere) - gv(b.gradeAtmosphere));
+        case 'gradeBrand': return dir * (gv(a.gradeBrand) - gv(b.gradeBrand));
+        case 'gradeBudget': return dir * (gv(a.gradeBudget) - gv(b.gradeBudget));
+        case 'gradeTraditions': return dir * (gv(a.gradeTraditions) - gv(b.gradeTraditions));
+        case 'gradeConference': return dir * (gv(a.gradeConference) - gv(b.gradeConference));
+        case 'gradeFacilities': return dir * (gv(a.gradeFacilities) - gv(b.gradeFacilities));
+        case 'gradeAcademic': return dir * (gv(a.gradeAcademic) - gv(b.gradeAcademic));
+        case 'gradeCampus': return dir * (gv(a.gradeCampus) - gv(b.gradeCampus));
+        case 'gradeChampion': return dir * (gv(a.gradeChampion) - gv(b.gradeChampion));
+        case 'gradeCoachStability': return dir * (gv(a.gradeCoachStability) - gv(b.gradeCoachStability));
+        case 'gradeCoachPrestige': return dir * (gv(a.gradeCoachPrestige) - gv(b.gradeCoachPrestige));
+        case 'gradeProQB': return dir * (gv(a.gradeProQB) - gv(b.gradeProQB));
+        case 'gradeProRB': return dir * (gv(a.gradeProRB) - gv(b.gradeProRB));
+        case 'gradeProWR': return dir * (gv(a.gradeProWR) - gv(b.gradeProWR));
+        case 'gradeProTE': return dir * (gv(a.gradeProTE) - gv(b.gradeProTE));
+        case 'gradeProOL': return dir * (gv(a.gradeProOL) - gv(b.gradeProOL));
+        case 'gradeProDL': return dir * (gv(a.gradeProDL) - gv(b.gradeProDL));
+        case 'gradeProLB': return dir * (gv(a.gradeProLB) - gv(b.gradeProLB));
+        case 'gradeProDB': return dir * (gv(a.gradeProDB) - gv(b.gradeProDB));
+        case 'gradeProK': return dir * (gv(a.gradeProK) - gv(b.gradeProK));
+        case 'gradeProP': return dir * (gv(a.gradeProP) - gv(b.gradeProP));
+        case 'coachLevel': return dir * ((a.coachLevel ?? -1) - (b.coachLevel ?? -1));
         default: return 0;
       }
     });
@@ -305,47 +338,47 @@ export default function Dashboard() {
                 <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               </>}
               <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
-              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
+              <Th label="HS" k="hsRecruits" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="XFER" k="transferRecruits" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               {showGrades && gradeTab === 'program' && (
                 <>
                   <Th label="Avg" k="avgGrade" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Atm</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Brand</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Budget</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Trad</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Conf</th>
+                  <Th label="Atm" k="gradeAtmosphere" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Brand" k="gradeBrand" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Budget" k="gradeBudget" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Trad" k="gradeTraditions" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Conf" k="gradeConference" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
               {showGrades && gradeTab === 'school' && (
                 <>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Facilities</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Academic</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Campus</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Champ</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Coach Stab</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Coach Pres</th>
+                  <Th label="Facilities" k="gradeFacilities" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Academic" k="gradeAcademic" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Campus" k="gradeCampus" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Champ" k="gradeChampion" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Coach Stab" k="gradeCoachStability" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Coach Pres" k="gradeCoachPrestige" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
               {showGrades && gradeTab === 'pro' && (
                 <>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>QB</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>RB</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>WR</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>TE</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>OL</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>DL</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>LB</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>DB</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>K</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>P</th>
+                  <Th label="QB" k="gradeProQB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="RB" k="gradeProRB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="WR" k="gradeProWR" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="TE" k="gradeProTE" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="OL" k="gradeProOL" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="DL" k="gradeProDL" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="LB" k="gradeProLB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="DB" k="gradeProDB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="K" k="gradeProK" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="P" k="gradeProP" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
               {showCoach && (
                 <>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Head Coach</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Archetype</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Level</th>
+                  <Th label="Level" k="coachLevel" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
             </tr>
@@ -446,6 +479,15 @@ export default function Dashboard() {
     </div>
   );
 }
+
+const GRADE_VAL: Record<string, number> = {
+  'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+  'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+  'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+  'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+  'F': 0.0,
+};
+function gv(g: string | null): number { return g != null ? (GRADE_VAL[g] ?? -1) : -1; }
 
 function netColor(n: number): string {
   if (n > 0) return '#34d399';
