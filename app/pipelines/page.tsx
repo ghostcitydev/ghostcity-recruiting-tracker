@@ -163,6 +163,13 @@ export default function PipelinesPage() {
       .sort((a, b) => b.value - a.value);
   }, [rows, viewMode, selectedTeam]);
 
+  // Lookup map: teamName|pipeline → { level, value } from influence rows
+  const influenceByTeamPipeline = useMemo(() => {
+    const m = new Map<string, { level: string; value: number }>();
+    for (const r of rows) m.set(`${r.team.name}|${r.pipeline}`, { level: r.level, value: r.value });
+    return m;
+  }, [rows]);
+
   // Team recruit view: per-pipeline breakdown for selected team
   const teamRecruitRows = useMemo(() => {
     if (viewMode !== 'team' || !selectedTeam) return [];
@@ -205,6 +212,8 @@ export default function PipelinesPage() {
     else if (conferenceFilter !== 'All') filtered = filtered.filter(r => r.team.conference === conferenceFilter);
 
     filtered.sort((a, b) => {
+      const infA = influenceByTeamPipeline.get(`${a.team.name}|${a.pipeline}`);
+      const infB = influenceByTeamPipeline.get(`${b.team.name}|${b.pipeline}`);
       let cmp = 0;
       if (sortKey === 'total') cmp = a.total - b.total;
       else if (sortKey === 'fiveStars') cmp = a.fiveStars - b.fiveStars;
@@ -212,10 +221,12 @@ export default function PipelinesPage() {
       else if (sortKey === 'threeStars') cmp = a.threeStars - b.threeStars;
       else if (sortKey === 'team') cmp = a.team.name.localeCompare(b.team.name);
       else if (sortKey === 'conference') cmp = a.team.conference.localeCompare(b.team.conference);
+      else if (sortKey === 'value') cmp = (infA?.value ?? -1) - (infB?.value ?? -1);
+      else if (sortKey === 'level') cmp = (LEVEL_ORDER[infA?.level ?? ''] ?? 0) - (LEVEL_ORDER[infB?.level ?? ''] ?? 0);
       return sortAsc ? cmp : -cmp;
     });
     return filtered;
-  }, [recruitRows, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc]);
+  }, [recruitRows, influenceByTeamPipeline, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc]);
 
   const conferences = useMemo(() => {
     return [...new Set(rows.map(r => r.team.conference))].sort();
@@ -364,6 +375,8 @@ export default function PipelinesPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
                     <th style={TH_STYLE}>Region</th>
+                    <th style={TH_STYLE}>Tier</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Influence</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★★</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★</th>
@@ -373,9 +386,13 @@ export default function PipelinesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teamRecruitRows.map(r => (
+                  {teamRecruitRows.map(r => {
+                    const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
+                    return (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
                       <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
+                      <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
@@ -383,7 +400,8 @@ export default function PipelinesPage() {
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -455,6 +473,8 @@ export default function PipelinesPage() {
                   <th style={{ ...TH_STYLE, width: 30 }}>#</th>
                   <SortHeader label="School" k="team" />
                   <SortHeader label="Conference" k="conference" />
+                  <SortHeader label="Tier" k="level" />
+                  <SortHeader label="Influence" k="value" right />
                   <SortHeader label="★★★★★" k="fiveStars" right />
                   <SortHeader label="★★★★" k="fourStars" right />
                   <SortHeader label="★★★" k="threeStars" right />
@@ -464,7 +484,9 @@ export default function PipelinesPage() {
                 </tr>
               </thead>
               <tbody>
-                {regionRecruitRows.map((r, i) => (
+                {regionRecruitRows.map((r, i) => {
+                    const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
+                    return (
                   <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-500)', fontSize: '0.75rem' }}>{i + 1}</td>
                     <td style={{ padding: '7px 12px' }}>
@@ -478,6 +500,8 @@ export default function PipelinesPage() {
                       </div>
                     </td>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-300)' }}>{r.team.conference}</td>
+                    <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
@@ -485,9 +509,10 @@ export default function PipelinesPage() {
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {regionRecruitRows.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
+                  <tr><td colSpan={11} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
                 )}
               </tbody>
             </table>
