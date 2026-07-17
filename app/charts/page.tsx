@@ -212,6 +212,17 @@ export default function ChartsPage() {
             ))}
           </select>
         </div>
+
+        <div className="ml-auto">
+          <a
+            href="/api/export?type=stats"
+            download
+            className="rounded px-2.5 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">

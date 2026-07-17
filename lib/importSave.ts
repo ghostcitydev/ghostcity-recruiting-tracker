@@ -60,25 +60,28 @@ async function resolveConferences(franchise: any, teamTable: any): Promise<Map<s
 
 type RecruitBreakdown = {
   total: number;
-  fiveStars: number;
-  fourStars: number;
-  threeStars: number;
-  twoStars: number;
-  oneStars: number;
-  hs: number;
-  transfer: number;
+  fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number;
+  hs: number; transfer: number;
+  fiveStarsHS: number; fourStarsHS: number; threeStarsHS: number; twoStarsHS: number; oneStarsHS: number;
+  fiveStarsXfer: number; fourStarsXfer: number; threeStarsXfer: number; twoStarsXfer: number; oneStarsXfer: number;
 };
 
 function emptyBreakdown(): RecruitBreakdown {
-  return { total: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, hs: 0, transfer: 0 };
+  return {
+    total: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, hs: 0, transfer: 0,
+    fiveStarsHS: 0, fourStarsHS: 0, threeStarsHS: 0, twoStarsHS: 0, oneStarsHS: 0,
+    fiveStarsXfer: 0, fourStarsXfer: 0, threeStarsXfer: 0, twoStarsXfer: 0, oneStarsXfer: 0,
+  };
 }
 
 const STAR_MAP: Record<string, keyof RecruitBreakdown> = {
-  FIVE_STAR: 'fiveStars',
-  FOUR_STAR: 'fourStars',
-  THREE_STAR: 'threeStars',
-  TWO_STAR: 'twoStars',
-  ONE_STAR: 'oneStars',
+  FIVE_STAR: 'fiveStars', FOUR_STAR: 'fourStars', THREE_STAR: 'threeStars', TWO_STAR: 'twoStars', ONE_STAR: 'oneStars',
+};
+const HS_STAR_MAP: Record<string, keyof RecruitBreakdown> = {
+  FIVE_STAR: 'fiveStarsHS', FOUR_STAR: 'fourStarsHS', THREE_STAR: 'threeStarsHS', TWO_STAR: 'twoStarsHS', ONE_STAR: 'oneStarsHS',
+};
+const XFER_STAR_MAP: Record<string, keyof RecruitBreakdown> = {
+  FIVE_STAR: 'fiveStarsXfer', FOUR_STAR: 'fourStarsXfer', THREE_STAR: 'threeStarsXfer', TWO_STAR: 'twoStarsXfer', ONE_STAR: 'oneStarsXfer',
 };
 
 type RecruitAnalysis = {
@@ -86,6 +89,7 @@ type RecruitAnalysis = {
   unsigned: RecruitBreakdown;
   unsignedHSStars: RecruitBreakdown;
   unsignedXferStars: RecruitBreakdown;
+  transfersOutByTeamIdx: Map<number, number>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,7 +98,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
   const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  await playerTable.readRecords(['ProspectStarRating']);
+  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex']);
 
   // Build player-row → Recruit record map for Class lookups
   const playerToRecruit = new Map<number, { isTransfer: boolean }>();
@@ -139,16 +143,39 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         if (!prec || prec.isEmpty) continue;
 
         breakdown.total++;
-        const starField = STAR_MAP[prec.ProspectStarRating as string];
+        const starRating = prec.ProspectStarRating as string;
+        const starField = STAR_MAP[starRating];
         if (starField) (breakdown[starField] as number)++;
 
         const recruitInfo = playerToRecruit.get(ref.row);
-        if (recruitInfo?.isTransfer) breakdown.transfer++;
-        else breakdown.hs++;
+        if (recruitInfo?.isTransfer) {
+          breakdown.transfer++;
+          const xf = XFER_STAR_MAP[starRating];
+          if (xf) (breakdown[xf] as number)++;
+        } else {
+          breakdown.hs++;
+          const hf = HS_STAR_MAP[starRating];
+          if (hf) (breakdown[hf] as number)++;
+        }
       } catch { /* skip unreadable slots */ }
     }
 
     if (breakdown.total > 0) byTeam.set(teamName, breakdown);
+  }
+
+  // Transfers out: count by PrevTeamIndex of all Transfer-class recruits
+  const transfersOutByTeamIdx = new Map<number, number>();
+  for (const rec of recruitTable.records) {
+    if (rec.isEmpty) continue;
+    const cls: string = rec.Class ?? '';
+    if (cls.startsWith('HighSchool') || cls.startsWith('JuniorCollege')) continue;
+    const ref = parseRef(rec.Player);
+    if (!ref) continue;
+    const prec = playerTable.records[ref.row];
+    if (!prec || prec.isEmpty) continue;
+    const prevIdx = prec.PrevTeamIndex as number;
+    if (prevIdx == null || prevIdx === 255 || prevIdx < 0) continue;
+    transfersOutByTeamIdx.set(prevIdx, (transfersOutByTeamIdx.get(prevIdx) ?? 0) + 1);
   }
 
   // Unsigned = recruits not signed (stage is Top10, Top5, Top3, Invalid, etc.)
@@ -176,7 +203,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
   }
 
-  return { byTeam, unsigned, unsignedHSStars, unsignedXferStars };
+  return { byTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -267,7 +294,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
   ]);
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars } = await analyzeRecruits(franchise, teamTable);
+  const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
   const settings = await extractSettings(franchise);
 
   const season = await prisma.season.upsert({
@@ -352,7 +379,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       teamRank: rec.TeamRank ?? null,
       wins, losses,
       transfersIn: rb.transfer,
-      transfersOut: rec.LastSeasonTransfersLost ?? null,
+      transfersOut: transfersOutByTeamIdx.get(rec.TeamIndex as number) ?? 0,
       recruitCount: rb.total,
       rosterSize: rec.ActiveRosterSize ?? null,
       fiveStars: rb.fiveStars,
@@ -360,6 +387,16 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       threeStars: rb.threeStars,
       twoStars: rb.twoStars,
       oneStars: rb.oneStars,
+      fiveStarsHS: rb.fiveStarsHS,
+      fourStarsHS: rb.fourStarsHS,
+      threeStarsHS: rb.threeStarsHS,
+      twoStarsHS: rb.twoStarsHS,
+      oneStarsHS: rb.oneStarsHS,
+      fiveStarsXfer: rb.fiveStarsXfer,
+      fourStarsXfer: rb.fourStarsXfer,
+      threeStarsXfer: rb.threeStarsXfer,
+      twoStarsXfer: rb.twoStarsXfer,
+      oneStarsXfer: rb.oneStarsXfer,
       hsRecruits: rb.hs,
       transferRecruits: rb.transfer,
       gradeAtmosphere: gAtm ? gradeToDisplay(gAtm) : null,

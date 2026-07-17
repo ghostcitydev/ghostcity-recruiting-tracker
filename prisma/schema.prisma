@@ -112,6 +112,18 @@ model TeamSeasonStat {
   twoStars   Int?
   oneStars   Int?
 
+  fiveStarsHS  Int?
+  fourStarsHS  Int?
+  threeStarsHS Int?
+  twoStarsHS   Int?
+  oneStarsHS   Int?
+
+  fiveStarsXfer  Int?
+  fourStarsXfer  Int?
+  threeStarsXfer Int?
+  twoStarsXfer   Int?
+  oneStarsXfer   Int?
+
   hsRecruits       Int?
   transferRecruits Int?
 

@@ -31,11 +31,9 @@ type TeamStat = {
   transfersIn: number | null;
   transfersOut: number | null;
   recruitCount: number | null;
-  fiveStars: number | null;
-  fourStars: number | null;
-  threeStars: number | null;
-  twoStars: number | null;
-  oneStars: number | null;
+  fiveStars: number | null; fourStars: number | null; threeStars: number | null; twoStars: number | null; oneStars: number | null;
+  fiveStarsHS: number | null; fourStarsHS: number | null; threeStarsHS: number | null; twoStarsHS: number | null; oneStarsHS: number | null;
+  fiveStarsXfer: number | null; fourStarsXfer: number | null; threeStarsXfer: number | null; twoStarsXfer: number | null; oneStarsXfer: number | null;
   hsRecruits: number | null;
   transferRecruits: number | null;
   rosterSize: number | null;
@@ -225,6 +223,14 @@ export default function Dashboard() {
 
         <div className="ml-auto flex items-center gap-4 text-xs" style={{ color: 'var(--ocean-400)' }}>
           <span>{rows.length} teams</span>
+          <a
+            href="/api/export?type=stats"
+            download
+            className="rounded px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}
+          >
+            Export CSV
+          </a>
         </div>
       </div>
 
@@ -243,14 +249,16 @@ export default function Dashboard() {
               <Th label="Prestige" k="prestige" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="Rank" k="recruitingRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="Record" k="record" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="In" k="transfersIn" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Out" k="transfersOut" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Net" k="netTransfers" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="★5" k="fiveStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="★4" k="fourStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="★3" k="threeStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="★2" k="twoStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              {!showGrades && <>
+                <Th label="In" k="transfersIn" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="Out" k="transfersOut" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="Net" k="netTransfers" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="★5" k="fiveStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="★4" k="fourStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="★3" k="threeStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="★2" k="twoStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              </>}
               <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
               <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
@@ -267,13 +275,19 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {rows.map((r, i) => {
+              const isHS = recruitTypeFilter === 'hs';
+              const isXfer = recruitTypeFilter === 'transfer';
+              const s5 = isHS ? r.fiveStarsHS : isXfer ? r.fiveStarsXfer : r.fiveStars;
+              const s4 = isHS ? r.fourStarsHS : isXfer ? r.fourStarsXfer : r.fourStars;
+              const s3 = isHS ? r.threeStarsHS : isXfer ? r.threeStarsXfer : r.threeStars;
+              const s2 = isHS ? r.twoStarsHS : isXfer ? r.twoStarsXfer : r.twoStars;
+              const s1 = isHS ? r.oneStarsHS : isXfer ? r.oneStarsXfer : r.oneStars;
+              return (
               <tr
                 key={r.id}
                 className="transition-colors"
-                style={{
-                  background: i % 2 === 0 ? 'var(--ocean-950)' : 'rgba(13,31,60,0.5)',
-                }}
+                style={{ background: i % 2 === 0 ? 'var(--ocean-950)' : 'rgba(13,31,60,0.5)' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'var(--ocean-800)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'var(--ocean-950)' : 'rgba(13,31,60,0.5)'}
               >
@@ -289,18 +303,20 @@ export default function Dashboard() {
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.recruitingRank ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{r.transfersIn ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#fb7185' }}>{r.transfersOut ?? '—'}</td>
-                <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: netColor((r.transfersIn ?? 0) - (r.transfersOut ?? 0)) }}>
-                  {formatNet((r.transfersIn ?? 0) - (r.transfersOut ?? 0))}
-                </td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: '#fbbf24' }}>{r.fiveStars || '—'}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#a78bfa' }}>{r.fourStars || '—'}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#60a5fa' }}>{r.threeStars || '—'}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{r.twoStars || '—'}</td>
-                <td className="px-3 py-2 tabular-nums" style={{ color: '#94a3b8' }}>{r.oneStars || '—'}</td>
+                {!showGrades && <>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{r.transfersIn ?? '—'}</td>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#fb7185' }}>{r.transfersOut ?? '—'}</td>
+                  <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: netColor((r.transfersIn ?? 0) - (r.transfersOut ?? 0)) }}>
+                    {formatNet((r.transfersIn ?? 0) - (r.transfersOut ?? 0))}
+                  </td>
+                  <td className="px-3 py-2 tabular-nums font-medium" style={{ color: '#fbbf24' }}>{s5 || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#a78bfa' }}>{s4 || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#60a5fa' }}>{s3 || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{s2 || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums" style={{ color: '#94a3b8' }}>{s1 || '—'}</td>
+                </>}
                 <td className="px-3 py-2 tabular-nums font-medium" style={{ color: 'var(--ocean-200)' }}>
-                  {recruitTypeFilter === 'hs' ? (r.hsRecruits ?? '—') : recruitTypeFilter === 'transfer' ? (r.transferRecruits ?? '—') : (r.recruitCount ?? '—')}
+                  {isHS ? (r.hsRecruits ?? '—') : isXfer ? (r.transferRecruits ?? '—') : (r.recruitCount ?? '—')}
                 </td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.hsRecruits ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.transferRecruits ?? '—'}</td>
@@ -315,7 +331,8 @@ export default function Dashboard() {
                   </>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

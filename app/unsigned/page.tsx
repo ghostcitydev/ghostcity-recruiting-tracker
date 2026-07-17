@@ -79,12 +79,22 @@ export default function UnsignedPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-5">
-      <div className="mb-4">
-        <h1 className="text-lg font-bold" style={{ color: 'var(--ocean-100)' }}>Unsigned Recruits & Transfers</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--ocean-400)' }}>
-          Tracks the number of recruits and transfers still uncommitted at the time of each import.
-          High unsigned counts — especially among top-rated prospects — may indicate AI recruiting logic issues.
-        </p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--ocean-100)' }}>Unsigned Recruits & Transfers</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--ocean-400)' }}>
+            Tracks the number of recruits and transfers still uncommitted at the time of each import.
+            High unsigned counts — especially among top-rated prospects — may indicate AI recruiting logic issues.
+          </p>
+        </div>
+        <a
+          href="/api/export?type=unsigned"
+          download
+          className="shrink-0 rounded px-2.5 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+          style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}
+        >
+          Export CSV
+        </a>
       </div>
 
       {/* Summary table */}
