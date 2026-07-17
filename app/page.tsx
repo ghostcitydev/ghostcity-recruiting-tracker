@@ -76,7 +76,7 @@ type SortKey =
   | 'gradeCoachStability' | 'gradeCoachPrestige'
   | 'gradeProQB' | 'gradeProRB' | 'gradeProWR' | 'gradeProTE' | 'gradeProOL'
   | 'gradeProDL' | 'gradeProLB' | 'gradeProDB' | 'gradeProK' | 'gradeProP'
-  | 'coachLevel';
+  | 'coachName' | 'coachArchetype' | 'coachLevel';
 
 export default function Dashboard() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -166,6 +166,8 @@ export default function Dashboard() {
         case 'gradeProDB': return dir * (gv(a.gradeProDB) - gv(b.gradeProDB));
         case 'gradeProK': return dir * (gv(a.gradeProK) - gv(b.gradeProK));
         case 'gradeProP': return dir * (gv(a.gradeProP) - gv(b.gradeProP));
+        case 'coachName': return dir * ((a.coachName ?? '').localeCompare(b.coachName ?? ''));
+        case 'coachArchetype': return dir * ((a.coachArchetype ?? '').localeCompare(b.coachArchetype ?? ''));
         case 'coachLevel': return dir * ((a.coachLevel ?? -1) - (b.coachLevel ?? -1));
         default: return 0;
       }
@@ -376,8 +378,8 @@ export default function Dashboard() {
               )}
               {showCoach && (
                 <>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Head Coach</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Archetype</th>
+                  <Th label="Head Coach" k="coachName" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Archetype" k="coachArchetype" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <Th label="Level" k="coachLevel" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
