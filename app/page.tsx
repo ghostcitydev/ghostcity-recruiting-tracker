@@ -315,11 +315,11 @@ export default function Dashboard() {
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Budget</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Trad</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Conf</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Facilities</th>
                 </>
               )}
               {showGrades && gradeTab === 'school' && (
                 <>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Facilities</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Academic</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Campus</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Champ</th>
@@ -406,13 +406,13 @@ export default function Dashboard() {
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBudget ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeTraditions ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeConference ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>
-                      {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}
-                    </td>
                   </>
                 )}
                 {showGrades && gradeTab === 'school' && (
                   <>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                      {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}
+                    </td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAcademic ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCampus ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeChampion ?? '—'}</td>

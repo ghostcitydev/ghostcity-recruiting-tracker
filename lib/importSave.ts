@@ -295,7 +295,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
 
   // Build tracking map: TeamIndex → all MySchoolTrackingTable grade fields
   type TrackingData = {
-    gradeFacilities: string | null; facilitiesScore: number | null;
+    gradeFacilities: string | null; facilitiesScore: number | null; facilitiesRawGrade: string;
     gradeAcademic: string | null; gradeCampus: string | null;
     gradeCoachStability: string | null; gradeCoachPrestige: string | null; gradeChampion: string | null;
     gradeProQB: string | null; gradeProRB: string | null; gradeProWR: string | null; gradeProTE: string | null;
@@ -318,8 +318,10 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       trackingTable.records.forEach((r: any, rowIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (r.isEmpty) return;
         const g = (f: string) => { const v = r[f] as string; return v ? gradeToDisplay(v) : null; };
+        const rawFac = (r.AthleticFacilitiesGrade as string) ?? '';
         trackingMap.set(rowIdx, {
-          gradeFacilities: g('AthleticFacilitiesGrade'),
+          gradeFacilities: rawFac ? gradeToDisplay(rawFac) : null,
+          facilitiesRawGrade: rawFac,
           facilitiesScore: Math.round(((r.AthleticFacilitiesScore as number) ?? 0) / 20),
           gradeAcademic: g('AcademicPrestigeGrade'),
           gradeCampus: g('CampusLifestyleGrade'),
@@ -516,7 +518,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeProDB: tracking?.gradeProDB ?? null,
       gradeProK: tracking?.gradeProK ?? null,
       gradeProP: tracking?.gradeProP ?? null,
-      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf),
+      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, tracking?.facilitiesRawGrade ?? ''),
       coachName: coach?.name ?? null,
       coachArchetype: coach?.archetype ?? null,
       coachLevel: coach?.level ?? null,
