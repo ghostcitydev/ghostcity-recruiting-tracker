@@ -25,7 +25,7 @@ type RecruitRow = {
   twoStars: number;
   oneStars: number;
   total: number;
-  team: { name: string; conference: string; logoUrl: string | null };
+  team: { name: string; conference: string; logoUrl: string | null; stats: { prestige: number | null }[] };
 };
 
 const PIPELINE_LABELS: Record<string, string> = {
@@ -381,6 +381,7 @@ export default function PipelinesPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
                     <th style={TH_STYLE}>Region</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Prestige</th>
                     <th style={TH_STYLE}>Tier</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>Influence</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★★</th>
@@ -398,6 +399,7 @@ export default function PipelinesPage() {
                     return (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
                       <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                       <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
@@ -484,6 +486,7 @@ export default function PipelinesPage() {
                   <th style={{ ...TH_STYLE, width: 30 }}>#</th>
                   <SortHeader label="School" k="team" />
                   <SortHeader label="Conference" k="conference" />
+                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>Prestige</th>
                   <SortHeader label="Tier" k="level" />
                   <SortHeader label="Influence" k="value" right />
                   <SortHeader label="★★★★★" k="fiveStars" right />
@@ -512,6 +515,7 @@ export default function PipelinesPage() {
                       </div>
                     </td>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-300)' }}>{r.team.conference}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                     <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
@@ -525,7 +529,7 @@ export default function PipelinesPage() {
                   );
                 })}
                 {regionRecruitRows.length === 0 && (
-                  <tr><td colSpan={12} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
+                  <tr><td colSpan={13} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
                 )}
               </tbody>
             </table>

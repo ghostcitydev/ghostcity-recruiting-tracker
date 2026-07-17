@@ -8,7 +8,14 @@ export async function GET(req: NextRequest) {
 
   const rows = await prisma.teamPipelineRecruit.findMany({
     where: { seasonId },
-    include: { team: { select: { name: true, conference: true, logoUrl: true } } },
+    include: {
+      team: {
+        select: {
+          name: true, conference: true, logoUrl: true,
+          stats: { where: { seasonId }, select: { prestige: true } },
+        },
+      },
+    },
     orderBy: [{ team: { name: 'asc' } }, { total: 'desc' }],
   });
 
