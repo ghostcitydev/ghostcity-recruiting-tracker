@@ -44,7 +44,18 @@ type TeamStat = {
   gradeConference: string | null;
   gradeFacilities: string | null;
   facilitiesScore: number | null;
+  gradeAcademic: string | null;
+  gradeCampus: string | null;
+  gradeCoachStability: string | null;
+  gradeCoachPrestige: string | null;
+  gradeChampion: string | null;
+  gradeProQB: string | null; gradeProRB: string | null; gradeProWR: string | null; gradeProTE: string | null;
+  gradeProOL: string | null; gradeProDL: string | null; gradeProLB: string | null; gradeProDB: string | null;
+  gradeProK: string | null; gradeProP: string | null;
   avgGrade: number | null;
+  coachName: string | null;
+  coachArchetype: string | null;
+  coachLevel: number | null;
   team: {
     id: string;
     name: string;
@@ -56,9 +67,16 @@ type TeamStat = {
 
 type SortKey =
   | 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank'
-  | 'record' | 'transfersIn' | 'transfersOut' | 'netTransfers' | 'recruitCount'
+  | 'record' | 'wins' | 'losses' | 'transfersIn' | 'transfersOut' | 'netTransfers'
+  | 'recruitCount' | 'hsRecruits' | 'transferRecruits'
   | 'fiveStars' | 'fourStars' | 'threeStars' | 'twoStars' | 'oneStars'
-  | 'avgGrade';
+  | 'avgGrade'
+  | 'gradeAtmosphere' | 'gradeBrand' | 'gradeBudget' | 'gradeTraditions' | 'gradeConference'
+  | 'gradeFacilities' | 'gradeAcademic' | 'gradeCampus' | 'gradeChampion'
+  | 'gradeCoachStability' | 'gradeCoachPrestige'
+  | 'gradeProQB' | 'gradeProRB' | 'gradeProWR' | 'gradeProTE' | 'gradeProOL'
+  | 'gradeProDL' | 'gradeProLB' | 'gradeProDB' | 'gradeProK' | 'gradeProP'
+  | 'coachName' | 'coachArchetype' | 'coachLevel';
 
 export default function Dashboard() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -69,6 +87,8 @@ export default function Dashboard() {
   const [conferenceFilter, setConferenceFilter] = useState('All');
   const [recruitTypeFilter, setRecruitTypeFilter] = useState<'all' | 'hs' | 'transfer'>('all');
   const [showGrades, setShowGrades] = useState(false);
+  const [gradeTab, setGradeTab] = useState<'program' | 'school' | 'pro'>('program');
+  const [showCoach, setShowCoach] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -115,12 +135,40 @@ export default function Dashboard() {
         case 'transfersOut': return dir * ((a.transfersOut ?? -1) - (b.transfersOut ?? -1));
         case 'netTransfers': return dir * (((a.transfersIn ?? 0) - (a.transfersOut ?? 0)) - ((b.transfersIn ?? 0) - (b.transfersOut ?? 0)));
         case 'recruitCount': return dir * ((a.recruitCount ?? -1) - (b.recruitCount ?? -1));
+        case 'wins': return dir * ((a.wins ?? -1) - (b.wins ?? -1));
+        case 'losses': return dir * ((a.losses ?? -1) - (b.losses ?? -1));
+        case 'hsRecruits': return dir * ((a.hsRecruits ?? -1) - (b.hsRecruits ?? -1));
+        case 'transferRecruits': return dir * ((a.transferRecruits ?? -1) - (b.transferRecruits ?? -1));
         case 'fiveStars': return dir * ((a.fiveStars ?? -1) - (b.fiveStars ?? -1));
         case 'fourStars': return dir * ((a.fourStars ?? -1) - (b.fourStars ?? -1));
         case 'threeStars': return dir * ((a.threeStars ?? -1) - (b.threeStars ?? -1));
         case 'twoStars': return dir * ((a.twoStars ?? -1) - (b.twoStars ?? -1));
         case 'oneStars': return dir * ((a.oneStars ?? -1) - (b.oneStars ?? -1));
         case 'avgGrade': return dir * ((a.avgGrade ?? -1) - (b.avgGrade ?? -1));
+        case 'gradeAtmosphere': return dir * (gv(a.gradeAtmosphere) - gv(b.gradeAtmosphere));
+        case 'gradeBrand': return dir * (gv(a.gradeBrand) - gv(b.gradeBrand));
+        case 'gradeBudget': return dir * (gv(a.gradeBudget) - gv(b.gradeBudget));
+        case 'gradeTraditions': return dir * (gv(a.gradeTraditions) - gv(b.gradeTraditions));
+        case 'gradeConference': return dir * (gv(a.gradeConference) - gv(b.gradeConference));
+        case 'gradeFacilities': return dir * (gv(a.gradeFacilities) - gv(b.gradeFacilities));
+        case 'gradeAcademic': return dir * (gv(a.gradeAcademic) - gv(b.gradeAcademic));
+        case 'gradeCampus': return dir * (gv(a.gradeCampus) - gv(b.gradeCampus));
+        case 'gradeChampion': return dir * (gv(a.gradeChampion) - gv(b.gradeChampion));
+        case 'gradeCoachStability': return dir * (gv(a.gradeCoachStability) - gv(b.gradeCoachStability));
+        case 'gradeCoachPrestige': return dir * (gv(a.gradeCoachPrestige) - gv(b.gradeCoachPrestige));
+        case 'gradeProQB': return dir * (gv(a.gradeProQB) - gv(b.gradeProQB));
+        case 'gradeProRB': return dir * (gv(a.gradeProRB) - gv(b.gradeProRB));
+        case 'gradeProWR': return dir * (gv(a.gradeProWR) - gv(b.gradeProWR));
+        case 'gradeProTE': return dir * (gv(a.gradeProTE) - gv(b.gradeProTE));
+        case 'gradeProOL': return dir * (gv(a.gradeProOL) - gv(b.gradeProOL));
+        case 'gradeProDL': return dir * (gv(a.gradeProDL) - gv(b.gradeProDL));
+        case 'gradeProLB': return dir * (gv(a.gradeProLB) - gv(b.gradeProLB));
+        case 'gradeProDB': return dir * (gv(a.gradeProDB) - gv(b.gradeProDB));
+        case 'gradeProK': return dir * (gv(a.gradeProK) - gv(b.gradeProK));
+        case 'gradeProP': return dir * (gv(a.gradeProP) - gv(b.gradeProP));
+        case 'coachName': return dir * ((a.coachName ?? '').localeCompare(b.coachName ?? ''));
+        case 'coachArchetype': return dir * ((a.coachArchetype ?? '').localeCompare(b.coachArchetype ?? ''));
+        case 'coachLevel': return dir * ((a.coachLevel ?? -1) - (b.coachLevel ?? -1));
         default: return 0;
       }
     });
@@ -231,8 +279,26 @@ export default function Dashboard() {
         </ControlGroup>
 
         <label className="flex cursor-pointer items-center gap-1.5 text-xs" style={{ color: 'var(--ocean-300)' }}>
-          <input type="checkbox" checked={showGrades} onChange={() => setShowGrades(!showGrades)} className="accent-blue-500" />
+          <input type="checkbox" checked={showGrades} onChange={() => { setShowGrades(!showGrades); if (showCoach) setShowCoach(false); }} className="accent-blue-500" />
           Show Grades
+        </label>
+        {showGrades && (
+          <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--ocean-700)' }}>
+            {(['program', 'school', 'pro'] as const).map(t => (
+              <button key={t} onClick={() => setGradeTab(t)} style={{
+                padding: '3px 10px', fontSize: '0.7rem', fontWeight: 600,
+                background: gradeTab === t ? 'var(--ocean-600)' : 'var(--ocean-800)',
+                color: gradeTab === t ? 'var(--ocean-100)' : 'var(--ocean-400)',
+                border: 'none', cursor: 'pointer',
+              }}>
+                {t === 'program' ? 'Program' : t === 'school' ? 'School' : 'Pro Pot.'}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs" style={{ color: 'var(--ocean-300)' }}>
+          <input type="checkbox" checked={showCoach} onChange={() => { setShowCoach(!showCoach); if (showGrades) setShowGrades(false); }} className="accent-blue-500" />
+          Show Coaches
         </label>
 
         <div className="ml-auto flex items-center gap-4 text-xs" style={{ color: 'var(--ocean-400)' }}>
@@ -274,17 +340,47 @@ export default function Dashboard() {
                 <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               </>}
               <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
-              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
-              {showGrades && (
+              <Th label="HS" k="hsRecruits" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="XFER" k="transferRecruits" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              {showGrades && gradeTab === 'program' && (
                 <>
                   <Th label="Avg" k="avgGrade" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Atm</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Brand</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Budget</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Trad</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Conf</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Facilities</th>
+                  <Th label="Atm" k="gradeAtmosphere" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Brand" k="gradeBrand" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Budget" k="gradeBudget" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Trad" k="gradeTraditions" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Conf" k="gradeConference" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                </>
+              )}
+              {showGrades && gradeTab === 'school' && (
+                <>
+                  <Th label="Facilities" k="gradeFacilities" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Academic" k="gradeAcademic" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Campus" k="gradeCampus" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Champ" k="gradeChampion" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Coach Stab" k="gradeCoachStability" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Coach Pres" k="gradeCoachPrestige" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                </>
+              )}
+              {showGrades && gradeTab === 'pro' && (
+                <>
+                  <Th label="QB" k="gradeProQB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="RB" k="gradeProRB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="WR" k="gradeProWR" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="TE" k="gradeProTE" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="OL" k="gradeProOL" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="DL" k="gradeProDL" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="LB" k="gradeProLB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="DB" k="gradeProDB" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="K" k="gradeProK" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="P" k="gradeProP" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                </>
+              )}
+              {showCoach && (
+                <>
+                  <Th label="Head Coach" k="coachName" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Archetype" k="coachArchetype" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <Th label="Level" k="coachLevel" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 </>
               )}
             </tr>
@@ -337,7 +433,7 @@ export default function Dashboard() {
                 </td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.hsRecruits ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.transferRecruits ?? '—'}</td>
-                {showGrades && (
+                {showGrades && gradeTab === 'program' && (
                   <>
                     <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: gradeColor(r.avgGrade) }}>{r.avgGrade?.toFixed(1) ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAtmosphere ?? '—'}</td>
@@ -345,9 +441,35 @@ export default function Dashboard() {
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBudget ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeTraditions ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeConference ?? '—'}</td>
+                  </>
+                )}
+                {showGrades && gradeTab === 'school' && (
+                  <>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>
                       {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}
                     </td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAcademic ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCampus ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeChampion ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachStability ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachPrestige ?? '—'}</td>
+                  </>
+                )}
+                {showGrades && gradeTab === 'pro' && (
+                  <>
+                    {([
+                      r.gradeProQB, r.gradeProRB, r.gradeProWR, r.gradeProTE, r.gradeProOL,
+                      r.gradeProDL, r.gradeProLB, r.gradeProDB, r.gradeProK, r.gradeProP,
+                    ] as (string | null)[]).map((g, gi) => (
+                      <td key={gi} className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{g ?? '—'}</td>
+                    ))}
+                  </>
+                )}
+                {showCoach && (
+                  <>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-100)' }}>{r.coachName ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-300)' }}>{r.coachArchetype ?? '—'}</td>
+                    <td className="px-3 py-2 tabular-nums text-xs font-semibold" style={{ color: 'var(--ocean-200)' }}>{r.coachLevel ?? '—'}</td>
                   </>
                 )}
               </tr>
@@ -359,6 +481,15 @@ export default function Dashboard() {
     </div>
   );
 }
+
+const GRADE_VAL: Record<string, number> = {
+  'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+  'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+  'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+  'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+  'F': 0.0,
+};
+function gv(g: string | null): number { return g != null ? (GRADE_VAL[g] ?? -1) : -1; }
 
 function netColor(n: number): string {
   if (n > 0) return '#34d399';

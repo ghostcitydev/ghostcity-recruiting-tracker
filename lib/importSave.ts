@@ -84,8 +84,10 @@ const XFER_STAR_MAP: Record<string, keyof RecruitBreakdown> = {
   FIVE_STAR: 'fiveStarsXfer', FOUR_STAR: 'fourStarsXfer', THREE_STAR: 'threeStarsXfer', TWO_STAR: 'twoStarsXfer', ONE_STAR: 'oneStarsXfer',
 };
 
+type PipelineRecruitStar = { fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
 type RecruitAnalysis = {
   byTeam: Map<string, RecruitBreakdown>;
+  pipelineRecruitsByTeam: Map<string, Map<string, PipelineRecruitStar>>;
   unsigned: RecruitBreakdown;
   unsignedHSStars: RecruitBreakdown;
   unsignedXferStars: RecruitBreakdown;
@@ -98,7 +100,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
   const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex']);
+  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline']);
 
   // Build player-row → Recruit record map for Class lookups
   const playerToRecruit = new Map<number, { isTransfer: boolean }>();
@@ -124,6 +126,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
 
   // Read per-team recruits from CommittedPlayers array on each team
   const byTeam = new Map<string, RecruitBreakdown>();
+  const pipelineRecruitsByTeam = new Map<string, Map<string, PipelineRecruitStar>>();
   for (const teamRec of teamTable.records) {
     if (teamRec.isEmpty || !teamRec.DisplayName) continue;
     const teamName: string = teamRec.DisplayName;
@@ -133,6 +136,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     const cpTable = await getTable(cpRef.tableId);
     const cpRec = cpTable.records[cpRef.row];
     const breakdown = emptyBreakdown();
+    const pipelineMap = new Map<string, PipelineRecruitStar>();
 
     for (const f of Object.keys(cpRec.fields)) {
       try {
@@ -156,11 +160,26 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
           breakdown.hs++;
           const hf = HS_STAR_MAP[starRating];
           if (hf) (breakdown[hf] as number)++;
+          // Track pipeline breakdown for HS/JUCO only
+          const homePipeline = prec.HomePipeline as string;
+          if (homePipeline && homePipeline !== 'Invalid_') {
+            if (!pipelineMap.has(homePipeline)) {
+              pipelineMap.set(homePipeline, { fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, total: 0 });
+            }
+            const pb = pipelineMap.get(homePipeline)!;
+            pb.total++;
+            if (starRating === 'FIVE_STAR') pb.fiveStars++;
+            else if (starRating === 'FOUR_STAR') pb.fourStars++;
+            else if (starRating === 'THREE_STAR') pb.threeStars++;
+            else if (starRating === 'TWO_STAR') pb.twoStars++;
+            else if (starRating === 'ONE_STAR') pb.oneStars++;
+          }
         }
       } catch { /* skip unreadable slots */ }
     }
 
     if (breakdown.total > 0) byTeam.set(teamName, breakdown);
+    if (pipelineMap.size > 0) pipelineRecruitsByTeam.set(teamName, pipelineMap);
   }
 
   // Transfers out: count by PrevTeamIndex of all Transfer-class recruits
@@ -203,7 +222,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
   }
 
-  return { byTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
+  return { byTeam, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -287,33 +306,84 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     'TEAM_RATINGOVR', 'TeamPrestige', 'PrestigeRank', 'TopClassRank', 'TeamRank',
     'ConfWin', 'ConfLoss', 'NonConfWin', 'NonConfLoss',
     'LastSeasonTransfersSigned', 'LastSeasonTransfersLost', 'ActiveRosterSize',
-    'ProgramPointsStadiumAtmosphereGrade', 'ProgramPointsBrandExposureGrade',
-    'ProgramPointsBudgetGrade', 'ProgramPointsProgramTraditionsGrade',
-    'ProgramPointsConferencePrestigeGrade',
+    'ProgramPointsBudgetGrade',
     'CommittedPlayers',
+    'MySchoolTrackingTable',
   ]);
 
-  // Build facilities grade map: TeamIndex → { grade, score }
-  const facilitiesMap = new Map<number, { grade: string; score: number }>();
+  // Read all school grades from MySchoolTrackingTable; each Team record carries a direct
+  // ref (MySchoolTrackingTable field) to its row — row index ≠ TeamIndex so we cannot
+  // use TeamIndex as a lookup key.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let trackingTable: any = null;
   try {
-    const trackingTables = franchise.tables.filter((t: any) => t.name === 'MySchoolTrackingTable'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (trackingTables.length > 0) {
-      const trackingTable = trackingTables[0];
-      await trackingTable.readRecords(['AthleticFacilitiesGrade', 'AthleticFacilitiesScore']);
-      // Row index = TeamIndex (no separate field); score 0–2000 → store as 0–100
-      trackingTable.records.forEach((r: any, rowIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (r.isEmpty) return;
-        const grade = r.AthleticFacilitiesGrade as string;
-        const raw = r.AthleticFacilitiesScore as number;
-        if (grade) {
-          facilitiesMap.set(rowIdx, { grade: gradeToDisplay(grade), score: Math.round((raw ?? 0) / 20) });
-        }
-      });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hits = franchise.tables.filter((t: any) => t.name === 'MySchoolTrackingTable');
+    if (hits.length > 0) {
+      trackingTable = hits[0];
+      await trackingTable.readRecords([
+        'StadiumAtmosphereGrade', 'BrandExposureGrade', 'ProgramTraditionGrade', 'ConferencePrestigeGrade',
+        'AthleticFacilitiesGrade', 'AthleticFacilitiesScore',
+        'AcademicPrestigeGrade', 'CampusLifestyleGrade',
+        'CoachStabilityGrade', 'CoachPrestigeGrade', 'ChampionshipContenderGrade',
+        'ProPotentialGradeQB', 'ProPotentialGradeRB', 'ProPotentialGradeWR', 'ProPotentialGradeTE',
+        'ProPotentialGradeOL', 'ProPotentialGradeDL', 'ProPotentialGradeLB', 'ProPotentialGradeDB',
+        'ProPotentialGradeK', 'ProPotentialGradeP',
+      ]);
     }
   } catch { /* table absent — skip */ }
 
+  // Build coach map: TeamIndex → { name, archetype, level }
+  type CoachData = { name: string; archetype: string | null; level: number | null };
+  const coachMap = new Map<number, CoachData>();
+  try {
+    const coachTables = franchise.tables.filter((t: any) => t.name === 'Coach' && !t.isArray); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const coachTable = coachTables.find((t: any) => t.records.length > 100) ?? coachTables[0]; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (coachTable) {
+      await coachTable.readRecords(['FirstName', 'LastName', 'TeamIndex', 'Position', 'DominantArchetype', 'Level']);
+      for (const c of coachTable.records) {
+        if (c.isEmpty || c.Position !== 'HeadCoach') continue;
+        const teamIdx = c.TeamIndex as number;
+        if (teamIdx == null || teamIdx === 255) continue;
+        const arch = c.DominantArchetype as string;
+        coachMap.set(teamIdx, {
+          name: `${c.FirstName ?? ''} ${c.LastName ?? ''}`.trim(),
+          archetype: arch && arch !== 'Invalid_' ? arch : null,
+          level: (c.Level as number) ?? null,
+        });
+      }
+    }
+  } catch { /* coach table absent — skip */ }
+
+  // Build pipeline map: TeamIndex → array of { pipeline, level, value }
+  type PipelineEntry = { pipeline: string; level: string; value: number };
+  const pipelineMap = new Map<number, PipelineEntry[]>();
+  try {
+    const pipelineArrTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence[]'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const pipelineTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (pipelineArrTable && pipelineTable) {
+      await pipelineArrTable.readRecords();
+      await pipelineTable.readRecords(['Pipeline', 'InfluenceLevel', 'InfluenceValue']);
+      pipelineArrTable.records.forEach((arrRec: any, teamIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (arrRec.isEmpty) return;
+        const entries: PipelineEntry[] = [];
+        for (const f of Object.keys(arrRec.fields)) {
+          if (!f.startsWith('SchoolPipelineInfluence')) continue;
+          const ref = parseRef(arrRec[f]);
+          if (!ref) continue;
+          const pRec = pipelineTable.records[ref.row];
+          if (!pRec || pRec.isEmpty) continue;
+          const lvl = pRec.InfluenceLevel as string;
+          if (lvl === 'Unrecognized') continue; // skip zero-value
+          entries.push({ pipeline: pRec.Pipeline as string, level: lvl, value: pRec.InfluenceValue as number });
+        }
+        if (entries.length) pipelineMap.set(teamIdx, entries);
+      });
+    }
+  } catch { /* pipeline table absent — skip */ }
+
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
+  const { byTeam: recruitData, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
   const settings = await extractSettings(franchise);
 
   const season = await prisma.season.upsert({
@@ -384,11 +454,19 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     const losses = (rec.ConfLoss ?? 0) + (rec.NonConfLoss ?? 0);
     const rb = recruitData.get(name) ?? emptyBreakdown();
 
-    const gAtm: string = rec.ProgramPointsStadiumAtmosphereGrade ?? '';
-    const gBrand: string = rec.ProgramPointsBrandExposureGrade ?? '';
     const gBudget: string = rec.ProgramPointsBudgetGrade ?? '';
-    const gTrad: string = rec.ProgramPointsProgramTraditionsGrade ?? '';
-    const gConf: string = rec.ProgramPointsConferencePrestigeGrade ?? '';
+    const teamIdx = rec.TeamIndex as number;
+    const coach = coachMap.get(teamIdx) ?? null;
+
+    // Resolve tracking record via the ref embedded in each Team row
+    const trackingRef = parseRef(rec.MySchoolTrackingTable);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tr: any = (trackingRef && trackingTable) ? (trackingTable.records[trackingRef.row] ?? null) : null;
+    const traw = (f: string): string => (tr && !tr.isEmpty ? (tr[f] as string) ?? '' : '');
+    const gAtm = traw('StadiumAtmosphereGrade');
+    const gBrand = traw('BrandExposureGrade');
+    const gTrad = traw('ProgramTraditionGrade');
+    const gConf = traw('ConferencePrestigeGrade');
 
     const statPayload = {
       overall: rec.TEAM_RATINGOVR ?? null,
@@ -398,7 +476,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       teamRank: rec.TeamRank ?? null,
       wins, losses,
       transfersIn: rb.transfer,
-      transfersOut: transfersOutByTeamIdx.get(rec.TeamIndex as number) ?? 0,
+      transfersOut: transfersOutByTeamIdx.get(teamIdx) ?? 0,
       recruitCount: rb.total,
       rosterSize: rec.ActiveRosterSize ?? null,
       fiveStars: rb.fiveStars,
@@ -423,9 +501,27 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeBudget: gBudget ? gradeToDisplay(gBudget) : null,
       gradeTraditions: gTrad ? gradeToDisplay(gTrad) : null,
       gradeConference: gConf ? gradeToDisplay(gConf) : null,
-      gradeFacilities: facilitiesMap.get(rec.TeamIndex as number)?.grade ?? null,
-      facilitiesScore: facilitiesMap.get(rec.TeamIndex as number)?.score ?? null,
-      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf),
+      gradeFacilities: traw('AthleticFacilitiesGrade') ? gradeToDisplay(traw('AthleticFacilitiesGrade')) : null,
+      facilitiesScore: tr && !tr.isEmpty ? Math.round(((tr.AthleticFacilitiesScore as number) ?? 0) / 20) : null,
+      gradeAcademic: traw('AcademicPrestigeGrade') ? gradeToDisplay(traw('AcademicPrestigeGrade')) : null,
+      gradeCampus: traw('CampusLifestyleGrade') ? gradeToDisplay(traw('CampusLifestyleGrade')) : null,
+      gradeCoachStability: traw('CoachStabilityGrade') ? gradeToDisplay(traw('CoachStabilityGrade')) : null,
+      gradeCoachPrestige: traw('CoachPrestigeGrade') ? gradeToDisplay(traw('CoachPrestigeGrade')) : null,
+      gradeChampion: traw('ChampionshipContenderGrade') ? gradeToDisplay(traw('ChampionshipContenderGrade')) : null,
+      gradeProQB: traw('ProPotentialGradeQB') ? gradeToDisplay(traw('ProPotentialGradeQB')) : null,
+      gradeProRB: traw('ProPotentialGradeRB') ? gradeToDisplay(traw('ProPotentialGradeRB')) : null,
+      gradeProWR: traw('ProPotentialGradeWR') ? gradeToDisplay(traw('ProPotentialGradeWR')) : null,
+      gradeProTE: traw('ProPotentialGradeTE') ? gradeToDisplay(traw('ProPotentialGradeTE')) : null,
+      gradeProOL: traw('ProPotentialGradeOL') ? gradeToDisplay(traw('ProPotentialGradeOL')) : null,
+      gradeProDL: traw('ProPotentialGradeDL') ? gradeToDisplay(traw('ProPotentialGradeDL')) : null,
+      gradeProLB: traw('ProPotentialGradeLB') ? gradeToDisplay(traw('ProPotentialGradeLB')) : null,
+      gradeProDB: traw('ProPotentialGradeDB') ? gradeToDisplay(traw('ProPotentialGradeDB')) : null,
+      gradeProK: traw('ProPotentialGradeK') ? gradeToDisplay(traw('ProPotentialGradeK')) : null,
+      gradeProP: traw('ProPotentialGradeP') ? gradeToDisplay(traw('ProPotentialGradeP')) : null,
+      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')),
+      coachName: coach?.name ?? null,
+      coachArchetype: coach?.archetype ?? null,
+      coachLevel: coach?.level ?? null,
     };
 
     await prisma.teamSeasonStat.upsert({
@@ -433,6 +529,26 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       update: statPayload,
       create: { teamId: team.id, seasonId: season.id, ...statPayload },
     });
+
+    // Upsert pipeline influence records for this team/season
+    const pipelines = pipelineMap.get(teamIdx) ?? [];
+    for (const p of pipelines) {
+      await prisma.teamPipeline.upsert({
+        where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline: p.pipeline } },
+        update: { level: p.level, value: p.value },
+        create: { teamId: team.id, seasonId: season.id, pipeline: p.pipeline, level: p.level, value: p.value },
+      });
+    }
+
+    // Upsert pipeline recruit counts (HS/JUCO only) for this team/season
+    const pipelineRecruits = pipelineRecruitsByTeam.get(name) ?? new Map();
+    for (const [pipeline, counts] of pipelineRecruits) {
+      await prisma.teamPipelineRecruit.upsert({
+        where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline } },
+        update: counts,
+        create: { teamId: team.id, seasonId: season.id, pipeline, ...counts },
+      });
+    }
 
     teamsImported++;
   }

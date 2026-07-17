@@ -18,6 +18,10 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 type HistoryRow = {
   overall: number | null;
   prestige: number | null;
+  prestigeRank: number | null;
+  teamRank: number | null;
+  wins: number | null;
+  losses: number | null;
   recruitingRank: number | null;
   transfersIn: number | null;
   transfersOut: number | null;
@@ -29,6 +33,14 @@ type HistoryRow = {
   oneStars: number | null;
   avgGrade: number | null;
   facilitiesScore: number | null;
+  gradeAcademic: string | null;
+  gradeCampus: string | null;
+  gradeCoachStability: string | null;
+  gradeCoachPrestige: string | null;
+  gradeChampion: string | null;
+  gradeProQB: string | null; gradeProRB: string | null; gradeProWR: string | null;
+  gradeProTE: string | null; gradeProOL: string | null; gradeProDL: string | null;
+  gradeProLB: string | null; gradeProDB: string | null; gradeProK: string | null; gradeProP: string | null;
   team: { id: string; name: string; conference: string };
   season: { id: string; year: number };
 };
@@ -44,9 +56,21 @@ type SeasonSetting = {
   unsignedXferThreeStar: number | null;
 };
 
+const GRADE_NUM: Record<string, number> = {
+  'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+  'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+  'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+  'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+  'F': 0.0,
+};
+
 const LINE_INDICATORS = [
   { key: 'overall', label: 'Overall Rating' },
   { key: 'prestige', label: 'Prestige' },
+  { key: 'prestigeRank', label: 'Prestige Rank' },
+  { key: 'teamRank', label: 'Team Rank' },
+  { key: 'wins', label: 'Wins' },
+  { key: 'losses', label: 'Losses' },
   { key: 'recruitingRank', label: 'Recruiting Class Rank' },
   { key: 'transfersIn', label: 'Transfers In' },
   { key: 'transfersOut', label: 'Transfers Out' },
@@ -59,6 +83,21 @@ const LINE_INDICATORS = [
   { key: 'netTransfers', label: 'Net Transfers (In − Out)' },
   { key: 'avgGrade', label: 'Avg School Grade' },
   { key: 'facilitiesScore', label: 'Facilities Score (0–100)' },
+  { key: 'gradeAcademic', label: 'Academic Prestige Grade' },
+  { key: 'gradeCampus', label: 'Campus Lifestyle Grade' },
+  { key: 'gradeChampion', label: 'Championship Contender Grade' },
+  { key: 'gradeCoachStability', label: 'Coach Stability Grade' },
+  { key: 'gradeCoachPrestige', label: 'Coach Prestige Grade' },
+  { key: 'gradeProQB', label: 'Pro Potential: QB' },
+  { key: 'gradeProRB', label: 'Pro Potential: RB' },
+  { key: 'gradeProWR', label: 'Pro Potential: WR' },
+  { key: 'gradeProTE', label: 'Pro Potential: TE' },
+  { key: 'gradeProOL', label: 'Pro Potential: OL' },
+  { key: 'gradeProDL', label: 'Pro Potential: DL' },
+  { key: 'gradeProLB', label: 'Pro Potential: LB' },
+  { key: 'gradeProDB', label: 'Pro Potential: DB' },
+  { key: 'gradeProK', label: 'Pro Potential: K' },
+  { key: 'gradeProP', label: 'Pro Potential: P' },
 ] as const;
 type IndicatorKey = (typeof LINE_INDICATORS)[number]['key'];
 
@@ -159,7 +198,9 @@ export default function ChartsPage() {
         const row = teamRows.find((r) => r.season.year === year);
         if (!row) return null;
         if (indicator === 'netTransfers') return (row.transfersIn ?? 0) - (row.transfersOut ?? 0);
-        return row[indicator] as number | null;
+        const val = row[indicator as keyof typeof row];
+        if (typeof val === 'string') return GRADE_NUM[val] ?? null;
+        return val as number | null;
       });
       return { label: teamName, data, borderColor: COLORS[i % COLORS.length], backgroundColor: COLORS[i % COLORS.length], spanGaps: true, tension: 0.25 };
     });
@@ -302,7 +343,7 @@ export default function ChartsPage() {
                 responsive: true,
                 scales: {
                   x: AXIS_STYLE,
-                  y: { reverse: indicator === 'recruitingRank', ...AXIS_STYLE },
+                  y: { reverse: ['recruitingRank', 'prestigeRank', 'teamRank'].includes(indicator), ...AXIS_STYLE },
                 },
                 plugins: { legend: LEGEND_STYLE },
               }} />
