@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Franchise';
+  src: url('/Franchise.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'FranchiseFilled';
+  src: url('/FranchiseFilled.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --ocean-950: #0a1628;
   --ocean-900: #0d1f3c;
