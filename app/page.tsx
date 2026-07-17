@@ -42,6 +42,8 @@ type TeamStat = {
   gradeBudget: string | null;
   gradeTraditions: string | null;
   gradeConference: string | null;
+  gradeFacilities: string | null;
+  facilitiesScore: number | null;
   avgGrade: number | null;
   team: {
     id: string;
@@ -270,6 +272,7 @@ export default function Dashboard() {
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Budget</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Trad</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Conf</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>Facilities</th>
                 </>
               )}
             </tr>
@@ -328,6 +331,9 @@ export default function Dashboard() {
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBudget ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeTraditions ?? '—'}</td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeConference ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                      {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}
+                    </td>
                   </>
                 )}
               </tr>

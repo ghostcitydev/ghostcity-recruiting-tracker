@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CFB 27 Dynasty Tracker",
+  title: "CFB 27 Recruiting Evolution Tracker",
   description: "Track team overalls, recruiting, transfers, and recruiting classes across your CFB 27 dynasty.",
 };
 
@@ -35,7 +35,7 @@ export default function RootLayout({
         >
           <div className="mx-auto flex max-w-[1600px] items-center gap-8 px-6 py-3">
             <span className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--ocean-300)' }}>
-              CFB 27 Tracker
+              CFB 27 Recruiting Evolution
             </span>
             <nav className="flex gap-1 text-sm">
               <NavLink href="/">Dashboard</NavLink>

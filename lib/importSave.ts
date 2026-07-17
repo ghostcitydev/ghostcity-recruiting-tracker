@@ -293,6 +293,25 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     'CommittedPlayers',
   ]);
 
+  // Build facilities grade map: TeamIndex → { grade, score }
+  const facilitiesMap = new Map<number, { grade: string; score: number }>();
+  try {
+    const trackingTables = franchise.tables.filter((t: any) => t.name === 'MySchoolTrackingTable'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (trackingTables.length > 0) {
+      const trackingTable = trackingTables[0];
+      await trackingTable.readRecords(['AthleticFacilitiesGrade', 'AthleticFacilitiesScore']);
+      for (const r of trackingTable.records) {
+        if (r.isEmpty) continue;
+        const idx = r.TeamIndex as number;
+        const grade = r.AthleticFacilitiesGrade as string;
+        const score = r.AthleticFacilitiesScore as number;
+        if (idx != null && idx !== 255 && grade) {
+          facilitiesMap.set(idx, { grade: gradeToDisplay(grade), score: score ?? 0 });
+        }
+      }
+    }
+  } catch { /* table absent — skip */ }
+
   const confMap = await resolveConferences(franchise, teamTable);
   const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
   const settings = await extractSettings(franchise);
@@ -404,6 +423,8 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeBudget: gBudget ? gradeToDisplay(gBudget) : null,
       gradeTraditions: gTrad ? gradeToDisplay(gTrad) : null,
       gradeConference: gConf ? gradeToDisplay(gConf) : null,
+      gradeFacilities: facilitiesMap.get(rec.TeamIndex as number)?.grade ?? null,
+      facilitiesScore: facilitiesMap.get(rec.TeamIndex as number)?.score ?? null,
       avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf),
     };
 

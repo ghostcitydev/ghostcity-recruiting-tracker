@@ -132,6 +132,8 @@ model TeamSeasonStat {
   gradeBudget      String?
   gradeTraditions  String?
   gradeConference  String?
+  gradeFacilities  String?
+  facilitiesScore  Int?
   avgGrade         Float?
 
   createdAt DateTime @default(now())

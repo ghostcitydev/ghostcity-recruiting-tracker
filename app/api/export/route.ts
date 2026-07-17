@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     'HS_5★', 'HS_4★', 'HS_3★', 'HS_2★', 'HS_1★',
     'Xfer_5★', 'Xfer_4★', 'Xfer_3★', 'Xfer_2★', 'Xfer_1★',
     'RosterSize',
-    'AvgGrade', 'GradeAtm', 'GradeBrand', 'GradeBudget', 'GradeTrad', 'GradeConf',
+    'AvgGrade', 'GradeAtm', 'GradeBrand', 'GradeBudget', 'GradeTrad', 'GradeConf', 'GradeFacilities', 'FacilitiesScore',
   ];
   const lines = [headers.join(',')];
   for (const s of stats) {
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       s.fiveStarsHS, s.fourStarsHS, s.threeStarsHS, s.twoStarsHS, s.oneStarsHS,
       s.fiveStarsXfer, s.fourStarsXfer, s.threeStarsXfer, s.twoStarsXfer, s.oneStarsXfer,
       s.rosterSize,
-      s.avgGrade?.toFixed(2), s.gradeAtmosphere, s.gradeBrand, s.gradeBudget, s.gradeTraditions, s.gradeConference,
+      s.avgGrade?.toFixed(2), s.gradeAtmosphere, s.gradeBrand, s.gradeBudget, s.gradeTraditions, s.gradeConference, s.gradeFacilities, s.facilitiesScore,
     ]));
   }
   return new Response(lines.join('\n'), {

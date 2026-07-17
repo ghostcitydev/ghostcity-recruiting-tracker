@@ -28,6 +28,7 @@ type HistoryRow = {
   twoStars: number | null;
   oneStars: number | null;
   avgGrade: number | null;
+  facilitiesScore: number | null;
   team: { id: string; name: string; conference: string };
   season: { id: string; year: number };
 };
@@ -46,6 +47,7 @@ const LINE_INDICATORS = [
   { key: 'oneStars', label: '1-Star Recruits' },
   { key: 'netTransfers', label: 'Net Transfers (In − Out)' },
   { key: 'avgGrade', label: 'Avg School Grade' },
+  { key: 'facilitiesScore', label: 'Facilities Score (0–2000)' },
 ] as const;
 type IndicatorKey = (typeof LINE_INDICATORS)[number]['key'];
 
