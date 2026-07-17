@@ -297,8 +297,8 @@ export default function Dashboard() {
                 <td className="px-3 py-2">
                   {r.team.logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.team.logoUrl} alt="" className="h-6 w-6 object-contain" />
-                  ) : <div className="h-6 w-6 rounded" style={{ background: 'var(--ocean-800)' }} />}
+                    <img src={r.team.logoUrl} alt="" className="h-8 w-8 object-contain" style={{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35)) drop-shadow(0 0 1px rgba(255,255,255,0.5))' }} />
+                  ) : <div className="h-8 w-8 rounded" style={{ background: 'var(--ocean-800)' }} />}
                 </td>
                 <td className="px-3 py-2 font-medium" style={{ color: 'var(--ocean-100)' }}>{r.team.name}</td>
                 <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-400)' }}>{r.team.conference}</td>
