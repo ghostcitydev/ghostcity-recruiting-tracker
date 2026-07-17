@@ -170,7 +170,7 @@ export default function PipelinesPage() {
     return m;
   }, [rows]);
 
-  const pts = (r: RecruitRow) => r.fiveStars * 5 + r.fourStars * 4 + r.threeStars * 3 + r.twoStars * 2 + r.oneStars;
+  const pts = (r: RecruitRow) => r.fiveStars * 5 + r.fourStars * 3 + r.threeStars * 1;
 
   // Team recruit view: per-pipeline breakdown for selected team
   const teamRecruitRows = useMemo(() => {
@@ -370,6 +370,9 @@ export default function PipelinesPage() {
           <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
             {selectedTeam} — HS Recruits by Pipeline
           </h2>
+          <p style={{ color: 'var(--ocean-600)', fontSize: '0.72rem', marginBottom: 10 }}>
+            Pts: ★★★★★ = 5 &nbsp;·&nbsp; ★★★★ = 3 &nbsp;·&nbsp; ★★★ = 1 &nbsp;·&nbsp; ★★ / ★ = 0
+          </p>
           {teamRecruitRows.length === 0 ? (
             <p style={{ color: 'var(--ocean-400)' }}>No HS recruit data for this team. Re-import your save to populate.</p>
           ) : (
@@ -471,6 +474,9 @@ export default function PipelinesPage() {
               ({regionRecruitRows.length} schools)
             </span>
           </h2>
+          <p style={{ color: 'var(--ocean-600)', fontSize: '0.72rem', marginBottom: 10 }}>
+            Pts: ★★★★★ = 5 &nbsp;·&nbsp; ★★★★ = 3 &nbsp;·&nbsp; ★★★ = 1 &nbsp;·&nbsp; ★★ / ★ = 0
+          </p>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
               <thead>
