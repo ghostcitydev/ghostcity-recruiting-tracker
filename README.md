@@ -43,8 +43,8 @@ That's it. No database server, no cloud account.
 
    Or if you have Git:
    ```
-   git clone https://github.com/tikitiger/cfb27-tracker.git
-   cd cfb27-tracker
+   git clone https://github.com/tikitiger/cfb-recruiting-evolution-tracker.git
+   cd cfb-recruiting-evolution-tracker
    ```
 
 2. **Run the setup script**
@@ -127,7 +127,7 @@ Each import is a snapshot — import after each season to build up a history ove
 
 ## Contributing
 
-Pull requests welcome. If you find a bug or want a feature, open an issue on GitHub.
+Pull requests welcome. If you find a bug or want a feature, open an issue at [github.com/tikitiger/cfb-recruiting-evolution-tracker](https://github.com/tikitiger/cfb-recruiting-evolution-tracker/issues).
 
 ---
 
