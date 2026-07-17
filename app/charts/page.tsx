@@ -18,6 +18,10 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 type HistoryRow = {
   overall: number | null;
   prestige: number | null;
+  prestigeRank: number | null;
+  teamRank: number | null;
+  wins: number | null;
+  losses: number | null;
   recruitingRank: number | null;
   transfersIn: number | null;
   transfersOut: number | null;
@@ -63,6 +67,10 @@ const GRADE_NUM: Record<string, number> = {
 const LINE_INDICATORS = [
   { key: 'overall', label: 'Overall Rating' },
   { key: 'prestige', label: 'Prestige' },
+  { key: 'prestigeRank', label: 'Prestige Rank' },
+  { key: 'teamRank', label: 'Team Rank' },
+  { key: 'wins', label: 'Wins' },
+  { key: 'losses', label: 'Losses' },
   { key: 'recruitingRank', label: 'Recruiting Class Rank' },
   { key: 'transfersIn', label: 'Transfers In' },
   { key: 'transfersOut', label: 'Transfers Out' },
@@ -335,7 +343,7 @@ export default function ChartsPage() {
                 responsive: true,
                 scales: {
                   x: AXIS_STYLE,
-                  y: { reverse: indicator === 'recruitingRank', ...AXIS_STYLE },
+                  y: { reverse: ['recruitingRank', 'prestigeRank', 'teamRank'].includes(indicator), ...AXIS_STYLE },
                 },
                 plugins: { legend: LEGEND_STYLE },
               }} />
