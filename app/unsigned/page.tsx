@@ -12,6 +12,16 @@ type SeasonSettings = {
   unsignedOneStar: number | null;
   unsignedHS: number | null;
   unsignedTransfer: number | null;
+  unsignedHSFiveStar: number | null;
+  unsignedHSFourStar: number | null;
+  unsignedHSThreeStar: number | null;
+  unsignedHSTwoStar: number | null;
+  unsignedHSOneStar: number | null;
+  unsignedXferFiveStar: number | null;
+  unsignedXferFourStar: number | null;
+  unsignedXferThreeStar: number | null;
+  unsignedXferTwoStar: number | null;
+  unsignedXferOneStar: number | null;
 };
 
 type UnsignedSeason = {
@@ -84,16 +94,25 @@ export default function UnsignedPage() {
       >
         <table className="w-full border-collapse text-sm">
           <thead>
+            <tr style={{ background: 'var(--ocean-900)', borderBottom: '1px solid var(--ocean-800)' }}>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }} rowSpan={2}>Season</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }} rowSpan={2}>Total</th>
+              <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide border-l" style={{ color: '#60a5fa', borderColor: 'var(--ocean-700)' }} colSpan={6}>High School / JUCO</th>
+              <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide border-l" style={{ color: '#a78bfa', borderColor: 'var(--ocean-700)' }} colSpan={6}>Transfer Portal</th>
+            </tr>
             <tr style={{ background: 'var(--ocean-900)' }}>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Season</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Total</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: STAR_COLORS.fiveStar }}>★5</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: STAR_COLORS.fourStar }}>★4</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: STAR_COLORS.threeStar }}>★3</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: STAR_COLORS.twoStar }}>★2</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: STAR_COLORS.oneStar }}>★1</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>HS</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Transfer</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold border-l" style={{ color: 'var(--ocean-400)', borderColor: 'var(--ocean-700)' }}>Total</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.fiveStar }}>★5</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.fourStar }}>★4</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.threeStar }}>★3</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.twoStar }}>★2</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.oneStar }}>★1</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold border-l" style={{ color: 'var(--ocean-400)', borderColor: 'var(--ocean-700)' }}>Total</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.fiveStar }}>★5</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.fourStar }}>★4</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.threeStar }}>★3</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.twoStar }}>★2</th>
+              <th className="px-4 py-2 text-right text-xs font-semibold" style={{ color: STAR_COLORS.oneStar }}>★1</th>
             </tr>
           </thead>
           <tbody>
@@ -107,13 +126,18 @@ export default function UnsignedPage() {
                 >
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--ocean-100)' }}>{r.label}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold" style={{ color: 'var(--ocean-200)' }}>{s.unsignedTotal ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium" style={{ color: STAR_COLORS.fiveStar }}>{s.unsignedFiveStar ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.fourStar }}>{s.unsignedFourStar ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.threeStar }}>{s.unsignedThreeStar ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.twoStar }}>{s.unsignedTwoStar ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.oneStar }}>{s.unsignedOneStar ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ocean-300)' }}>{s.unsignedHS ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ocean-300)' }}>{s.unsignedTransfer ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-medium border-l" style={{ color: '#60a5fa', borderColor: 'var(--ocean-800)' }}>{s.unsignedHS ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.fiveStar }}>{s.unsignedHSFiveStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.fourStar }}>{s.unsignedHSFourStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.threeStar }}>{s.unsignedHSThreeStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.twoStar }}>{s.unsignedHSTwoStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.oneStar }}>{s.unsignedHSOneStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-medium border-l" style={{ color: '#a78bfa', borderColor: 'var(--ocean-800)' }}>{s.unsignedTransfer ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.fiveStar }}>{s.unsignedXferFiveStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.fourStar }}>{s.unsignedXferFourStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.threeStar }}>{s.unsignedXferThreeStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.twoStar }}>{s.unsignedXferTwoStar ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: STAR_COLORS.oneStar }}>{s.unsignedXferOneStar ?? 0}</td>
                 </tr>
               );
             })}

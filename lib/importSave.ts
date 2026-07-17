@@ -82,59 +82,101 @@ const STAR_MAP: Record<string, keyof RecruitBreakdown> = {
 };
 
 type RecruitAnalysis = {
-  byTeam: Map<number, RecruitBreakdown>;
+  byTeam: Map<string, RecruitBreakdown>;
   unsigned: RecruitBreakdown;
+  unsignedHSStars: RecruitBreakdown;
+  unsignedXferStars: RecruitBreakdown;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function analyzeRecruits(franchise: any): Promise<RecruitAnalysis> {
+async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitAnalysis> {
   const recruitTable = tableByName(franchise, 'Recruit');
-  await recruitTable.readRecords(['Player', 'Class']);
+  await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
-  const entries: { tableId: number; row: number; isTransfer: boolean }[] = [];
+  const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
+  await playerTable.readRecords(['ProspectStarRating']);
+
+  // Build player-row → Recruit record map for Class lookups
+  const playerToRecruit = new Map<number, { isTransfer: boolean }>();
   for (const rec of recruitTable.records) {
     if (rec.isEmpty) continue;
     const ref = parseRef(rec.Player);
     if (!ref) continue;
     const cls: string = rec.Class ?? '';
-    entries.push({ ...ref, isTransfer: cls.startsWith('JuniorCollege') });
+    // JUCO counts as HS bucket (matches game's "High School / JUCO" grouping)
+    playerToRecruit.set(ref.row, { isTransfer: !cls.startsWith('HighSchool') && !cls.startsWith('JuniorCollege') });
   }
 
-  const byTable = new Map<number, typeof entries>();
-  for (const e of entries) {
-    if (!byTable.has(e.tableId)) byTable.set(e.tableId, []);
-    byTable.get(e.tableId)!.push(e);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tableCache = new Map<number, any>();
+  async function getTable(id: number) {
+    if (!tableCache.has(id)) {
+      const t = franchise.getTableById(id);
+      await t.readRecords();
+      tableCache.set(id, t);
+    }
+    return tableCache.get(id);
   }
 
-  const byTeam = new Map<number, RecruitBreakdown>();
+  // Read per-team recruits from CommittedPlayers array on each team
+  const byTeam = new Map<string, RecruitBreakdown>();
+  for (const teamRec of teamTable.records) {
+    if (teamRec.isEmpty || !teamRec.DisplayName) continue;
+    const teamName: string = teamRec.DisplayName;
+    const cpRef = parseRef(teamRec.CommittedPlayers);
+    if (!cpRef) continue;
+
+    const cpTable = await getTable(cpRef.tableId);
+    const cpRec = cpTable.records[cpRef.row];
+    const breakdown = emptyBreakdown();
+
+    for (const f of Object.keys(cpRec.fields)) {
+      try {
+        const val = cpRec[f];
+        const ref = parseRef(val);
+        if (!ref) continue;
+        const prec = playerTable.records[ref.row];
+        if (!prec || prec.isEmpty) continue;
+
+        breakdown.total++;
+        const starField = STAR_MAP[prec.ProspectStarRating as string];
+        if (starField) (breakdown[starField] as number)++;
+
+        const recruitInfo = playerToRecruit.get(ref.row);
+        if (recruitInfo?.isTransfer) breakdown.transfer++;
+        else breakdown.hs++;
+      } catch { /* skip unreadable slots */ }
+    }
+
+    if (breakdown.total > 0) byTeam.set(teamName, breakdown);
+  }
+
+  // Unsigned = recruits not signed (stage is Top10, Top5, Top3, Invalid, etc.)
   const unsigned = emptyBreakdown();
+  const unsignedHSStars = emptyBreakdown();
+  const unsignedXferStars = emptyBreakdown();
+  for (const rec of recruitTable.records) {
+    if (rec.isEmpty) continue;
+    if (rec.RecruitStage === 'Signed') continue;
+    const ref = parseRef(rec.Player);
+    if (!ref) continue;
+    const prec = playerTable.records[ref.row];
+    if (!prec || prec.isEmpty) continue;
 
-  for (const [tableId, rows] of byTable) {
-    const pt = franchise.getTableById(tableId);
-    await pt.readRecords(['TeamIndex', 'ProspectStarRating']);
-    for (const entry of rows) {
-      const prec = pt.records[entry.row];
-      if (!prec || prec.isEmpty) continue;
-      let teamIndex: number;
-      try { teamIndex = prec.TeamIndex; } catch { continue; }
-
-      const starField = STAR_MAP[prec.ProspectStarRating as string];
-
-      if (teamIndex === 255 || teamIndex == null) {
-        unsigned.total++;
-        if (entry.isTransfer) unsigned.transfer++; else unsigned.hs++;
-        if (starField) (unsigned[starField] as number)++;
-        continue;
-      }
-
-      if (!byTeam.has(teamIndex)) byTeam.set(teamIndex, emptyBreakdown());
-      const b = byTeam.get(teamIndex)!;
-      b.total++;
-      if (entry.isTransfer) b.transfer++; else b.hs++;
-      if (starField) (b[starField] as number)++;
+    unsigned.total++;
+    const cls: string = rec.Class ?? '';
+    const isTransfer = !cls.startsWith('HighSchool') && !cls.startsWith('JuniorCollege');
+    if (isTransfer) unsigned.transfer++;
+    else unsigned.hs++;
+    const starField = STAR_MAP[prec.ProspectStarRating as string];
+    if (starField) {
+      (unsigned[starField] as number)++;
+      if (isTransfer) (unsignedXferStars[starField] as number)++;
+      else (unsignedHSStars[starField] as number)++;
     }
   }
-  return { byTeam, unsigned };
+
+  return { byTeam, unsigned, unsignedHSStars, unsignedXferStars };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -221,10 +263,11 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     'ProgramPointsStadiumAtmosphereGrade', 'ProgramPointsBrandExposureGrade',
     'ProgramPointsBudgetGrade', 'ProgramPointsProgramTraditionsGrade',
     'ProgramPointsConferencePrestigeGrade',
+    'CommittedPlayers',
   ]);
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, unsigned } = await analyzeRecruits(franchise);
+  const { byTeam: recruitData, unsigned, unsignedHSStars, unsignedXferStars } = await analyzeRecruits(franchise, teamTable);
   const settings = await extractSettings(franchise);
 
   const season = await prisma.season.upsert({
@@ -233,31 +276,31 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     create: { year, label: `Season ${year}`, sourceFile: savePath },
   });
 
+  const unsignedPayload = {
+    unsignedTotal: unsigned.total,
+    unsignedFiveStar: unsigned.fiveStars,
+    unsignedFourStar: unsigned.fourStars,
+    unsignedThreeStar: unsigned.threeStars,
+    unsignedTwoStar: unsigned.twoStars,
+    unsignedOneStar: unsigned.oneStars,
+    unsignedHS: unsigned.hs,
+    unsignedTransfer: unsigned.transfer,
+    unsignedHSFiveStar: unsignedHSStars.fiveStars,
+    unsignedHSFourStar: unsignedHSStars.fourStars,
+    unsignedHSThreeStar: unsignedHSStars.threeStars,
+    unsignedHSTwoStar: unsignedHSStars.twoStars,
+    unsignedHSOneStar: unsignedHSStars.oneStars,
+    unsignedXferFiveStar: unsignedXferStars.fiveStars,
+    unsignedXferFourStar: unsignedXferStars.fourStars,
+    unsignedXferThreeStar: unsignedXferStars.threeStars,
+    unsignedXferTwoStar: unsignedXferStars.twoStars,
+    unsignedXferOneStar: unsignedXferStars.oneStars,
+  };
+
   await prisma.seasonSettings.upsert({
     where: { seasonId: season.id },
-    update: {
-      ...settings,
-      unsignedTotal: unsigned.total,
-      unsignedFiveStar: unsigned.fiveStars,
-      unsignedFourStar: unsigned.fourStars,
-      unsignedThreeStar: unsigned.threeStars,
-      unsignedTwoStar: unsigned.twoStars,
-      unsignedOneStar: unsigned.oneStars,
-      unsignedHS: unsigned.hs,
-      unsignedTransfer: unsigned.transfer,
-    },
-    create: {
-      seasonId: season.id,
-      ...settings,
-      unsignedTotal: unsigned.total,
-      unsignedFiveStar: unsigned.fiveStars,
-      unsignedFourStar: unsigned.fourStars,
-      unsignedThreeStar: unsigned.threeStars,
-      unsignedTwoStar: unsigned.twoStars,
-      unsignedOneStar: unsigned.oneStars,
-      unsignedHS: unsigned.hs,
-      unsignedTransfer: unsigned.transfer,
-    },
+    update: { ...settings, ...unsignedPayload },
+    create: { seasonId: season.id, ...settings, ...unsignedPayload },
   });
 
   let teamsImported = 0;
@@ -293,7 +336,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
 
     const wins = (rec.ConfWin ?? 0) + (rec.NonConfWin ?? 0);
     const losses = (rec.ConfLoss ?? 0) + (rec.NonConfLoss ?? 0);
-    const rb = recruitData.get(rec.TeamIndex) ?? emptyBreakdown();
+    const rb = recruitData.get(name) ?? emptyBreakdown();
 
     const gAtm: string = rec.ProgramPointsStadiumAtmosphereGrade ?? '';
     const gBrand: string = rec.ProgramPointsBrandExposureGrade ?? '';
@@ -308,7 +351,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       recruitingRank: rec.TopClassRank ?? null,
       teamRank: rec.TeamRank ?? null,
       wins, losses,
-      transfersIn: rec.LastSeasonTransfersSigned ?? null,
+      transfersIn: rb.transfer,
       transfersOut: rec.LastSeasonTransfersLost ?? null,
       recruitCount: rb.total,
       rosterSize: rec.ActiveRosterSize ?? null,

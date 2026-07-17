@@ -252,12 +252,8 @@ export default function Dashboard() {
               <Th label="★2" k="twoStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              {recruitTypeFilter !== 'all' ? null : (
-                <>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
-                </>
-              )}
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>HS</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase" style={{ color: 'var(--ocean-500)' }}>XFER</th>
               {showGrades && (
                 <>
                   <Th label="Avg" k="avgGrade" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -303,13 +299,11 @@ export default function Dashboard() {
                 <td className="px-3 py-2 tabular-nums" style={{ color: '#60a5fa' }}>{r.threeStars || '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{r.twoStars || '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: '#94a3b8' }}>{r.oneStars || '—'}</td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: 'var(--ocean-200)' }}>{r.recruitCount ?? '—'}</td>
-                {recruitTypeFilter !== 'all' ? null : (
-                  <>
-                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.hsRecruits ?? '—'}</td>
-                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.transferRecruits ?? '—'}</td>
-                  </>
-                )}
+                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: 'var(--ocean-200)' }}>
+                  {recruitTypeFilter === 'hs' ? (r.hsRecruits ?? '—') : recruitTypeFilter === 'transfer' ? (r.transferRecruits ?? '—') : (r.recruitCount ?? '—')}
+                </td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.hsRecruits ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-300)' }}>{r.transferRecruits ?? '—'}</td>
                 {showGrades && (
                   <>
                     <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: gradeColor(r.avgGrade) }}>{r.avgGrade?.toFixed(1) ?? '—'}</td>

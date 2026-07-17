@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type SaveFile = { name: string; path: string };
+type Season = { id: string; year: number; label: string };
 type ImportResult = {
   seasonYear: number;
   teamsImported: number;
@@ -18,7 +19,12 @@ export default function ImportPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
+  const [seasons, setSeasons] = useState<Season[]>([]);
   const router = useRouter();
+
+  function loadSeasons() {
+    fetch('/api/seasons').then((r) => r.json()).then(setSeasons);
+  }
 
   useEffect(() => {
     fetch('/api/saves')
@@ -29,6 +35,7 @@ export default function ImportPage() {
         if (data.saves.length) setSelectedPath(data.saves[0].path);
         if (data.error) setLoadError(data.error);
       });
+    loadSeasons();
   }, []);
 
   async function handleImport(e: React.FormEvent) {
@@ -123,6 +130,39 @@ export default function ImportPage() {
           >
             View Dashboard
           </button>
+        </div>
+      )}
+
+      {/* Season management */}
+      {seasons.length > 0 && (
+        <div className="mt-10 border-t pt-8" style={{ borderColor: 'var(--ocean-800)' }}>
+          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Imported Seasons</h2>
+          <div className="mt-3 flex flex-col gap-2">
+            {seasons.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between rounded-lg border px-4 py-2.5"
+                style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}
+              >
+                <span className="text-sm font-medium" style={{ color: 'var(--ocean-200)' }}>{s.label}</span>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete all data for ${s.label}?`)) return;
+                    await fetch('/api/seasons', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ seasonId: s.id }),
+                    });
+                    loadSeasons();
+                  }}
+                  className="rounded px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+                  style={{ background: 'rgba(153,27,27,0.3)', color: '#fca5a5' }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

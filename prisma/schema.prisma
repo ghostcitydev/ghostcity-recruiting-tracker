@@ -62,14 +62,25 @@ model SeasonSettings {
   xpK   Int?
   xpP   Int?
 
-  unsignedTotal    Int?
-  unsignedFiveStar Int?
-  unsignedFourStar Int?
+  unsignedTotal     Int?
+  unsignedFiveStar  Int?
+  unsignedFourStar  Int?
   unsignedThreeStar Int?
-  unsignedTwoStar  Int?
-  unsignedOneStar  Int?
-  unsignedHS       Int?
-  unsignedTransfer Int?
+  unsignedTwoStar   Int?
+  unsignedOneStar   Int?
+  unsignedHS        Int?
+  unsignedTransfer  Int?
+
+  unsignedHSFiveStar   Int?
+  unsignedHSFourStar   Int?
+  unsignedHSThreeStar  Int?
+  unsignedHSTwoStar    Int?
+  unsignedHSOneStar    Int?
+  unsignedXferFiveStar  Int?
+  unsignedXferFourStar  Int?
+  unsignedXferThreeStar Int?
+  unsignedXferTwoStar   Int?
+  unsignedXferOneStar   Int?
 }
 
 model TeamSeasonStat {
