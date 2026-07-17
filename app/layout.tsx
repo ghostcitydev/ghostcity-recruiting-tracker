@@ -34,7 +34,7 @@ export default function RootLayout({
           style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}
         >
           <div className="mx-auto flex max-w-[1600px] items-center gap-8 px-6 py-3">
-            <span style={{ fontFamily: 'Franchise, sans-serif', fontSize: '1.25rem', color: 'var(--ocean-100)', letterSpacing: '0.02em' }}>
+            <span style={{ fontFamily: 'Franchise, sans-serif', fontSize: '2.75rem', lineHeight: 1, color: 'var(--ocean-100)', letterSpacing: '0.02em' }}>
               CFB Recruiting Evolution Tracker
             </span>
             <nav className="flex gap-1 text-sm">

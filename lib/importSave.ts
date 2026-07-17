@@ -300,15 +300,15 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     if (trackingTables.length > 0) {
       const trackingTable = trackingTables[0];
       await trackingTable.readRecords(['AthleticFacilitiesGrade', 'AthleticFacilitiesScore']);
-      for (const r of trackingTable.records) {
-        if (r.isEmpty) continue;
-        const idx = r.TeamIndex as number;
+      // Row index = TeamIndex (no separate field); score 0–2000 → store as 0–100
+      trackingTable.records.forEach((r: any, rowIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (r.isEmpty) return;
         const grade = r.AthleticFacilitiesGrade as string;
-        const score = r.AthleticFacilitiesScore as number;
-        if (idx != null && idx !== 255 && grade) {
-          facilitiesMap.set(idx, { grade: gradeToDisplay(grade), score: score ?? 0 });
+        const raw = r.AthleticFacilitiesScore as number;
+        if (grade) {
+          facilitiesMap.set(rowIdx, { grade: gradeToDisplay(grade), score: Math.round((raw ?? 0) / 20) });
         }
-      }
+      });
     }
   } catch { /* table absent — skip */ }
 

@@ -47,7 +47,7 @@ const LINE_INDICATORS = [
   { key: 'oneStars', label: '1-Star Recruits' },
   { key: 'netTransfers', label: 'Net Transfers (In − Out)' },
   { key: 'avgGrade', label: 'Avg School Grade' },
-  { key: 'facilitiesScore', label: 'Facilities Score (0–2000)' },
+  { key: 'facilitiesScore', label: 'Facilities Score (0–100)' },
 ] as const;
 type IndicatorKey = (typeof LINE_INDICATORS)[number]['key'];
 
