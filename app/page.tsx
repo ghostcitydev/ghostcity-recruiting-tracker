@@ -88,11 +88,17 @@ export default function Dashboard() {
 
   const conferences = useMemo(() => {
     const set = new Set(stats.map((s) => s.team.conference));
-    return ['All', ...Array.from(set).sort()];
+    return ['All', 'Power 4', 'Group of 5', ...Array.from(set).sort()];
   }, [stats]);
 
+  const P4 = new Set(['ACC', 'Big 12', 'Big Ten', 'SEC']);
+  const G5 = new Set(['American', 'CUSA', 'MAC', 'MWC', 'Sun Belt', 'Pac-12']);
+
   const rows = useMemo(() => {
-    let filtered = conferenceFilter === 'All' ? stats : stats.filter((s) => s.team.conference === conferenceFilter);
+    let filtered = conferenceFilter === 'All' ? stats
+      : conferenceFilter === 'Power 4' ? stats.filter((s) => P4.has(s.team.conference))
+      : conferenceFilter === 'Group of 5' ? stats.filter((s) => G5.has(s.team.conference))
+      : stats.filter((s) => s.team.conference === conferenceFilter);
     filtered = [...filtered].sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       switch (sortKey) {
@@ -206,7 +212,13 @@ export default function Dashboard() {
 
         <ControlGroup label="Conference">
           <Select value={conferenceFilter} onChange={setConferenceFilter}>
-            {conferences.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="All">All</option>
+            <option value="Power 4">Power 4</option>
+            <option value="Group of 5">Group of 5</option>
+            <option disabled>──────────</option>
+            {conferences.filter((c) => !['All', 'Power 4', 'Group of 5'].includes(c)).map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </Select>
         </ControlGroup>
 
