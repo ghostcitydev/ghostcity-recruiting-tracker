@@ -82,7 +82,7 @@ function StarCell({ n, color }: { n: number; color: string }) {
 
 type ViewMode = 'team' | 'region';
 type DataMode = 'influence' | 'recruits';
-type SortKey = 'team' | 'conference' | 'value' | 'level' | 'total' | 'fiveStars' | 'fourStars' | 'threeStars';
+type SortKey = 'team' | 'conference' | 'value' | 'level' | 'total' | 'points' | 'fiveStars' | 'fourStars' | 'threeStars';
 
 const P4 = new Set(['ACC', 'Big 12', 'Big Ten', 'SEC']);
 const G5 = new Set(['American', 'CUSA', 'MAC', 'MWC', 'Sun Belt', 'Pac-12']);
@@ -170,6 +170,8 @@ export default function PipelinesPage() {
     return m;
   }, [rows]);
 
+  const pts = (r: RecruitRow) => r.fiveStars * 5 + r.fourStars * 4 + r.threeStars * 3 + r.twoStars * 2 + r.oneStars;
+
   // Team recruit view: per-pipeline breakdown for selected team
   const teamRecruitRows = useMemo(() => {
     if (viewMode !== 'team' || !selectedTeam) return [];
@@ -216,6 +218,7 @@ export default function PipelinesPage() {
       const infB = influenceByTeamPipeline.get(`${b.team.name}|${b.pipeline}`);
       let cmp = 0;
       if (sortKey === 'total') cmp = a.total - b.total;
+      else if (sortKey === 'points') cmp = pts(a) - pts(b);
       else if (sortKey === 'fiveStars') cmp = a.fiveStars - b.fiveStars;
       else if (sortKey === 'fourStars') cmp = a.fourStars - b.fourStars;
       else if (sortKey === 'threeStars') cmp = a.threeStars - b.threeStars;
@@ -383,6 +386,7 @@ export default function PipelinesPage() {
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>Total</th>
+                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Pts</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,6 +403,7 @@ export default function PipelinesPage() {
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fde047', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
                     </tr>
                     );
                   })}
@@ -481,6 +486,7 @@ export default function PipelinesPage() {
                   <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
                   <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
                   <SortHeader label="Total" k="total" right />
+                  <SortHeader label="Pts" k="points" right />
                 </tr>
               </thead>
               <tbody>
@@ -508,11 +514,12 @@ export default function PipelinesPage() {
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fde047', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
                   </tr>
                   );
                 })}
                 {regionRecruitRows.length === 0 && (
-                  <tr><td colSpan={11} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
+                  <tr><td colSpan={12} style={{ padding: '20px 12px', color: 'var(--ocean-500)', textAlign: 'center' }}>No HS recruit data for this region.</td></tr>
                 )}
               </tbody>
             </table>
