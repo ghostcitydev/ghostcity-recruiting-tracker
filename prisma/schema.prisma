@@ -27,7 +27,60 @@ model Season {
   importedAt DateTime @default(now())
   sourceFile String?
 
-  stats TeamSeasonStat[]
+  stats    TeamSeasonStat[]
+  settings SeasonSettings?
+}
+
+model SeasonSettings {
+  id       String @id @default(cuid())
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId String @unique
+
+  cpuTransferChance  Int?
+  userTransferChance Int?
+  maxTransfersPerTeam Int?
+  recruitFlipping    Boolean?
+  skillLevel         String?
+  progressionFreq    String?
+  talentProgressSpeed String?
+  xpPenalty          Int?
+
+  xpQB  Int?
+  xpHB  Int?
+  xpWR  Int?
+  xpTE  Int?
+  xpT   Int?
+  xpG   Int?
+  xpC   Int?
+  xpDE  Int?
+  xpDT  Int?
+  xpOLB Int?
+  xpMLB Int?
+  xpCB  Int?
+  xpFS  Int?
+  xpSS  Int?
+  xpK   Int?
+  xpP   Int?
+
+  unsignedTotal     Int?
+  unsignedFiveStar  Int?
+  unsignedFourStar  Int?
+  unsignedThreeStar Int?
+  unsignedTwoStar   Int?
+  unsignedOneStar   Int?
+  unsignedHS        Int?
+  unsignedTransfer  Int?
+
+  unsignedHSFiveStar   Int?
+  unsignedHSFourStar   Int?
+  unsignedHSThreeStar  Int?
+  unsignedHSTwoStar    Int?
+  unsignedHSOneStar    Int?
+  unsignedXferFiveStar  Int?
+  unsignedXferFourStar  Int?
+  unsignedXferThreeStar Int?
+  unsignedXferTwoStar   Int?
+  unsignedXferOneStar   Int?
 }
 
 model TeamSeasonStat {
@@ -52,6 +105,36 @@ model TeamSeasonStat {
   recruitCount     Int?
   unsignedRecruits Int?
   rosterSize       Int?
+
+  fiveStars  Int?
+  fourStars  Int?
+  threeStars Int?
+  twoStars   Int?
+  oneStars   Int?
+
+  fiveStarsHS  Int?
+  fourStarsHS  Int?
+  threeStarsHS Int?
+  twoStarsHS   Int?
+  oneStarsHS   Int?
+
+  fiveStarsXfer  Int?
+  fourStarsXfer  Int?
+  threeStarsXfer Int?
+  twoStarsXfer   Int?
+  oneStarsXfer   Int?
+
+  hsRecruits       Int?
+  transferRecruits Int?
+
+  gradeAtmosphere  String?
+  gradeBrand       String?
+  gradeBudget      String?
+  gradeTraditions  String?
+  gradeConference  String?
+  gradeFacilities  String?
+  facilitiesScore  Int?
+  avgGrade         Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
