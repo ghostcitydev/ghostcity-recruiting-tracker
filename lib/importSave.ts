@@ -314,12 +314,12 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
 
   // Build tracking map: TeamIndex → all MySchoolTrackingTable grade fields
   type TrackingData = {
-    gradeFacilities: string | null; facilitiesScore: number | null; facilitiesRawGrade: string;
-    gradeAcademic: string | null; gradeCampus: string | null;
-    gradeCoachStability: string | null; gradeCoachPrestige: string | null; gradeChampion: string | null;
-    gradeProQB: string | null; gradeProRB: string | null; gradeProWR: string | null; gradeProTE: string | null;
-    gradeProOL: string | null; gradeProDL: string | null; gradeProLB: string | null; gradeProDB: string | null;
-    gradeProK: string | null; gradeProP: string | null;
+    gradeFacilities: string; facilitiesScore: number | null;
+    gradeAcademic: string; gradeCampus: string;
+    gradeCoachStability: string; gradeCoachPrestige: string; gradeChampion: string;
+    gradeProQB: string; gradeProRB: string; gradeProWR: string; gradeProTE: string;
+    gradeProOL: string; gradeProDL: string; gradeProLB: string; gradeProDB: string;
+    gradeProK: string; gradeProP: string;
   };
   const trackingMap = new Map<number, TrackingData>();
   try {
@@ -336,22 +336,20 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       ]);
       trackingTable.records.forEach((r: any, rowIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (r.isEmpty) return;
-        const g = (f: string) => { const v = r[f] as string; return v ? gradeToDisplay(v) : null; };
-        const rawFac = (r.AthleticFacilitiesGrade as string) ?? '';
+        const raw = (f: string): string => (r[f] as string) ?? '';
         trackingMap.set(rowIdx, {
-          gradeFacilities: rawFac ? gradeToDisplay(rawFac) : null,
-          facilitiesRawGrade: rawFac,
+          gradeFacilities: raw('AthleticFacilitiesGrade'),
           facilitiesScore: Math.round(((r.AthleticFacilitiesScore as number) ?? 0) / 20),
-          gradeAcademic: g('AcademicPrestigeGrade'),
-          gradeCampus: g('CampusLifestyleGrade'),
-          gradeCoachStability: g('CoachStabilityGrade'),
-          gradeCoachPrestige: g('CoachPrestigeGrade'),
-          gradeChampion: g('ChampionshipContenderGrade'),
-          gradeProQB: g('ProPotentialGradeQB'), gradeProRB: g('ProPotentialGradeRB'),
-          gradeProWR: g('ProPotentialGradeWR'), gradeProTE: g('ProPotentialGradeTE'),
-          gradeProOL: g('ProPotentialGradeOL'), gradeProDL: g('ProPotentialGradeDL'),
-          gradeProLB: g('ProPotentialGradeLB'), gradeProDB: g('ProPotentialGradeDB'),
-          gradeProK: g('ProPotentialGradeK'), gradeProP: g('ProPotentialGradeP'),
+          gradeAcademic: raw('AcademicPrestigeGrade'),
+          gradeCampus: raw('CampusLifestyleGrade'),
+          gradeCoachStability: raw('CoachStabilityGrade'),
+          gradeCoachPrestige: raw('CoachPrestigeGrade'),
+          gradeChampion: raw('ChampionshipContenderGrade'),
+          gradeProQB: raw('ProPotentialGradeQB'), gradeProRB: raw('ProPotentialGradeRB'),
+          gradeProWR: raw('ProPotentialGradeWR'), gradeProTE: raw('ProPotentialGradeTE'),
+          gradeProOL: raw('ProPotentialGradeOL'), gradeProDL: raw('ProPotentialGradeDL'),
+          gradeProLB: raw('ProPotentialGradeLB'), gradeProDB: raw('ProPotentialGradeDB'),
+          gradeProK: raw('ProPotentialGradeK'), gradeProP: raw('ProPotentialGradeP'),
         });
       });
     }
@@ -520,24 +518,24 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeBudget: gBudget ? gradeToDisplay(gBudget) : null,
       gradeTraditions: gTrad ? gradeToDisplay(gTrad) : null,
       gradeConference: gConf ? gradeToDisplay(gConf) : null,
-      gradeFacilities: tracking?.gradeFacilities ?? null,
+      gradeFacilities: tracking?.gradeFacilities ? gradeToDisplay(tracking.gradeFacilities) : null,
       facilitiesScore: tracking?.facilitiesScore ?? null,
-      gradeAcademic: tracking?.gradeAcademic ?? null,
-      gradeCampus: tracking?.gradeCampus ?? null,
-      gradeCoachStability: tracking?.gradeCoachStability ?? null,
-      gradeCoachPrestige: tracking?.gradeCoachPrestige ?? null,
-      gradeChampion: tracking?.gradeChampion ?? null,
-      gradeProQB: tracking?.gradeProQB ?? null,
-      gradeProRB: tracking?.gradeProRB ?? null,
-      gradeProWR: tracking?.gradeProWR ?? null,
-      gradeProTE: tracking?.gradeProTE ?? null,
-      gradeProOL: tracking?.gradeProOL ?? null,
-      gradeProDL: tracking?.gradeProDL ?? null,
-      gradeProLB: tracking?.gradeProLB ?? null,
-      gradeProDB: tracking?.gradeProDB ?? null,
-      gradeProK: tracking?.gradeProK ?? null,
-      gradeProP: tracking?.gradeProP ?? null,
-      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, tracking?.facilitiesRawGrade ?? ''),
+      gradeAcademic: tracking?.gradeAcademic ? gradeToDisplay(tracking.gradeAcademic) : null,
+      gradeCampus: tracking?.gradeCampus ? gradeToDisplay(tracking.gradeCampus) : null,
+      gradeCoachStability: tracking?.gradeCoachStability ? gradeToDisplay(tracking.gradeCoachStability) : null,
+      gradeCoachPrestige: tracking?.gradeCoachPrestige ? gradeToDisplay(tracking.gradeCoachPrestige) : null,
+      gradeChampion: tracking?.gradeChampion ? gradeToDisplay(tracking.gradeChampion) : null,
+      gradeProQB: tracking?.gradeProQB ? gradeToDisplay(tracking.gradeProQB) : null,
+      gradeProRB: tracking?.gradeProRB ? gradeToDisplay(tracking.gradeProRB) : null,
+      gradeProWR: tracking?.gradeProWR ? gradeToDisplay(tracking.gradeProWR) : null,
+      gradeProTE: tracking?.gradeProTE ? gradeToDisplay(tracking.gradeProTE) : null,
+      gradeProOL: tracking?.gradeProOL ? gradeToDisplay(tracking.gradeProOL) : null,
+      gradeProDL: tracking?.gradeProDL ? gradeToDisplay(tracking.gradeProDL) : null,
+      gradeProLB: tracking?.gradeProLB ? gradeToDisplay(tracking.gradeProLB) : null,
+      gradeProDB: tracking?.gradeProDB ? gradeToDisplay(tracking.gradeProDB) : null,
+      gradeProK: tracking?.gradeProK ? gradeToDisplay(tracking.gradeProK) : null,
+      gradeProP: tracking?.gradeProP ? gradeToDisplay(tracking.gradeProP) : null,
+      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, tracking?.gradeFacilities ?? ''),
       coachName: coach?.name ?? null,
       coachArchetype: coach?.archetype ?? null,
       coachLevel: coach?.level ?? null,
