@@ -306,27 +306,23 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     'TEAM_RATINGOVR', 'TeamPrestige', 'PrestigeRank', 'TopClassRank', 'TeamRank',
     'ConfWin', 'ConfLoss', 'NonConfWin', 'NonConfLoss',
     'LastSeasonTransfersSigned', 'LastSeasonTransfersLost', 'ActiveRosterSize',
-    'ProgramPointsStadiumAtmosphereGrade', 'ProgramPointsBrandExposureGrade',
-    'ProgramPointsBudgetGrade', 'ProgramPointsProgramTraditionsGrade',
-    'ProgramPointsConferencePrestigeGrade',
+    'ProgramPointsBudgetGrade',
     'CommittedPlayers',
+    'MySchoolTrackingTable',
   ]);
 
-  // Build tracking map: TeamIndex → all MySchoolTrackingTable grade fields
-  type TrackingData = {
-    gradeFacilities: string; facilitiesScore: number | null;
-    gradeAcademic: string; gradeCampus: string;
-    gradeCoachStability: string; gradeCoachPrestige: string; gradeChampion: string;
-    gradeProQB: string; gradeProRB: string; gradeProWR: string; gradeProTE: string;
-    gradeProOL: string; gradeProDL: string; gradeProLB: string; gradeProDB: string;
-    gradeProK: string; gradeProP: string;
-  };
-  const trackingMap = new Map<number, TrackingData>();
+  // Read all school grades from MySchoolTrackingTable; each Team record carries a direct
+  // ref (MySchoolTrackingTable field) to its row — row index ≠ TeamIndex so we cannot
+  // use TeamIndex as a lookup key.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let trackingTable: any = null;
   try {
-    const trackingTables = franchise.tables.filter((t: any) => t.name === 'MySchoolTrackingTable'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (trackingTables.length > 0) {
-      const trackingTable = trackingTables[0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hits = franchise.tables.filter((t: any) => t.name === 'MySchoolTrackingTable');
+    if (hits.length > 0) {
+      trackingTable = hits[0];
       await trackingTable.readRecords([
+        'StadiumAtmosphereGrade', 'BrandExposureGrade', 'ProgramTraditionGrade', 'ConferencePrestigeGrade',
         'AthleticFacilitiesGrade', 'AthleticFacilitiesScore',
         'AcademicPrestigeGrade', 'CampusLifestyleGrade',
         'CoachStabilityGrade', 'CoachPrestigeGrade', 'ChampionshipContenderGrade',
@@ -334,24 +330,6 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
         'ProPotentialGradeOL', 'ProPotentialGradeDL', 'ProPotentialGradeLB', 'ProPotentialGradeDB',
         'ProPotentialGradeK', 'ProPotentialGradeP',
       ]);
-      trackingTable.records.forEach((r: any, rowIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (r.isEmpty) return;
-        const raw = (f: string): string => (r[f] as string) ?? '';
-        trackingMap.set(rowIdx, {
-          gradeFacilities: raw('AthleticFacilitiesGrade'),
-          facilitiesScore: Math.round(((r.AthleticFacilitiesScore as number) ?? 0) / 20),
-          gradeAcademic: raw('AcademicPrestigeGrade'),
-          gradeCampus: raw('CampusLifestyleGrade'),
-          gradeCoachStability: raw('CoachStabilityGrade'),
-          gradeCoachPrestige: raw('CoachPrestigeGrade'),
-          gradeChampion: raw('ChampionshipContenderGrade'),
-          gradeProQB: raw('ProPotentialGradeQB'), gradeProRB: raw('ProPotentialGradeRB'),
-          gradeProWR: raw('ProPotentialGradeWR'), gradeProTE: raw('ProPotentialGradeTE'),
-          gradeProOL: raw('ProPotentialGradeOL'), gradeProDL: raw('ProPotentialGradeDL'),
-          gradeProLB: raw('ProPotentialGradeLB'), gradeProDB: raw('ProPotentialGradeDB'),
-          gradeProK: raw('ProPotentialGradeK'), gradeProP: raw('ProPotentialGradeP'),
-        });
-      });
     }
   } catch { /* table absent — skip */ }
 
@@ -476,14 +454,19 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     const losses = (rec.ConfLoss ?? 0) + (rec.NonConfLoss ?? 0);
     const rb = recruitData.get(name) ?? emptyBreakdown();
 
-    const gAtm: string = rec.ProgramPointsStadiumAtmosphereGrade ?? '';
-    const gBrand: string = rec.ProgramPointsBrandExposureGrade ?? '';
     const gBudget: string = rec.ProgramPointsBudgetGrade ?? '';
-    const gTrad: string = rec.ProgramPointsProgramTraditionsGrade ?? '';
-    const gConf: string = rec.ProgramPointsConferencePrestigeGrade ?? '';
     const teamIdx = rec.TeamIndex as number;
-    const tracking = trackingMap.get(teamIdx) ?? null;
     const coach = coachMap.get(teamIdx) ?? null;
+
+    // Resolve tracking record via the ref embedded in each Team row
+    const trackingRef = parseRef(rec.MySchoolTrackingTable);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tr: any = (trackingRef && trackingTable) ? (trackingTable.records[trackingRef.row] ?? null) : null;
+    const traw = (f: string): string => (tr && !tr.isEmpty ? (tr[f] as string) ?? '' : '');
+    const gAtm = traw('StadiumAtmosphereGrade');
+    const gBrand = traw('BrandExposureGrade');
+    const gTrad = traw('ProgramTraditionGrade');
+    const gConf = traw('ConferencePrestigeGrade');
 
     const statPayload = {
       overall: rec.TEAM_RATINGOVR ?? null,
@@ -518,24 +501,24 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeBudget: gBudget ? gradeToDisplay(gBudget) : null,
       gradeTraditions: gTrad ? gradeToDisplay(gTrad) : null,
       gradeConference: gConf ? gradeToDisplay(gConf) : null,
-      gradeFacilities: tracking?.gradeFacilities ? gradeToDisplay(tracking.gradeFacilities) : null,
-      facilitiesScore: tracking?.facilitiesScore ?? null,
-      gradeAcademic: tracking?.gradeAcademic ? gradeToDisplay(tracking.gradeAcademic) : null,
-      gradeCampus: tracking?.gradeCampus ? gradeToDisplay(tracking.gradeCampus) : null,
-      gradeCoachStability: tracking?.gradeCoachStability ? gradeToDisplay(tracking.gradeCoachStability) : null,
-      gradeCoachPrestige: tracking?.gradeCoachPrestige ? gradeToDisplay(tracking.gradeCoachPrestige) : null,
-      gradeChampion: tracking?.gradeChampion ? gradeToDisplay(tracking.gradeChampion) : null,
-      gradeProQB: tracking?.gradeProQB ? gradeToDisplay(tracking.gradeProQB) : null,
-      gradeProRB: tracking?.gradeProRB ? gradeToDisplay(tracking.gradeProRB) : null,
-      gradeProWR: tracking?.gradeProWR ? gradeToDisplay(tracking.gradeProWR) : null,
-      gradeProTE: tracking?.gradeProTE ? gradeToDisplay(tracking.gradeProTE) : null,
-      gradeProOL: tracking?.gradeProOL ? gradeToDisplay(tracking.gradeProOL) : null,
-      gradeProDL: tracking?.gradeProDL ? gradeToDisplay(tracking.gradeProDL) : null,
-      gradeProLB: tracking?.gradeProLB ? gradeToDisplay(tracking.gradeProLB) : null,
-      gradeProDB: tracking?.gradeProDB ? gradeToDisplay(tracking.gradeProDB) : null,
-      gradeProK: tracking?.gradeProK ? gradeToDisplay(tracking.gradeProK) : null,
-      gradeProP: tracking?.gradeProP ? gradeToDisplay(tracking.gradeProP) : null,
-      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, tracking?.gradeFacilities ?? ''),
+      gradeFacilities: traw('AthleticFacilitiesGrade') ? gradeToDisplay(traw('AthleticFacilitiesGrade')) : null,
+      facilitiesScore: tr && !tr.isEmpty ? Math.round(((tr.AthleticFacilitiesScore as number) ?? 0) / 20) : null,
+      gradeAcademic: traw('AcademicPrestigeGrade') ? gradeToDisplay(traw('AcademicPrestigeGrade')) : null,
+      gradeCampus: traw('CampusLifestyleGrade') ? gradeToDisplay(traw('CampusLifestyleGrade')) : null,
+      gradeCoachStability: traw('CoachStabilityGrade') ? gradeToDisplay(traw('CoachStabilityGrade')) : null,
+      gradeCoachPrestige: traw('CoachPrestigeGrade') ? gradeToDisplay(traw('CoachPrestigeGrade')) : null,
+      gradeChampion: traw('ChampionshipContenderGrade') ? gradeToDisplay(traw('ChampionshipContenderGrade')) : null,
+      gradeProQB: traw('ProPotentialGradeQB') ? gradeToDisplay(traw('ProPotentialGradeQB')) : null,
+      gradeProRB: traw('ProPotentialGradeRB') ? gradeToDisplay(traw('ProPotentialGradeRB')) : null,
+      gradeProWR: traw('ProPotentialGradeWR') ? gradeToDisplay(traw('ProPotentialGradeWR')) : null,
+      gradeProTE: traw('ProPotentialGradeTE') ? gradeToDisplay(traw('ProPotentialGradeTE')) : null,
+      gradeProOL: traw('ProPotentialGradeOL') ? gradeToDisplay(traw('ProPotentialGradeOL')) : null,
+      gradeProDL: traw('ProPotentialGradeDL') ? gradeToDisplay(traw('ProPotentialGradeDL')) : null,
+      gradeProLB: traw('ProPotentialGradeLB') ? gradeToDisplay(traw('ProPotentialGradeLB')) : null,
+      gradeProDB: traw('ProPotentialGradeDB') ? gradeToDisplay(traw('ProPotentialGradeDB')) : null,
+      gradeProK: traw('ProPotentialGradeK') ? gradeToDisplay(traw('ProPotentialGradeK')) : null,
+      gradeProP: traw('ProPotentialGradeP') ? gradeToDisplay(traw('ProPotentialGradeP')) : null,
+      avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')),
       coachName: coach?.name ?? null,
       coachArchetype: coach?.archetype ?? null,
       coachLevel: coach?.level ?? null,
