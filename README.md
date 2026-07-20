@@ -37,40 +37,37 @@ That's it. No database server, no cloud account.
 
 ### First time
 
-1. **Download or clone this repo**
+**1. Download or clone this repo**
 
-   Click the green **Code** button → **Download ZIP**, then extract it anywhere you like (e.g. `C:\CFB27Tracker`).
+Click the green **Code** button → **Download ZIP**, then extract it anywhere you like (e.g. `C:\CFB27Tracker`).
 
-   Or if you have Git:
-   ```
-   git clone https://github.com/tikitiger/cfb-recruiting-evolution-tracker.git
-   cd cfb-recruiting-evolution-tracker
-   ```
+Or if you have Git:
+```
+git clone https://github.com/tikitiger/cfb-recruiting-evolution-tracker.git
+cd cfb-recruiting-evolution-tracker
+```
 
-2. **Run the setup script**
+**2. Run the setup script**
 
-   Double-click **`setup.bat`** in the folder.
+Double-click **`setup.bat`** in the folder. This will:
+- Install all dependencies
+- Create the local database
+- Open the app in your browser at `http://localhost:3000`
 
-   This will:
-   - Install all dependencies
-   - Create the local database
-   - Open the app in your browser at `http://localhost:3000`
+The first run takes a minute or two while packages download. After that it's fast.
 
-   The first run takes a minute or two while packages download. After that it's fast.
+**3. Import your save**
 
-3. **Import your save**
+- In the app, click **Import** in the nav bar
+- Pick your dynasty save from the dropdown (it auto-detects saves in `Documents\EA SPORTS College Football 27\saves\`)
+- Click **Import Save** — takes about 10–20 seconds
+- Navigate to **Dashboard** to see your data
 
-   - In the app, click **Import** in the nav bar
-   - Paste the full path to your dynasty save file, e.g.:
-     ```
-     C:\Users\YourName\Documents\EA SPORTS College Football 27\saves\DYNASTY-YOURTEAM-AUTOSAVE
-     ```
-   - Click **Import Save** — takes about 10–20 seconds
-   - Navigate to **Dashboard** to see your data
+---
 
-### Starting the app after first-time setup
+### Every time after that
 
-Double-click **`start.bat`** (or run `npm run dev` in the folder).
+Double-click **`start.bat`**.
 
 The app runs at `http://localhost:3000`. Keep the terminal window open while you're using it — closing it stops the server.
 
@@ -107,6 +104,9 @@ When a new version is released:
 **Import fails with an error**
 - Double-check the save file path — it should point to the file itself, not the folder
 - Make sure the dynasty is saved in-game before importing
+
+**Import fails with `TableDoesNotExist` or `The table 'main.Season' does not exist`**
+- The database wasn't initialized. Double-click **`setup.bat`** (not `start.bat`) to create the tables and generate the Prisma client, then try importing again. Newer versions of `start.bat` do this automatically on first launch.
 
 **Data looks wrong / facilities score is blank**
 - Re-import the save — some fields were added in later versions and require a fresh import

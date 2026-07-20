@@ -12,6 +12,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
+import { safeJson } from '@/lib/safeFetch';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
 
@@ -68,7 +69,7 @@ const LINE_INDICATORS = [
   { key: 'overall', label: 'Overall Rating' },
   { key: 'prestige', label: 'Prestige' },
   { key: 'prestigeRank', label: 'Prestige Rank' },
-  { key: 'teamRank', label: 'Team Rank' },
+  { key: 'teamRank', label: 'National Rank' },
   { key: 'wins', label: 'Wins' },
   { key: 'losses', label: 'Losses' },
   { key: 'recruitingRank', label: 'Recruiting Class Rank' },
@@ -123,37 +124,46 @@ const AXIS_STYLE = { ticks: { color: '#5a9ad4' }, grid: { color: 'rgba(19,45,84,
 const LEGEND_STYLE = { labels: { color: '#b8d8f2' } };
 
 type ChartMode = 'line' | 'composition' | 'ovr-bands' | 'unsigned-national' | 'net-transfers-national';
-
 const NATIONAL_MODES: ChartMode[] = ['ovr-bands', 'unsigned-national', 'net-transfers-national'];
+const REVERSED_INDICATORS = new Set(['recruitingRank', 'prestigeRank', 'teamRank']);
+
+type PanelConfig = { mode: ChartMode; indicator: IndicatorKey };
+
+const DEFAULT_PANELS: PanelConfig[] = [
+  { mode: 'line', indicator: 'overall' },
+  { mode: 'line', indicator: 'wins' },
+  { mode: 'line', indicator: 'teamRank' },
+  { mode: 'ovr-bands', indicator: 'overall' },
+];
 
 export default function ChartsPage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [settings, setSettings] = useState<SeasonSetting[]>([]);
-  const [mode, setMode] = useState<ChartMode>('line');
-  const [indicator, setIndicator] = useState<IndicatorKey>('overall');
+  const [layout, setLayout] = useState<1 | 4>(1);
+  const [panels, setPanels] = useState<PanelConfig[]>(DEFAULT_PANELS);
   const [conferenceFilter, setConferenceFilter] = useState('All');
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/history').then((r) => r.json()),
-      fetch('/api/seasons').then((r) => r.json()),
-    ]).then(async ([histData, seasons]: [HistoryRow[], { id: string; year: number }[]]) => {
-      setHistory(histData);
+    (async () => {
+      const [histRes, seasonsRes] = await Promise.all([
+        safeJson<HistoryRow[]>('/api/history'),
+        safeJson<{ id: string; year: number }[]>('/api/seasons'),
+      ]);
+      if (histRes.ok && histRes.data) setHistory(histRes.data);
+      const seasons = seasonsRes.ok && seasonsRes.data ? seasonsRes.data : [];
       const settled = await Promise.all(
         seasons.map((s) =>
-          fetch(`/api/settings?seasonId=${s.id}`)
-            .then((r) => r.json())
-            .then((d) => (d ? { ...d, seasonId: s.id, year: s.year } : null))
+          safeJson<any>(`/api/settings?seasonId=${s.id}`).then((r) =>
+            r.ok && r.data ? { ...r.data, seasonId: s.id, year: s.year } : null
+          )
         )
       );
       setSettings(settled.filter(Boolean) as SeasonSetting[]);
       setLoading(false);
-    });
+    })();
   }, []);
-
-  const isNational = NATIONAL_MODES.includes(mode);
 
   const conferences = useMemo(() => {
     const set = new Set(history.map((h) => h.team.conference));
@@ -188,131 +198,40 @@ export default function ChartsPage() {
     setSelectedTeams((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
 
-  // ── Per-team charts ──────────────────────────────────────────────────────
+  function updatePanel(i: number, patch: Partial<PanelConfig>) {
+    setPanels(prev => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
 
-  const lineChartData = useMemo(() => {
-    const datasets = selectedTeams.map((teamId, i) => {
-      const teamRows = history.filter((h) => h.team.id === teamId);
-      const teamName = teamRows[0]?.team.name ?? teamId;
-      const data = seasonYears.map((year) => {
-        const row = teamRows.find((r) => r.season.year === year);
-        if (!row) return null;
-        if (indicator === 'netTransfers') return (row.transfersIn ?? 0) - (row.transfersOut ?? 0);
-        const val = row[indicator as keyof typeof row];
-        if (typeof val === 'string') return GRADE_NUM[val] ?? null;
-        return val as number | null;
-      });
-      return { label: teamName, data, borderColor: COLORS[i % COLORS.length], backgroundColor: COLORS[i % COLORS.length], spanGaps: true, tension: 0.25 };
-    });
-    return { labels: seasonYears, datasets };
-  }, [selectedTeams, history, seasonYears, indicator]);
-
-  const compositionCharts = useMemo(() => {
-    return selectedTeams.map((teamId) => {
-      const teamRows = history.filter((h) => h.team.id === teamId);
-      const teamName = teamRows[0]?.team.name ?? teamId;
-      const starKeys = ['fiveStars', 'fourStars', 'threeStars', 'twoStars', 'oneStars'] as const;
-      const starLabels = ['5★', '4★', '3★', '2★', '1★'];
-      const datasets = starKeys.map((key, i) => ({
-        label: starLabels[i],
-        data: seasonYears.map((year) => {
-          const row = teamRows.find((r) => r.season.year === year);
-          return row ? (row[key] ?? 0) : 0;
-        }),
-        backgroundColor: STAR_COLORS[key],
-      }));
-      return { teamName, data: { labels: seasonYears, datasets } };
-    });
-  }, [selectedTeams, history, seasonYears]);
-
-  // ── National charts ──────────────────────────────────────────────────────
-
-  // 1. OVR bands — count of teams in each band per season
-  const ovrBandsData = useMemo(() => {
-    const datasets = OVR_BANDS.map((band) => ({
-      label: band.label,
-      data: seasonYears.map((year) => {
-        const rows = history.filter((h) => h.season.year === year && h.overall != null);
-        return rows.filter((h) => h.overall! >= band.min && h.overall! <= band.max).length;
-      }),
-      backgroundColor: band.color,
-    }));
-    return { labels: seasonYears, datasets };
-  }, [history, seasonYears]);
-
-  // 2. Unsigned recruits national — HS vs Transfer, 5★/4★/3★ only
-  const unsignedNationalData = useMemo(() => {
-    const sorted = [...settings].sort((a, b) => a.year - b.year);
-    const labels = sorted.map((s) => s.year);
-    return {
-      labels,
-      datasets: [
-        { label: 'HS 5★',   data: sorted.map((s) => s.unsignedHSFiveStar ?? 0),   backgroundColor: '#fbbf24', stack: 'hs' },
-        { label: 'HS 4★',   data: sorted.map((s) => s.unsignedHSFourStar ?? 0),   backgroundColor: '#a78bfa', stack: 'hs' },
-        { label: 'HS 3★',   data: sorted.map((s) => s.unsignedHSThreeStar ?? 0),  backgroundColor: '#60a5fa', stack: 'hs' },
-        { label: 'Xfer 5★', data: sorted.map((s) => s.unsignedXferFiveStar ?? 0), backgroundColor: '#fbbf2480', stack: 'xfer' },
-        { label: 'Xfer 4★', data: sorted.map((s) => s.unsignedXferFourStar ?? 0), backgroundColor: '#a78bfa80', stack: 'xfer' },
-        { label: 'Xfer 3★', data: sorted.map((s) => s.unsignedXferThreeStar ?? 0),backgroundColor: '#60a5fa80', stack: 'xfer' },
-      ],
-    };
-  }, [settings]);
-
-  // 3. Net transfers national — total In and Out per season
-  const netTransfersNationalData = useMemo(() => {
-    const datasets = [
-      {
-        label: 'Transfers In',
-        data: seasonYears.map((year) =>
-          history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersIn ?? 0), 0)
-        ),
-        backgroundColor: '#34d399',
-      },
-      {
-        label: 'Transfers Out',
-        data: seasonYears.map((year) =>
-          history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersOut ?? 0), 0)
-        ),
-        backgroundColor: '#fb7185',
-      },
-    ];
-    return { labels: seasonYears, datasets };
-  }, [history, seasonYears]);
+  const activePanels = panels.slice(0, layout);
+  const anyPerTeam = activePanels.some(p => !NATIONAL_MODES.includes(p.mode));
 
   if (loading) return <div className="p-8" style={{ color: 'var(--ocean-400)' }}>Loading…</div>;
   if (!history.length) return <div className="mx-auto max-w-2xl px-6 py-20 text-center" style={{ color: 'var(--ocean-400)' }}>No data yet — import a save first.</div>;
 
-  const indicatorLabel = LINE_INDICATORS.find((i) => i.key === indicator)?.label ?? indicator;
+  const gridClass = layout === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2';
 
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-5">
-      {/* Controls */}
+      {/* Global controls */}
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Chart</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value as ChartMode)}
-            className="rounded-md border px-2.5 py-1.5 text-sm font-medium outline-none"
-            style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
-            <option value="line">Trend Line</option>
-            <option value="composition">Recruit Composition</option>
-            <option disabled>──────────</option>
-            <option value="ovr-bands">National: OVR Bands</option>
-            <option value="unsigned-national">National: Unsigned Recruits</option>
-            <option value="net-transfers-national">National: Net Transfers</option>
-          </select>
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Layout</span>
+          <div className="flex gap-1">
+            {[1, 4].map((n) => (
+              <button key={n} onClick={() => setLayout(n as 1 | 4)}
+                className="rounded px-2.5 py-1 text-xs font-medium"
+                style={{
+                  background: layout === n ? 'var(--ocean-700)' : 'var(--ocean-800)',
+                  color: layout === n ? 'var(--ocean-100)' : 'var(--ocean-300)',
+                  border: '1px solid var(--ocean-700)',
+                }}>
+                {n === 4 ? '2×2' : `${n}`}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {mode === 'line' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Indicator</span>
-            <select value={indicator} onChange={(e) => setIndicator(e.target.value as IndicatorKey)}
-              className="rounded-md border px-2.5 py-1.5 text-sm font-medium outline-none"
-              style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
-              {LINE_INDICATORS.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
-            </select>
-          </div>
-        )}
-
-        {!isNational && (
+        {anyPerTeam && (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Conference</span>
             <select value={conferenceFilter} onChange={(e) => setConferenceFilter(e.target.value)}
@@ -332,108 +251,26 @@ export default function ChartsPage() {
         </div>
       </div>
 
-      <div className={`grid grid-cols-1 gap-4 ${isNational ? '' : 'lg:grid-cols-[1fr_260px]'}`}>
-        {/* Chart area */}
-        <div>
-          {/* ── Trend line ── */}
-          {mode === 'line' && (
-            <div className="rounded-lg border p-5" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-              <h2 className="mb-4 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>{indicatorLabel} by Season</h2>
-              <Line data={lineChartData} options={{
-                responsive: true,
-                scales: {
-                  x: AXIS_STYLE,
-                  y: { reverse: ['recruitingRank', 'prestigeRank', 'teamRank'].includes(indicator), ...AXIS_STYLE },
-                },
-                plugins: { legend: LEGEND_STYLE },
-              }} />
-            </div>
-          )}
-
-          {/* ── Recruit composition ── */}
-          {mode === 'composition' && (
-            <div className="flex flex-col gap-4">
-              {compositionCharts.length === 0 && (
-                <div className="rounded-lg border p-8 text-center" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)', color: 'var(--ocean-400)' }}>
-                  Select teams to see recruit composition
-                </div>
-              )}
-              {compositionCharts.map(({ teamName, data }) => (
-                <div key={teamName} className="rounded-lg border p-5" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-                  <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>{teamName} — Recruit Composition</h2>
-                  <div style={{ height: 200 }}>
-                    <Bar data={data} options={{
-                      responsive: true, maintainAspectRatio: false,
-                      scales: {
-                        x: { stacked: true, ...AXIS_STYLE },
-                        y: { stacked: true, ...AXIS_STYLE, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 }, title: { display: true, text: 'Recruits', color: '#5a9ad4' } },
-                      },
-                      plugins: { legend: LEGEND_STYLE },
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── National: OVR bands ── */}
-          {mode === 'ovr-bands' && (
-            <div className="rounded-lg border p-5" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-              <h2 className="mb-1 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>Overall Rating Distribution by Season</h2>
-              <p className="mb-4 text-xs" style={{ color: 'var(--ocean-500)' }}>Number of teams in each OVR band nationally</p>
-              <Bar data={ovrBandsData} options={{
-                responsive: true,
-                scales: {
-                  x: { stacked: true, ...AXIS_STYLE },
-                  y: { stacked: true, ...AXIS_STYLE, title: { display: true, text: 'Teams', color: '#5a9ad4' } },
-                },
-                plugins: { legend: LEGEND_STYLE },
-              }} />
-            </div>
-          )}
-
-          {/* ── National: Unsigned recruits ── */}
-          {mode === 'unsigned-national' && (
-            <div className="rounded-lg border p-5" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-              <h2 className="mb-1 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>Unsigned Recruits — National (5★ / 4★ / 3★)</h2>
-              <p className="mb-4 text-xs" style={{ color: 'var(--ocean-500)' }}>Solid = High School / JUCO &nbsp;·&nbsp; Faded = Transfer Portal</p>
-              {settings.length === 0 ? (
-                <div className="py-12 text-center text-sm" style={{ color: 'var(--ocean-400)' }}>No unsigned data — import a save first.</div>
-              ) : (
-                <Bar data={unsignedNationalData} options={{
-                  responsive: true,
-                  scales: {
-                    x: AXIS_STYLE,
-                    y: { ...AXIS_STYLE, title: { display: true, text: 'Unsigned', color: '#5a9ad4' } },
-                  },
-                  plugins: { legend: LEGEND_STYLE },
-                }} />
-              )}
-            </div>
-          )}
-
-          {/* ── National: Net transfers ── */}
-          {mode === 'net-transfers-national' && (
-            <div className="rounded-lg border p-5" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-              <h2 className="mb-1 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>Transfer Portal Volume — National</h2>
-              <p className="mb-4 text-xs" style={{ color: 'var(--ocean-500)' }}>Total players entering and leaving each school nationally per season</p>
-              <Bar data={netTransfersNationalData} options={{
-                responsive: true,
-                scales: {
-                  x: AXIS_STYLE,
-                  y: { ...AXIS_STYLE, title: { display: true, text: 'Players', color: '#5a9ad4' } },
-                },
-                plugins: { legend: LEGEND_STYLE },
-              }} />
-            </div>
-          )}
+      <div className={`grid grid-cols-1 gap-4 ${anyPerTeam ? 'lg:grid-cols-[1fr_240px]' : ''}`}>
+        <div className={`grid gap-4 ${gridClass}`}>
+          {activePanels.map((panel, i) => (
+            <ChartPanel
+              key={i}
+              panel={panel}
+              onChange={(patch) => updatePanel(i, patch)}
+              history={history}
+              settings={settings}
+              seasonYears={seasonYears}
+              selectedTeams={selectedTeams}
+              compact={layout > 1}
+            />
+          ))}
         </div>
 
-        {/* Team selector — hidden for national charts */}
-        {!isNational && (
+        {anyPerTeam && (
           <div className="rounded-lg border p-4" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
             <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--ocean-300)' }}>Teams</h2>
-            <div className="flex max-h-[500px] flex-col gap-1 overflow-y-auto text-sm">
+            <div className="flex max-h-[600px] flex-col gap-1 overflow-y-auto text-sm">
               <label className="flex cursor-pointer items-center gap-2 rounded border-b px-2 py-1.5 font-semibold" style={{ color: 'var(--ocean-100)', borderColor: 'var(--ocean-800)' }}>
                 <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="accent-blue-500" />
                 Select All
@@ -446,6 +283,214 @@ export default function ChartsPage() {
               ))}
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Panel ───────────────────────────────────────────────────────────────────
+
+function ChartPanel({
+  panel, onChange, history, settings, seasonYears, selectedTeams, compact,
+}: {
+  panel: PanelConfig;
+  onChange: (patch: Partial<PanelConfig>) => void;
+  history: HistoryRow[];
+  settings: SeasonSetting[];
+  seasonYears: number[];
+  selectedTeams: string[];
+  compact: boolean;
+}) {
+  const chartHeight = compact ? 260 : 620;
+
+  const lineChartData = useMemo(() => {
+    const datasets = selectedTeams.map((teamId, i) => {
+      const teamRows = history.filter((h) => h.team.id === teamId);
+      const teamName = teamRows[0]?.team.name ?? teamId;
+      const data = seasonYears.map((year) => {
+        const row = teamRows.find((r) => r.season.year === year);
+        if (!row) return null;
+        if (panel.indicator === 'netTransfers') return (row.transfersIn ?? 0) - (row.transfersOut ?? 0);
+        const val = row[panel.indicator as keyof typeof row];
+        if (typeof val === 'string') return GRADE_NUM[val] ?? null;
+        return val as number | null;
+      });
+      return { label: teamName, data, borderColor: COLORS[i % COLORS.length], backgroundColor: COLORS[i % COLORS.length], spanGaps: true, tension: 0.25 };
+    });
+    return { labels: seasonYears, datasets };
+  }, [selectedTeams, history, seasonYears, panel.indicator]);
+
+  const compositionCharts = useMemo(() => {
+    return selectedTeams.map((teamId) => {
+      const teamRows = history.filter((h) => h.team.id === teamId);
+      const teamName = teamRows[0]?.team.name ?? teamId;
+      const starKeys = ['fiveStars', 'fourStars', 'threeStars', 'twoStars', 'oneStars'] as const;
+      const starLabels = ['5★', '4★', '3★', '2★', '1★'];
+      const datasets = starKeys.map((key, i) => ({
+        label: starLabels[i],
+        data: seasonYears.map((year) => {
+          const row = teamRows.find((r) => r.season.year === year);
+          return row ? (row[key] ?? 0) : 0;
+        }),
+        backgroundColor: STAR_COLORS[key],
+      }));
+      return { teamName, data: { labels: seasonYears, datasets } };
+    });
+  }, [selectedTeams, history, seasonYears]);
+
+  const ovrBandsData = useMemo(() => ({
+    labels: seasonYears,
+    datasets: OVR_BANDS.map((band) => ({
+      label: band.label,
+      data: seasonYears.map((year) => {
+        const rows = history.filter((h) => h.season.year === year && h.overall != null);
+        return rows.filter((h) => h.overall! >= band.min && h.overall! <= band.max).length;
+      }),
+      backgroundColor: band.color,
+    })),
+  }), [history, seasonYears]);
+
+  const unsignedNationalData = useMemo(() => {
+    const sorted = [...settings].sort((a, b) => a.year - b.year);
+    return {
+      labels: sorted.map((s) => s.year),
+      datasets: [
+        { label: 'HS 5★',   data: sorted.map((s) => s.unsignedHSFiveStar ?? 0),   backgroundColor: '#fbbf24', stack: 'hs' },
+        { label: 'HS 4★',   data: sorted.map((s) => s.unsignedHSFourStar ?? 0),   backgroundColor: '#a78bfa', stack: 'hs' },
+        { label: 'HS 3★',   data: sorted.map((s) => s.unsignedHSThreeStar ?? 0),  backgroundColor: '#60a5fa', stack: 'hs' },
+        { label: 'Xfer 5★', data: sorted.map((s) => s.unsignedXferFiveStar ?? 0), backgroundColor: '#fbbf2480', stack: 'xfer' },
+        { label: 'Xfer 4★', data: sorted.map((s) => s.unsignedXferFourStar ?? 0), backgroundColor: '#a78bfa80', stack: 'xfer' },
+        { label: 'Xfer 3★', data: sorted.map((s) => s.unsignedXferThreeStar ?? 0),backgroundColor: '#60a5fa80', stack: 'xfer' },
+      ],
+    };
+  }, [settings]);
+
+  const netTransfersNationalData = useMemo(() => ({
+    labels: seasonYears,
+    datasets: [
+      {
+        label: 'Transfers In',
+        data: seasonYears.map((year) =>
+          history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersIn ?? 0), 0)
+        ),
+        backgroundColor: '#34d399',
+      },
+      {
+        label: 'Transfers Out',
+        data: seasonYears.map((year) =>
+          history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersOut ?? 0), 0)
+        ),
+        backgroundColor: '#fb7185',
+      },
+    ],
+  }), [history, seasonYears]);
+
+  const indicatorLabel = LINE_INDICATORS.find((i) => i.key === panel.indicator)?.label ?? panel.indicator;
+
+  return (
+    <div className="rounded-lg border p-4" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
+      {/* Panel controls */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select value={panel.mode} onChange={(e) => onChange({ mode: e.target.value as ChartMode })}
+          className="rounded border px-2 py-1 text-xs font-medium outline-none"
+          style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
+          <option value="line">Trend Line</option>
+          <option value="composition">Recruit Composition</option>
+          <option disabled>──────────</option>
+          <option value="ovr-bands">Nat: OVR Bands</option>
+          <option value="unsigned-national">Nat: Unsigned Recruits</option>
+          <option value="net-transfers-national">Nat: Net Transfers</option>
+        </select>
+
+        {panel.mode === 'line' && (
+          <select value={panel.indicator} onChange={(e) => onChange({ indicator: e.target.value as IndicatorKey })}
+            className="rounded border px-2 py-1 text-xs font-medium outline-none"
+            style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
+            {LINE_INDICATORS.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+          </select>
+        )}
+
+        <span className="ml-auto text-xs" style={{ color: 'var(--ocean-500)' }}>
+          {panel.mode === 'line' ? indicatorLabel
+            : panel.mode === 'composition' ? 'Recruit Composition'
+            : panel.mode === 'ovr-bands' ? 'OVR Distribution'
+            : panel.mode === 'unsigned-national' ? 'Unsigned Recruits (Nat.)'
+            : 'Transfer Volume (Nat.)'}
+        </span>
+      </div>
+
+      <div style={{ height: chartHeight }}>
+        {panel.mode === 'line' && (
+          <Line data={lineChartData} options={{
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: AXIS_STYLE,
+              y: { reverse: REVERSED_INDICATORS.has(panel.indicator), ...AXIS_STYLE },
+            },
+            plugins: { legend: LEGEND_STYLE },
+          }} />
+        )}
+
+        {panel.mode === 'composition' && (
+          compositionCharts.length === 0 ? (
+            <div className="grid h-full place-items-center text-sm" style={{ color: 'var(--ocean-400)' }}>Select teams to see composition</div>
+          ) : (
+            <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
+              {compositionCharts.map(({ teamName, data }) => (
+                <div key={teamName}>
+                  <div className="mb-1 text-xs" style={{ color: 'var(--ocean-300)' }}>{teamName}</div>
+                  <div style={{ height: compact ? 100 : 140 }}>
+                    <Bar data={data} options={{
+                      responsive: true, maintainAspectRatio: false,
+                      scales: {
+                        x: { stacked: true, ...AXIS_STYLE },
+                        y: { stacked: true, ...AXIS_STYLE, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 } },
+                      },
+                      plugins: { legend: LEGEND_STYLE },
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {panel.mode === 'ovr-bands' && (
+          <Bar data={ovrBandsData} options={{
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { stacked: true, ...AXIS_STYLE },
+              y: { stacked: true, ...AXIS_STYLE, title: { display: !compact, text: 'Teams', color: '#5a9ad4' } },
+            },
+            plugins: { legend: LEGEND_STYLE },
+          }} />
+        )}
+
+        {panel.mode === 'unsigned-national' && (
+          settings.length === 0 ? (
+            <div className="grid h-full place-items-center text-sm" style={{ color: 'var(--ocean-400)' }}>No unsigned data — import a save first.</div>
+          ) : (
+            <Bar data={unsignedNationalData} options={{
+              responsive: true, maintainAspectRatio: false,
+              scales: {
+                x: AXIS_STYLE,
+                y: { ...AXIS_STYLE, title: { display: !compact, text: 'Unsigned', color: '#5a9ad4' } },
+              },
+              plugins: { legend: LEGEND_STYLE },
+            }} />
+          )
+        )}
+
+        {panel.mode === 'net-transfers-national' && (
+          <Bar data={netTransfersNationalData} options={{
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: AXIS_STYLE,
+              y: { ...AXIS_STYLE, title: { display: !compact, text: 'Players', color: '#5a9ad4' } },
+            },
+            plugins: { legend: LEGEND_STYLE },
+          }} />
         )}
       </div>
     </div>

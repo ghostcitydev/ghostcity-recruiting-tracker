@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { safeJson } from '@/lib/safeFetch';
 
 type Season = { id: string; year: number; label: string };
 type Settings = {
@@ -66,7 +67,7 @@ type TeamStat = {
 };
 
 type SortKey =
-  | 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank'
+  | 'name' | 'conference' | 'overall' | 'prestige' | 'recruitingRank' | 'teamRank' | 'points'
   | 'record' | 'wins' | 'losses' | 'transfersIn' | 'transfersOut' | 'netTransfers'
   | 'recruitCount' | 'hsRecruits' | 'transferRecruits'
   | 'fiveStars' | 'fourStars' | 'threeStars' | 'twoStars' | 'oneStars'
@@ -84,6 +85,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<TeamStat[]>([]);
   const [settings, setSettings] = useState<Settings>(null);
   const [loading, setLoading] = useState(true);
+  const [fatalError, setFatalError] = useState<string | null>(null);
   const [conferenceFilter, setConferenceFilter] = useState('All');
   const [recruitTypeFilter, setRecruitTypeFilter] = useState<'all' | 'hs' | 'transfer'>('all');
   const [showGrades, setShowGrades] = useState(false);
@@ -93,7 +95,9 @@ export default function Dashboard() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
-    fetch('/api/seasons').then((r) => r.json()).then((data: Season[]) => {
+    safeJson<Season[]>('/api/seasons').then((res) => {
+      if (!res.ok) { setFatalError(res.error); setLoading(false); return; }
+      const data = res.data ?? [];
       setSeasons(data);
       if (data.length) setSeasonId(data[0].id);
       setLoading(false);
@@ -102,8 +106,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!seasonId) return;
-    fetch(`/api/stats?seasonId=${seasonId}`).then((r) => r.json()).then(setStats);
-    fetch(`/api/settings?seasonId=${seasonId}`).then((r) => r.json()).then(setSettings);
+    safeJson<TeamStat[]>(`/api/stats?seasonId=${seasonId}`).then((res) => { if (res.ok) setStats(res.data ?? []); });
+    safeJson<Settings>(`/api/settings?seasonId=${seasonId}`).then((res) => { if (res.ok) setSettings(res.data ?? null); });
   }, [seasonId]);
 
   const conferences = useMemo(() => {
@@ -119,6 +123,14 @@ export default function Dashboard() {
       : conferenceFilter === 'Power 4' ? stats.filter((s) => P4.has(s.team.conference))
       : conferenceFilter === 'Group of 5' ? stats.filter((s) => G5.has(s.team.conference))
       : stats.filter((s) => s.team.conference === conferenceFilter);
+    const isHS = recruitTypeFilter === 'hs';
+    const isXfer = recruitTypeFilter === 'transfer';
+    const s5v = (r: TeamStat) => (isHS ? r.fiveStarsHS : isXfer ? r.fiveStarsXfer : r.fiveStars) ?? 0;
+    const s4v = (r: TeamStat) => (isHS ? r.fourStarsHS : isXfer ? r.fourStarsXfer : r.fourStars) ?? 0;
+    const s3v = (r: TeamStat) => (isHS ? r.threeStarsHS : isXfer ? r.threeStarsXfer : r.threeStars) ?? 0;
+    const s2v = (r: TeamStat) => (isHS ? r.twoStarsHS : isXfer ? r.twoStarsXfer : r.twoStars) ?? 0;
+    const s1v = (r: TeamStat) => (isHS ? r.oneStarsHS : isXfer ? r.oneStarsXfer : r.oneStars) ?? 0;
+
     filtered = [...filtered].sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       switch (sortKey) {
@@ -130,20 +142,31 @@ export default function Dashboard() {
           const av = a.recruitingRank ?? 9999, bv = b.recruitingRank ?? 9999;
           return -dir * (av - bv);
         }
+        case 'teamRank': {
+          const av = a.teamRank ?? 9999, bv = b.teamRank ?? 9999;
+          return -dir * (av - bv);
+        }
+        case 'points': {
+          const pv = (r: TeamStat) => s5v(r) * 5 + s4v(r) * 3 + s3v(r);
+          return dir * (pv(a) - pv(b));
+        }
         case 'record': return dir * ((a.wins ?? 0) - (a.losses ?? 0) - ((b.wins ?? 0) - (b.losses ?? 0)));
         case 'transfersIn': return dir * ((a.transfersIn ?? -1) - (b.transfersIn ?? -1));
         case 'transfersOut': return dir * ((a.transfersOut ?? -1) - (b.transfersOut ?? -1));
         case 'netTransfers': return dir * (((a.transfersIn ?? 0) - (a.transfersOut ?? 0)) - ((b.transfersIn ?? 0) - (b.transfersOut ?? 0)));
-        case 'recruitCount': return dir * ((a.recruitCount ?? -1) - (b.recruitCount ?? -1));
+        case 'recruitCount': {
+          const cv = (r: TeamStat) => (isHS ? r.hsRecruits : isXfer ? r.transferRecruits : r.recruitCount) ?? -1;
+          return dir * (cv(a) - cv(b));
+        }
         case 'wins': return dir * ((a.wins ?? -1) - (b.wins ?? -1));
         case 'losses': return dir * ((a.losses ?? -1) - (b.losses ?? -1));
         case 'hsRecruits': return dir * ((a.hsRecruits ?? -1) - (b.hsRecruits ?? -1));
         case 'transferRecruits': return dir * ((a.transferRecruits ?? -1) - (b.transferRecruits ?? -1));
-        case 'fiveStars': return dir * ((a.fiveStars ?? -1) - (b.fiveStars ?? -1));
-        case 'fourStars': return dir * ((a.fourStars ?? -1) - (b.fourStars ?? -1));
-        case 'threeStars': return dir * ((a.threeStars ?? -1) - (b.threeStars ?? -1));
-        case 'twoStars': return dir * ((a.twoStars ?? -1) - (b.twoStars ?? -1));
-        case 'oneStars': return dir * ((a.oneStars ?? -1) - (b.oneStars ?? -1));
+        case 'fiveStars': return dir * (s5v(a) - s5v(b));
+        case 'fourStars': return dir * (s4v(a) - s4v(b));
+        case 'threeStars': return dir * (s3v(a) - s3v(b));
+        case 'twoStars': return dir * (s2v(a) - s2v(b));
+        case 'oneStars': return dir * (s1v(a) - s1v(b));
         case 'avgGrade': return dir * ((a.avgGrade ?? -1) - (b.avgGrade ?? -1));
         case 'gradeAtmosphere': return dir * (gv(a.gradeAtmosphere) - gv(b.gradeAtmosphere));
         case 'gradeBrand': return dir * (gv(a.gradeBrand) - gv(b.gradeBrand));
@@ -173,7 +196,7 @@ export default function Dashboard() {
       }
     });
     return filtered;
-  }, [stats, conferenceFilter, sortKey, sortDir]);
+  }, [stats, conferenceFilter, recruitTypeFilter, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -181,6 +204,18 @@ export default function Dashboard() {
   }
 
   if (loading) return <div className="p-8" style={{ color: 'var(--ocean-400)' }}>Loading…</div>;
+
+  if (fatalError) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-20 text-center">
+        <h1 className="text-2xl font-bold" style={{ color: '#f87171' }}>Server error</h1>
+        <p className="mt-3 text-sm" style={{ color: 'var(--ocean-300)' }}>{fatalError}</p>
+        <p className="mt-6 text-xs" style={{ color: 'var(--ocean-500)' }}>
+          If you just cloned the repo, close this window and double-click <code>setup.bat</code> first.
+        </p>
+      </div>
+    );
+  }
 
   if (!seasons.length) {
     return (
@@ -327,7 +362,8 @@ export default function Dashboard() {
               <Th label="Conf" k="conference" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="OVR" k="overall" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="Prestige" k="prestige" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Rank" k="recruitingRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Nat" k="teamRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Recr" k="recruitingRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="Record" k="record" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               {!showGrades && <>
                 <Th label="In" k="transfersIn" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -338,6 +374,7 @@ export default function Dashboard() {
                 <Th label="★3" k="threeStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <Th label="★2" k="twoStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <Th label="★1" k="oneStars" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <Th label="Pts" k="points" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               </>}
               <Th label="Signed" k="recruitCount" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <Th label="HS" k="hsRecruits" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -414,6 +451,7 @@ export default function Dashboard() {
                 <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-400)' }}>{r.team.conference}</td>
                 <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: ovrColor(r.overall) }}>{r.overall ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}</td>
+                <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.teamRank ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.recruitingRank ?? '—'}</td>
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
                 {!showGrades && <>
@@ -427,6 +465,7 @@ export default function Dashboard() {
                   <td className="px-3 py-2 tabular-nums" style={{ color: '#60a5fa' }}>{s3 || '—'}</td>
                   <td className="px-3 py-2 tabular-nums" style={{ color: '#34d399' }}>{s2 || '—'}</td>
                   <td className="px-3 py-2 tabular-nums" style={{ color: '#94a3b8' }}>{s1 || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: 'var(--ocean-100)' }}>{(s5 ?? 0) * 5 + (s4 ?? 0) * 3 + (s3 ?? 0) || '—'}</td>
                 </>}
                 <td className="px-3 py-2 tabular-nums font-medium" style={{ color: 'var(--ocean-200)' }}>
                   {isHS ? (r.hsRecruits ?? '—') : isXfer ? (r.transferRecruits ?? '—') : (r.recruitCount ?? '—')}
