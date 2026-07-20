@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { safeJson } from '@/lib/safeFetch';
 
 type SaveFile = { name: string; path: string };
 type Season = { id: string; year: number; label: string };
@@ -23,18 +24,22 @@ export default function ImportPage() {
   const router = useRouter();
 
   function loadSeasons() {
-    fetch('/api/seasons').then((r) => r.json()).then(setSeasons);
+    safeJson<Season[]>('/api/seasons').then((res) => {
+      if (res.ok) setSeasons(res.data ?? []);
+      else setLoadError(res.error ?? 'Failed to load seasons');
+    });
   }
 
   useEffect(() => {
-    fetch('/api/saves')
-      .then((r) => r.json())
-      .then((data: { dir: string; saves: SaveFile[]; error?: string }) => {
-        setSaveDir(data.dir);
-        setSaves(data.saves);
-        if (data.saves.length) setSelectedPath(data.saves[0].path);
-        if (data.error) setLoadError(data.error);
-      });
+    safeJson<{ dir: string; saves: SaveFile[]; error?: string }>('/api/saves').then((res) => {
+      if (!res.ok) { setLoadError(res.error ?? 'Failed to load saves'); return; }
+      const data = res.data;
+      if (!data) return;
+      setSaveDir(data.dir);
+      setSaves(data.saves);
+      if (data.saves.length) setSelectedPath(data.saves[0].path);
+      if (data.error) setLoadError(data.error);
+    });
     loadSeasons();
   }, []);
 
