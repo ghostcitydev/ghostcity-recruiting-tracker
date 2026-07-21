@@ -15,12 +15,18 @@ type ImportResult = {
 export default function ImportPage() {
   const [saves, setSaves] = useState<SaveFile[]>([]);
   const [saveDir, setSaveDir] = useState('');
+  const [defaultDir, setDefaultDir] = useState('');
+  const [isDefaultDir, setIsDefaultDir] = useState(true);
   const [selectedPath, setSelectedPath] = useState('');
   const [loadError, setLoadError] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [seasons, setSeasons] = useState<Season[]>([]);
+  const [showFolderEdit, setShowFolderEdit] = useState(false);
+  const [folderInput, setFolderInput] = useState('');
+  const [folderSaving, setFolderSaving] = useState(false);
+  const [folderError, setFolderError] = useState('');
   const router = useRouter();
 
   function loadSeasons() {
@@ -30,18 +36,60 @@ export default function ImportPage() {
     });
   }
 
-  useEffect(() => {
-    safeJson<{ dir: string; saves: SaveFile[]; error?: string }>('/api/saves').then((res) => {
+  function loadSaves() {
+    return safeJson<{ dir: string; defaultDir: string; isDefault: boolean; saves: SaveFile[]; error?: string }>('/api/saves').then((res) => {
       if (!res.ok) { setLoadError(res.error ?? 'Failed to load saves'); return; }
       const data = res.data;
       if (!data) return;
       setSaveDir(data.dir);
+      setDefaultDir(data.defaultDir);
+      setIsDefaultDir(data.isDefault);
       setSaves(data.saves);
-      if (data.saves.length) setSelectedPath(data.saves[0].path);
-      if (data.error) setLoadError(data.error);
+      setSelectedPath(data.saves.length ? data.saves[0].path : '');
+      setLoadError(data.error ?? '');
     });
+  }
+
+  useEffect(() => {
+    loadSaves();
     loadSeasons();
   }, []);
+
+  async function saveFolder() {
+    setFolderSaving(true);
+    setFolderError('');
+    try {
+      const res = await fetch('/api/app-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saveDir: folderInput.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setFolderError(data.error ?? 'Failed to save folder'); return; }
+      setShowFolderEdit(false);
+      await loadSaves();
+    } catch (e) {
+      setFolderError(e instanceof Error ? e.message : 'Failed to save folder');
+    } finally {
+      setFolderSaving(false);
+    }
+  }
+
+  async function resetFolder() {
+    setFolderSaving(true);
+    setFolderError('');
+    try {
+      await fetch('/api/app-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saveDir: null }),
+      });
+      setShowFolderEdit(false);
+      await loadSaves();
+    } finally {
+      setFolderSaving(false);
+    }
+  }
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
@@ -101,9 +149,62 @@ export default function ImportPage() {
               {loadError || 'No dynasty save files found'}
             </div>
           )}
-          <p className="mt-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>
-            Looking in: {saveDir}
-          </p>
+          {!showFolderEdit ? (
+            <p className="mt-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>
+              Looking in: {saveDir}
+              {!isDefaultDir && <span style={{ color: 'var(--ocean-400)' }}> (custom)</span>}
+              {' · '}
+              <button
+                type="button"
+                onClick={() => { setFolderInput(saveDir); setFolderError(''); setShowFolderEdit(true); }}
+                className="underline hover:opacity-80"
+              >
+                Change
+              </button>
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              <input
+                type="text"
+                value={folderInput}
+                onChange={(e) => setFolderInput(e.target.value)}
+                placeholder={defaultDir}
+                className="w-full rounded-lg border px-3 py-2 text-xs outline-none"
+                style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
+              />
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={saveFolder}
+                  disabled={folderSaving}
+                  className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-40"
+                  style={{ background: 'var(--ocean-600)' }}
+                >
+                  Save
+                </button>
+                {!isDefaultDir && (
+                  <button
+                    type="button"
+                    onClick={resetFolder}
+                    disabled={folderSaving}
+                    className="underline hover:opacity-80 disabled:opacity-40"
+                    style={{ color: 'var(--ocean-400)' }}
+                  >
+                    Reset to default
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setShowFolderEdit(false); setFolderError(''); }}
+                  className="underline hover:opacity-80"
+                  style={{ color: 'var(--ocean-400)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+              {folderError && <p style={{ color: '#fca5a5' }}>{folderError}</p>}
+            </div>
+          )}
         </div>
 
         <button

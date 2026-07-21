@@ -7,6 +7,11 @@ datasource db {
   provider = "sqlite"
 }
 
+model AppSettings {
+  id      Int     @id @default(1)
+  saveDir String?
+}
+
 model Team {
   id           String @id @default(cuid())
   name         String @unique

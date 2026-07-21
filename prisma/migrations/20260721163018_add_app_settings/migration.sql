@@ -1,0 +1,5 @@
+-- CreateTable
+CREATE TABLE "AppSettings" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT DEFAULT 1,
+    "saveDir" TEXT
+);
