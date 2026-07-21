@@ -2,11 +2,74 @@
   "name": "cfb-27-recruiting-evolution-tracker",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "electron .",
+    "dist": "next build && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.cfb27tracker",
+    "productName": "CFB 27 Recruiting Evolution Tracker",
+    "copyright": "Copyright © 2026",
+    "npmRebuild": true,
+    "files": [
+      "electron/**/*",
+      ".next/**/*",
+      "app/**/*",
+      "lib/**/*",
+      "prisma/schema.prisma",
+      "public/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "next.config.*",
+      "tsconfig.json",
+      "postcss.config.*",
+      "!node_modules/.cache/**/*",
+      "!.next/cache/**/*",
+      "!**/*.bat",
+      "!scripts/**/*",
+      "!*.db",
+      "!.env*",
+      "!README.md",
+      "!{.git,.gitignore}"
+    ],
+    "extraResources": [
+      {
+        "from": "prisma/migrations",
+        "to": "migrations"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CFB 27 Tracker"
+    },
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.exe"
+    }
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",
@@ -26,6 +89,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
