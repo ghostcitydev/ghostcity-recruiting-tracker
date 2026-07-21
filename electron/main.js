@@ -91,12 +91,17 @@ async function startServer() {
 // ── Window ─────────────────────────────────────────────────────────────────────
 
 function createWindow() {
+  const iconPath = isDev
+    ? path.join(__dirname, '..', 'public', 'icon.ico')
+    : path.join(process.resourcesPath, 'app', 'public', 'icon.ico');
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 960,
     minHeight: 640,
     title: 'CFB 27 Recruiting Evolution Tracker',
+    icon: iconPath,
     backgroundColor: '#0a1628',
     webPreferences: {
       nodeIntegration: false,
