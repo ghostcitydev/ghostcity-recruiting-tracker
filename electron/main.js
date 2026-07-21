@@ -100,7 +100,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: 'CFB 27 Recruiting Evolution Tracker',
+    title: 'Ghost City RLT',
     icon: iconPath,
     backgroundColor: '#0a1628',
     webPreferences: {

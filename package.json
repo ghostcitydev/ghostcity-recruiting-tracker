@@ -1,5 +1,5 @@
 {
-  "name": "cfb-27-recruiting-evolution-tracker",
+  "name": "ghost-city-rlt",
   "version": "0.1.0",
   "private": true,
   "main": "electron/main.js",
@@ -12,8 +12,8 @@
     "dist": "next build && electron-builder --win --x64"
   },
   "build": {
-    "appId": "com.cfb27tracker",
-    "productName": "CFB 27 Recruiting Evolution Tracker",
+    "appId": "com.ghostcityrlt",
+    "productName": "Ghost City RLT",
     "copyright": "Copyright © 2026",
     "npmRebuild": true,
     "files": [
@@ -66,7 +66,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "CFB 27 Tracker"
+      "shortcutName": "Ghost City RLT"
     },
     "portable": {
       "artifactName": "${productName} Portable ${version}.exe"
