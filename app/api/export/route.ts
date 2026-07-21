@@ -83,10 +83,14 @@ export async function GET(request: Request) {
   }
 
   if (type === 'pipeline-recruits') {
-    const rows = await prisma.teamPipelineRecruit.findMany({
-      include: { team: true, season: true },
-      orderBy: [{ season: { year: 'asc' } }, { team: { name: 'asc' } }, { pipeline: 'asc' }],
-    });
+    const [rows, influence] = await Promise.all([
+      prisma.teamPipelineRecruit.findMany({
+        include: { team: true, season: true },
+        orderBy: [{ season: { year: 'asc' } }, { team: { name: 'asc' } }, { pipeline: 'asc' }],
+      }),
+      prisma.teamPipeline.findMany({ select: { teamId: true, seasonId: true, pipeline: true, level: true, value: true } }),
+    ]);
+    const influenceMap = new Map(influence.map(i => [`${i.teamId}|${i.seasonId}|${i.pipeline}`, i]));
     const PIPELINE_LABELS: Record<string, string> = {
       Alabama: 'Alabama', Arizona: 'Arizona', Arkansas: 'Arkansas',
       BigApple: 'New York Metro', BigSky: 'Big Sky (MT/ID/WY)', CentralFlorida: 'Central Florida',
@@ -103,12 +107,19 @@ export async function GET(request: Request) {
       SouthwestTexas: 'Southwest Texas', Tennessee: 'Tennessee', Tidewater: 'Tidewater (VA/NC)',
       Utah: 'Utah', WestVirginia: 'West Virginia', Wisconsin: 'Wisconsin',
     };
-    const headers = ['Year', 'Team', 'Conference', 'Region', '5★', '4★', '3★', '2★', '1★', 'Total'];
+    const LEVEL_LABELS: Record<string, string> = {
+      CulturalPillar: 'Cultural Pillar', HouseholdName: 'Household Name', Popular: 'Popular',
+      Respected: 'Respected', NicheInterest: 'Niche Interest', Unrecognized: 'Unrecognized',
+    };
+    const headers = ['Year', 'Team', 'Conference', 'Region', 'InfluenceLevel', 'InfluenceScore', '5★', '4★', '3★', '2★', '1★', 'Total'];
     const lines = [headers.join(',')];
     for (const r of rows) {
+      const inf = influenceMap.get(`${r.teamId}|${r.seasonId}|${r.pipeline}`);
       lines.push(row([
         r.season.year, r.team.name, r.team.conference,
         PIPELINE_LABELS[r.pipeline] ?? r.pipeline,
+        inf ? (LEVEL_LABELS[inf.level] ?? inf.level) : '',
+        inf?.value ?? '',
         r.fiveStars, r.fourStars, r.threeStars, r.twoStars, r.oneStars, r.total,
       ]));
     }
