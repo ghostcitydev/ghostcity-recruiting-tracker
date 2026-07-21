@@ -3,14 +3,16 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const path = require('path');
 const http = require('http');
+const net = require('net');
 const fs = require('fs');
 const crypto = require('crypto');
 
 const isDev = !app.isPackaged;
-const PORT = 3001; // avoid colliding with any existing localhost:3000
-// In both dev and prod, __dirname is the electron/ folder inside the app root.
-// In prod the app root lives inside app.asar; Electron's fs patching makes it readable.
+const PORT = 3001;
 const APP_DIR = path.join(__dirname, '..');
+const STANDALONE_DIR = isDev
+  ? path.join(__dirname, '..', '.next', 'standalone')
+  : path.join(process.resourcesPath, 'standalone');
 const MIGRATIONS_DIR = isDev
   ? path.join(__dirname, '..', 'prisma', 'migrations')
   : path.join(process.resourcesPath, 'migrations');
@@ -19,13 +21,14 @@ let mainWindow = null;
 let httpServer = null;
 
 // ── Migration runner ───────────────────────────────────────────────────────────
-// Applies pending Prisma migration SQL files directly via better-sqlite3.
-// Keeps a _prisma_migrations table so each migration only runs once.
 
 function runMigrations(dbPath) {
   if (!fs.existsSync(MIGRATIONS_DIR)) return;
 
-  const Database = require('better-sqlite3');
+  const Database = isDev
+    ? require('better-sqlite3')
+    : require(path.join(STANDALONE_DIR, 'node_modules', 'better-sqlite3'));
+
   const db = new Database(dbPath);
 
   db.exec(`
@@ -65,7 +68,6 @@ function runMigrations(dbPath) {
         VALUES (?, ?, datetime('now'), ?, 1)
       `).run(crypto.randomUUID(), checksum, name);
     } catch (e) {
-      // Column already exists etc — safe to ignore for idempotent migrations
       console.warn(`[migrate] ${name}: ${e.message}`);
     }
   }
@@ -75,17 +77,40 @@ function runMigrations(dbPath) {
 
 // ── Next.js server ─────────────────────────────────────────────────────────────
 
-async function startServer() {
-  const next = require('next');
-  const nextApp = next({ dev: isDev, dir: APP_DIR, hostname: '127.0.0.1', port: PORT });
-  const handle = nextApp.getRequestHandler();
-  await nextApp.prepare();
-
-  await new Promise((resolve, reject) => {
-    httpServer = http.createServer((req, res) => handle(req, res));
-    httpServer.listen(PORT, '127.0.0.1', resolve);
-    httpServer.on('error', reject);
+function waitForPort(port) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + 30000;
+    const check = () => {
+      const sock = net.createConnection(port, '127.0.0.1');
+      sock.once('connect', () => { sock.destroy(); resolve(); });
+      sock.once('error', () => {
+        if (Date.now() > deadline) return reject(new Error('Server did not start within 30s'));
+        setTimeout(check, 300);
+      });
+    };
+    check();
   });
+}
+
+async function startServer() {
+  if (isDev) {
+    const next = require('next');
+    const nextApp = next({ dev: true, dir: APP_DIR, hostname: '127.0.0.1', port: PORT });
+    const handle = nextApp.getRequestHandler();
+    await nextApp.prepare();
+    await new Promise((resolve, reject) => {
+      httpServer = http.createServer((req, res) => handle(req, res));
+      httpServer.listen(PORT, '127.0.0.1', resolve);
+      httpServer.on('error', reject);
+    });
+  } else {
+    // Production: use Next.js standalone server (lives outside the asar in resources/)
+    process.env.PORT = String(PORT);
+    process.env.HOSTNAME = '127.0.0.1';
+    process.chdir(STANDALONE_DIR);
+    require(path.join(STANDALONE_DIR, 'server.js'));
+    await waitForPort(PORT);
+  }
 }
 
 // ── Window ─────────────────────────────────────────────────────────────────────
@@ -93,7 +118,7 @@ async function startServer() {
 function createWindow() {
   const iconPath = isDev
     ? path.join(__dirname, '..', 'public', 'icon.ico')
-    : path.join(process.resourcesPath, 'app', 'public', 'icon.ico');
+    : path.join(process.resourcesPath, 'standalone', 'public', 'icon.ico');
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -111,7 +136,6 @@ function createWindow() {
 
   mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
 
-  // Open external links in the system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -123,7 +147,6 @@ function createWindow() {
 // ── App lifecycle ──────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  // Point Prisma at the user's data directory so the database survives app updates
   const dbPath = path.join(app.getPath('userData'), 'cfb27.db');
   process.env.DATABASE_URL = `file:${dbPath}`;
 
