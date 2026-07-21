@@ -19,23 +19,28 @@
     "files": [
       "electron/**/*",
       ".next/**/*",
-      "app/**/*",
+      "app/generated/**/*",
       "lib/**/*",
-      "prisma/schema.prisma",
       "public/**/*",
-      "node_modules/**/*",
       "package.json",
       "next.config.*",
-      "tsconfig.json",
-      "postcss.config.*",
-      "!node_modules/.cache/**/*",
       "!.next/cache/**/*",
       "!**/*.bat",
       "!scripts/**/*",
       "!*.db",
       "!.env*",
       "!README.md",
-      "!{.git,.gitignore}"
+      "!{.git,.gitignore}",
+      "!node_modules/@prisma/engines/**/*",
+      "!node_modules/prisma/**/*",
+      "!node_modules/**/*.md",
+      "!node_modules/**/*.ts",
+      "!node_modules/**/test/**/*",
+      "!node_modules/**/tests/**/*",
+      "!node_modules/**/__tests__/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
     ],
     "extraResources": [
       {
