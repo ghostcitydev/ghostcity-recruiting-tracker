@@ -27,7 +27,7 @@ Built for dynasty nerds who want more than what the game shows you.
 
 ## Download
 
-Grab the latest release from the [Releases page](https://github.com/tikitiger/ghostcity-recruiting-tracker/releases).
+Grab the latest release from the [Releases page](https://github.com/ghostcitydev/ghostcity-recruiting-tracker/releases).
 
 - **Ghost City RLT Portable.exe** — run anywhere, no install needed
 - **Ghost City RLT Setup.exe** — installs with Start Menu / desktop shortcuts
@@ -88,7 +88,7 @@ The app reads your save file using the [`madden-franchise`](https://github.com/W
 If you want to run from source or contribute:
 
 ```
-git clone https://github.com/tikitiger/ghostcity-recruiting-tracker.git
+git clone https://github.com/ghostcitydev/ghostcity-recruiting-tracker.git
 cd ghostcity-recruiting-tracker
 setup.bat
 ```
