@@ -11,6 +11,8 @@ exports.default = async function afterPack(context) {
 
   const packages = [
     'better-sqlite3',
+    'bindings',
+    'file-uri-to-path',
     path.join('@prisma', 'adapter-better-sqlite3'),
     path.join('@prisma', 'driver-adapter-utils'),
   ];
