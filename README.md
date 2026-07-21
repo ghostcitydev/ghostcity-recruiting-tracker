@@ -59,6 +59,8 @@ No Node.js. No database setup. No config files. Just run the exe.
 
 Importing is read-only — the save file itself is never modified. Import after **National Signing Day** each season to capture recruit commitments, using the same autosave file each time; the tracker detects the season year automatically.
 
+If your saves live somewhere other than the default `Documents\EA SPORTS College Football 27\saves\` folder (redirected Documents, a different drive, OneDrive, etc.), click **Change** next to "Looking in:" on the Import page and point it at the right folder.
+
 ---
 
 ## Save file safety (Toolbox)
@@ -127,6 +129,8 @@ Requires Node.js 18+. `setup.bat` installs dependencies, creates the local SQLit
 - `npm run dev` — plain Next.js dev server at `http://localhost:3000`, open in any browser. Fastest loop for UI/API work.
 - `npm run electron:dev` — opens the real Electron desktop window pointed at a live dev server. Use this when testing anything Electron-specific (window behavior, native dialogs, packaging-sensitive code paths). Hot reload works.
 - `npm run dist` — builds the production portable exe (`.next/standalone` output + electron-builder). Only needed when cutting an actual release; not required for day-to-day development.
+
+**Gotcha:** `npm run dist` rebuilds the native `better-sqlite3` module against Electron's ABI, which breaks `npm run dev` / `npm run electron:dev` afterward (`ERR_DLOPEN_FAILED`, wrong `NODE_MODULE_VERSION`). If that happens, run `npm rebuild better-sqlite3` to switch it back to plain Node.js.
 
 ---
 
