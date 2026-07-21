@@ -108,6 +108,18 @@ When a new version is released:
 **Import fails with `TableDoesNotExist` or `The table 'main.Season' does not exist`**
 - The database wasn't initialized. Double-click **`setup.bat`** (not `start.bat`) to create the tables and generate the Prisma client, then try importing again. Newer versions of `start.bat` do this automatically on first launch.
 
+**`setup.bat` ran but I still got database errors (seasons table missing, etc.)**
+- This can happen if `setup.bat`'s database step failed silently — usually because the `.env` config file didn't exist yet. Think of `.env` like a sticky note that tells the app *where* to put its database file; without it, the setup step gives up before creating any tables.
+- Fix: open the folder in File Explorer, create a new text file named **`.env`** (just that — no `.txt` at the end), and paste this single line into it:
+  ```
+  DATABASE_URL="file:./dev.db"
+  ```
+  Then open a terminal in the folder (Shift+right-click → "Open in Terminal") and run:
+  ```
+  npx prisma db push
+  ```
+  That creates all the tables. After that, `start.bat` will work normally.
+
 **Data looks wrong / facilities score is blank**
 - Re-import the save — some fields were added in later versions and require a fresh import
 - Delete the old season from the Import page first, then re-import
