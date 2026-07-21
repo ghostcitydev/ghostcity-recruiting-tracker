@@ -126,6 +126,7 @@ Requires Node.js 18+. `setup.bat` installs dependencies, creates the local SQLit
 
 **Working on the Electron app itself?**
 
+- **`test-mode.bat`** — double-click to open the real desktop app window against a live dev server. Same as `npm run electron:dev` below, no command line needed. Code changes hot-reload; close the window to stop.
 - `npm run dev` — plain Next.js dev server at `http://localhost:3000`, open in any browser. Fastest loop for UI/API work.
 - `npm run electron:dev` — opens the real Electron desktop window pointed at a live dev server. Use this when testing anything Electron-specific (window behavior, native dialogs, packaging-sensitive code paths). Hot reload works.
 - `npm run dist` — builds the production portable exe (`.next/standalone` output + electron-builder). Only needed when cutting an actual release; not required for day-to-day development.
