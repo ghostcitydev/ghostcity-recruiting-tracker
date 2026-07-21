@@ -109,6 +109,7 @@ export default function ImportPage() {
         <button
           type="submit"
           disabled={status === 'loading' || !selectedPath}
+          suppressHydrationWarning
           className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
           style={{ background: 'var(--ocean-600)' }}
         >

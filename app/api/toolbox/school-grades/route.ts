@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import Franchise from 'madden-franchise';
 import { parseRef, tableByName } from '@/lib/franchiseRefs';
 import fs from 'fs';
+import defaultGrades from '@/lib/default-grades.json';
 
 // Static per-school grades (sim does not recompute)
 const STATIC_FIELDS = [
@@ -29,6 +30,26 @@ const GRADE_ORDER = [
   'Bminus', 'B', 'Bplus', 'Aminus', 'A', 'Aplus',
 ];
 const GRADE_TO_TIER = new Map(GRADE_ORDER.map((g, i) => [g, i]));
+
+// Maps save-file field names → keys used in default-grades.json
+const FIELD_TO_DEFAULT_KEY: Record<string, string> = {
+  AcademicPrestigeGrade:     'gradeAcademic',
+  CampusLifestyleGrade:      'gradeCampus',
+  AthleticFacilitiesGrade:   'gradeFacilities',
+  BrandExposureGrade:        'gradeBrand',
+  ChampionshipContenderGrade:'gradeChampion',
+  CoachPrestigeGrade:        'gradeCoachPrestige',
+  CoachStabilityGrade:       'gradeCoachStability',
+  ConferencePrestigeGrade:   'gradeConference',
+  ProgramTraditionGrade:     'gradeTraditions',
+  StadiumAtmosphereGrade:    'gradeAtmosphere',
+};
+
+// Converts display grade (e.g. "A+", "C-") back to save-file enum key
+function displayToEnum(display: string | null): string | null {
+  if (!display) return null;
+  return display.replace('+', 'plus').replace('-', 'minus');
+}
 
 async function loadFranchise() {
   const season = await prisma.season.findFirst({ orderBy: { year: 'desc' } });
@@ -102,12 +123,14 @@ type StaticOp =
   | null
   | { op: 'fixed'; grade: string }
   | { op: 'tighten'; midGrade: string; maxTierDeviation: number }
-  | { op: 'custom'; values: Record<string, string> };
+  | { op: 'custom'; values: Record<string, string> }
+  | { op: 'defaults' };
 
 type DerivedOp =
   | null
   | { op: 'fixed'; grade: string }
-  | { op: 'tighten'; midGrade: string; maxTierDeviation: number };
+  | { op: 'tighten'; midGrade: string; maxTierDeviation: number }
+  | { op: 'defaults' };
 
 type Payload = { static: StaticOp; derived: DerivedOp };
 
@@ -119,6 +142,7 @@ function targetForField(
   current: string,
   op: StaticOp | DerivedOp,
   teamName: string,
+  fieldName: string,
 ): string | null {
   if (!op) return null;
   if (op.op === 'fixed') {
@@ -136,6 +160,13 @@ function targetForField(
   if (op.op === 'custom') {
     const provided = op.values[teamName];
     return provided && GRADE_TO_TIER.has(provided) ? provided : null;
+  }
+  if (op.op === 'defaults') {
+    const teamDefaults = (defaultGrades as Record<string, Record<string, string | null>>)[teamName];
+    if (!teamDefaults) return null;
+    const key = FIELD_TO_DEFAULT_KEY[fieldName];
+    if (!key) return null;
+    return displayToEnum(teamDefaults[key] ?? null);
   }
   return null;
 }
@@ -156,7 +187,7 @@ export async function POST(req: NextRequest) {
       const write = (fields: string[], op: StaticOp | DerivedOp) => {
         for (const f of fields) {
           const current = rec[f] as string;
-          const target = targetForField(current, op, t.name);
+          const target = targetForField(current, op, t.name, f);
           if (target != null && target !== current) {
             rec[f] = target;
             fieldsUpdated++;
