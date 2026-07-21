@@ -236,8 +236,8 @@ function ProgramSetupCard() {
 
 // ─── Grades Panel ─────────────────────────────────────────
 
-type StaticMode = 'fixed' | 'tighten' | 'custom' | 'preserve';
-type DerivedMode = 'fixed' | 'tighten' | 'preserve';
+type StaticMode = 'fixed' | 'tighten' | 'custom' | 'preserve' | 'defaults';
+type DerivedMode = 'fixed' | 'tighten' | 'preserve' | 'defaults';
 
 function GradesPanel() {
   const [teams, setTeams] = useState<TeamGrade[] | null>(null);
@@ -289,11 +289,13 @@ function GradesPanel() {
     if (staticMode === 'preserve') return null;
     if (staticMode === 'fixed') return { op: 'fixed', grade: staticFixed };
     if (staticMode === 'tighten') return { op: 'tighten', midGrade: staticMid, maxTierDeviation: staticDev };
+    if (staticMode === 'defaults') return { op: 'defaults' };
     return { op: 'custom', values: staticCustom };
   }
   function buildDerivedOp() {
     if (derivedMode === 'preserve') return null;
     if (derivedMode === 'fixed') return { op: 'fixed', grade: derivedFixed };
+    if (derivedMode === 'defaults') return { op: 'defaults' };
     return { op: 'tighten', midGrade: derivedMid, maxTierDeviation: derivedDev };
   }
 
@@ -314,9 +316,11 @@ function GradesPanel() {
   const staticSummary = staticMode === 'preserve' ? 'leave unchanged'
     : staticMode === 'fixed' ? `set to ${GRADE_LABEL(staticFixed)}`
     : staticMode === 'tighten' ? `clamp to ${gradeRangePreview(staticMid, staticDev)} around ${GRADE_LABEL(staticMid)}`
+    : staticMode === 'defaults' ? 'reset each school to year-zero game defaults'
     : `apply ${Object.keys(staticCustom).length} per-school values`;
   const derivedSummary = derivedMode === 'preserve' ? 'leave unchanged (sim will recompute anyway)'
     : derivedMode === 'fixed' ? `set to ${GRADE_LABEL(derivedFixed)} (sim may re-derive on next tick)`
+    : derivedMode === 'defaults' ? 'reset each school to year-zero game defaults (sim may re-derive on next tick)'
     : `clamp to ${gradeRangePreview(derivedMid, derivedDev)} around ${GRADE_LABEL(derivedMid)}`;
 
   return (
@@ -338,7 +342,7 @@ function GradesPanel() {
           <ModeChip label="Tighten" active={staticMode === 'tighten'} onClick={() => setStaticMode('tighten')} />
           <ModeChip label="Custom per school" active={staticMode === 'custom'} onClick={() => setStaticMode('custom')} />
           <ModeChip label="Preserve" active={staticMode === 'preserve'} onClick={() => setStaticMode('preserve')} />
-          <ModeChip label="↺ Reset to C+" active={false} onClick={() => { setStaticMode('fixed'); setStaticFixed('Cplus'); }} />
+          <ModeChip label="↺ Reset to defaults" active={staticMode === 'defaults'} onClick={() => setStaticMode('defaults')} />
         </div>
         {staticMode === 'fixed' && (
           <div className="flex items-center gap-3">
@@ -391,7 +395,7 @@ function GradesPanel() {
           <ModeChip label="Fixed" active={derivedMode === 'fixed'} onClick={() => setDerivedMode('fixed')} />
           <ModeChip label="Tighten (based on existing)" active={derivedMode === 'tighten'} onClick={() => setDerivedMode('tighten')} />
           <ModeChip label="Preserve as-is" active={derivedMode === 'preserve'} onClick={() => setDerivedMode('preserve')} />
-          <ModeChip label="↺ Reset to C+" active={false} onClick={() => { setDerivedMode('fixed'); setDerivedFixed('Cplus'); }} />
+          <ModeChip label="↺ Reset to defaults" active={derivedMode === 'defaults'} onClick={() => setDerivedMode('defaults')} />
         </div>
         {derivedMode === 'fixed' && (
           <div className="flex items-center gap-3">
