@@ -7,7 +7,14 @@ const path = require('path');
 
 exports.default = async function afterPack(context) {
   const root = context.packager.projectDir;
-  const standaloneModules = path.join(context.appOutDir, 'resources', 'standalone', 'node_modules');
+  const standaloneDest = path.join(context.appOutDir, 'resources', 'standalone');
+  const standaloneModules = path.join(standaloneDest, 'node_modules');
+
+  // electron-builder's extraResources copy applies its own node_modules
+  // dedup/filtering and silently drops packages like `next`. Copy the
+  // standalone output ourselves with a plain recursive fs copy instead.
+  fs.cpSync(path.join(root, '.next', 'standalone'), standaloneDest, { recursive: true, force: true });
+  console.log('[afterPack] Copied .next/standalone -> resources/standalone');
 
   const packages = [
     'better-sqlite3',
