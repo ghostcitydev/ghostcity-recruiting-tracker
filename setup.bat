@@ -22,6 +22,12 @@ for /f "tokens=*" %%v in ('node --version') do set NODE_VER=%%v
 echo  Node.js found: %NODE_VER%
 echo.
 
+:: Create .env if missing (not included in the download — Prisma needs it to find the database)
+if not exist ".env" (
+    echo  Creating config file...
+    echo DATABASE_URL="file:./dev.db"> .env
+)
+
 :: Install dependencies
 echo  Installing dependencies...
 call npm install
@@ -33,12 +39,14 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-:: Run database migrations
+:: Create/update database tables
 echo  Setting up database...
-call npx prisma migrate dev --name init 2>nul
+call npx prisma db push
 if %errorlevel% neq 0 (
-    :: Migration may already be applied — that's fine, just generate the client
-    echo  ^(Migrations already applied, continuing...^)
+    echo.
+    echo  ERROR: Database setup failed.
+    pause
+    exit /b 1
 )
 
 :: Generate Prisma client

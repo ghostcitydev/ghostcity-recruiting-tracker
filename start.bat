@@ -8,7 +8,7 @@ if not exist "node_modules" (
     call setup.bat
     exit /b %errorlevel%
 )
-if not exist "prisma\dev.db" (
+if not exist "dev.db" (
     echo  Database missing. Running setup.bat...
     echo.
     call setup.bat
