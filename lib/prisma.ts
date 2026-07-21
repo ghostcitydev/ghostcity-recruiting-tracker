@@ -5,7 +5,7 @@ import path from 'node:path';
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 const adapter = new PrismaBetterSqlite3({
-  url: `file:${path.join(process.cwd(), 'dev.db')}`,
+  url: process.env.DATABASE_URL ?? `file:${path.join(process.cwd(), 'dev.db')}`,
 });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
