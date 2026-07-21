@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
-  const seasons = await prisma.season.findMany({ orderBy: { year: 'desc' } });
-  return Response.json(seasons);
+  try {
+    const seasons = await prisma.season.findMany({ orderBy: { year: 'desc' } });
+    return Response.json(seasons);
+  } catch (err: any) {
+    console.error('[api/seasons]', err);
+    return Response.json({ error: err?.message ?? String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: Request) {
