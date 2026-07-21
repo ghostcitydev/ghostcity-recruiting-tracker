@@ -330,6 +330,32 @@ export default function PipelinesPage() {
         )}
       </div>
 
+      {/* Export buttons */}
+      <div className="flex gap-2 mb-4">
+        <a
+          href="/api/export?type=pipelines"
+          style={{
+            background: 'var(--ocean-800)', color: 'var(--ocean-300)',
+            border: '1px solid var(--ocean-700)', borderRadius: 6,
+            padding: '5px 12px', fontSize: '0.8rem', fontWeight: 600,
+            textDecoration: 'none', display: 'inline-block',
+          }}
+        >
+          ↓ Export Pipeline Influence CSV
+        </a>
+        <a
+          href="/api/export?type=pipeline-recruits"
+          style={{
+            background: 'var(--ocean-800)', color: 'var(--ocean-300)',
+            border: '1px solid var(--ocean-700)', borderRadius: 6,
+            padding: '5px 12px', fontSize: '0.8rem', fontWeight: 600,
+            textDecoration: 'none', display: 'inline-block',
+          }}
+        >
+          ↓ Export HS Recruits CSV
+        </a>
+      </div>
+
       {loading && <p style={{ color: 'var(--ocean-400)' }}>Loading…</p>}
       {!loading && rows.length === 0 && selectedSeasonId && (
         <p style={{ color: 'var(--ocean-400)' }}>No pipeline data found. Re-import your save to populate this data.</p>

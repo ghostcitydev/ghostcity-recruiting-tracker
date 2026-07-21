@@ -42,6 +42,81 @@ export async function GET(request: Request) {
     });
   }
 
+  if (type === 'pipelines') {
+    const rows = await prisma.teamPipeline.findMany({
+      include: { team: true, season: true },
+      orderBy: [{ season: { year: 'asc' } }, { team: { name: 'asc' } }, { pipeline: 'asc' }],
+    });
+    const PIPELINE_LABELS: Record<string, string> = {
+      Alabama: 'Alabama', Arizona: 'Arizona', Arkansas: 'Arkansas',
+      BigApple: 'New York Metro', BigSky: 'Big Sky (MT/ID/WY)', CentralFlorida: 'Central Florida',
+      Colorado: 'Colorado', EastTexas: 'East Texas', Hawaii: 'Hawaii',
+      Illinois: 'Illinois', Indiana: 'Indiana', Iowa: 'Iowa', Kansas: 'Kansas',
+      Kentucky: 'Kentucky', Louisiana: 'Louisiana', MetroAtlanta: 'Metro Atlanta',
+      Michigan: 'Michigan', Minnesota: 'Minnesota', Mississippi: 'Mississippi',
+      Missouri: 'Missouri', Nebraska: 'Nebraska', Nevada: 'Nevada',
+      NewEngland: 'New England', NewMexico: 'New Mexico', NorthCarolina: 'North Carolina',
+      NorthFlorida: 'North Florida', NorthTexas: 'North Texas', NorthernCalifornia: 'Northern California',
+      Ohio: 'Ohio', Oklahoma: 'Oklahoma', PacificNorthwest: 'Pacific Northwest',
+      Pennsylvania: 'Pennsylvania', SouthCarolina: 'South Carolina', SouthFlorida: 'South Florida',
+      SouthGeorgia: 'South Georgia', SouthernCalifornia: 'Southern California',
+      SouthwestTexas: 'Southwest Texas', Tennessee: 'Tennessee', Tidewater: 'Tidewater (VA/NC)',
+      Utah: 'Utah', WestVirginia: 'West Virginia', Wisconsin: 'Wisconsin',
+    };
+    const LEVEL_LABELS: Record<string, string> = {
+      CulturalPillar: 'Cultural Pillar', HouseholdName: 'Household Name', Popular: 'Popular',
+      Respected: 'Respected', NicheInterest: 'Niche Interest', Unrecognized: 'Unrecognized',
+    };
+    const headers = ['Year', 'Team', 'Conference', 'Region', 'Level', 'Value'];
+    const lines = [headers.join(',')];
+    for (const r of rows) {
+      lines.push(row([
+        r.season.year, r.team.name, r.team.conference,
+        PIPELINE_LABELS[r.pipeline] ?? r.pipeline,
+        LEVEL_LABELS[r.level] ?? r.level,
+        r.value,
+      ]));
+    }
+    return new Response(lines.join('\n'), {
+      headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="pipelines.csv"' },
+    });
+  }
+
+  if (type === 'pipeline-recruits') {
+    const rows = await prisma.teamPipelineRecruit.findMany({
+      include: { team: true, season: true },
+      orderBy: [{ season: { year: 'asc' } }, { team: { name: 'asc' } }, { pipeline: 'asc' }],
+    });
+    const PIPELINE_LABELS: Record<string, string> = {
+      Alabama: 'Alabama', Arizona: 'Arizona', Arkansas: 'Arkansas',
+      BigApple: 'New York Metro', BigSky: 'Big Sky (MT/ID/WY)', CentralFlorida: 'Central Florida',
+      Colorado: 'Colorado', EastTexas: 'East Texas', Hawaii: 'Hawaii',
+      Illinois: 'Illinois', Indiana: 'Indiana', Iowa: 'Iowa', Kansas: 'Kansas',
+      Kentucky: 'Kentucky', Louisiana: 'Louisiana', MetroAtlanta: 'Metro Atlanta',
+      Michigan: 'Michigan', Minnesota: 'Minnesota', Mississippi: 'Mississippi',
+      Missouri: 'Missouri', Nebraska: 'Nebraska', Nevada: 'Nevada',
+      NewEngland: 'New England', NewMexico: 'New Mexico', NorthCarolina: 'North Carolina',
+      NorthFlorida: 'North Florida', NorthTexas: 'North Texas', NorthernCalifornia: 'Northern California',
+      Ohio: 'Ohio', Oklahoma: 'Oklahoma', PacificNorthwest: 'Pacific Northwest',
+      Pennsylvania: 'Pennsylvania', SouthCarolina: 'South Carolina', SouthFlorida: 'South Florida',
+      SouthGeorgia: 'South Georgia', SouthernCalifornia: 'Southern California',
+      SouthwestTexas: 'Southwest Texas', Tennessee: 'Tennessee', Tidewater: 'Tidewater (VA/NC)',
+      Utah: 'Utah', WestVirginia: 'West Virginia', Wisconsin: 'Wisconsin',
+    };
+    const headers = ['Year', 'Team', 'Conference', 'Region', '5★', '4★', '3★', '2★', '1★', 'Total'];
+    const lines = [headers.join(',')];
+    for (const r of rows) {
+      lines.push(row([
+        r.season.year, r.team.name, r.team.conference,
+        PIPELINE_LABELS[r.pipeline] ?? r.pipeline,
+        r.fiveStars, r.fourStars, r.threeStars, r.twoStars, r.oneStars, r.total,
+      ]));
+    }
+    return new Response(lines.join('\n'), {
+      headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="pipeline-recruits.csv"' },
+    });
+  }
+
   // type === 'stats' (default) — all team season stats
   const stats = await prisma.teamSeasonStat.findMany({
     include: { team: true, season: true },
