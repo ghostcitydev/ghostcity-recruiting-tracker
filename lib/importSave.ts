@@ -84,10 +84,30 @@ const XFER_STAR_MAP: Record<string, keyof RecruitBreakdown> = {
   FIVE_STAR: 'fiveStarsXfer', FOUR_STAR: 'fourStarsXfer', THREE_STAR: 'threeStarsXfer', TWO_STAR: 'twoStarsXfer', ONE_STAR: 'oneStarsXfer',
 };
 
+const POS_GROUP_MAP: Record<string, string> = {
+  QB: 'QB',
+  HB: 'HB', FB: 'HB',
+  WR: 'WR',
+  TE: 'TE',
+  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL', T: 'OL', G: 'OL',
+  LE: 'DL', RE: 'DL', DT: 'DL', NT: 'DL', DE: 'DL',
+  LOLB: 'LB', ROLB: 'LB', MLB: 'LB', OLB: 'LB',
+  CB: 'DB', FS: 'DB', SS: 'DB', S: 'DB',
+  K: 'K',
+  P: 'P',
+};
+
+type PosRecruitStar = { total: number; fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; hs: number; xfer: number };
+
 type PipelineRecruitStar = { fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
+
+type IndividualRecruit = { firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string };
+
 type RecruitAnalysis = {
   byTeam: Map<string, RecruitBreakdown>;
+  posRecruitsByTeam: Map<string, Map<string, PosRecruitStar>>;
   pipelineRecruitsByTeam: Map<string, Map<string, PipelineRecruitStar>>;
+  signedRecruitsByTeam: Map<string, IndividualRecruit[]>;
   unsigned: RecruitBreakdown;
   unsignedHSStars: RecruitBreakdown;
   unsignedXferStars: RecruitBreakdown;
@@ -100,7 +120,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
   const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline']);
+  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline', 'Position', 'FirstName', 'LastName', 'OverallRating']);
 
   // Build player-row → Recruit record map for Class lookups
   const playerToRecruit = new Map<number, { isTransfer: boolean }>();
@@ -126,7 +146,9 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
 
   // Read per-team recruits from CommittedPlayers array on each team
   const byTeam = new Map<string, RecruitBreakdown>();
+  const posRecruitsByTeam = new Map<string, Map<string, PosRecruitStar>>();
   const pipelineRecruitsByTeam = new Map<string, Map<string, PipelineRecruitStar>>();
+  const signedRecruitsByTeam = new Map<string, IndividualRecruit[]>();
   for (const teamRec of teamTable.records) {
     if (teamRec.isEmpty || !teamRec.DisplayName) continue;
     const teamName: string = teamRec.DisplayName;
@@ -136,6 +158,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     const cpTable = await getTable(cpRef.tableId);
     const cpRec = cpTable.records[cpRef.row];
     const breakdown = emptyBreakdown();
+    const posMap = new Map<string, PosRecruitStar>();
     const pipelineMap = new Map<string, PipelineRecruitStar>();
 
     for (const f of Object.keys(cpRec.fields)) {
@@ -151,8 +174,38 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         const starField = STAR_MAP[starRating];
         if (starField) (breakdown[starField] as number)++;
 
+        // Track per-position group recruiting
+        const rawPos = prec.Position as string;
+        const posGroup = POS_GROUP_MAP[rawPos];
         const recruitInfo = playerToRecruit.get(ref.row);
-        if (recruitInfo?.isTransfer) {
+        const isTransfer = recruitInfo?.isTransfer ?? false;
+
+        if (posGroup) {
+          if (!posMap.has(posGroup)) {
+            posMap.set(posGroup, { total: 0, fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, hs: 0, xfer: 0 });
+          }
+          const pb = posMap.get(posGroup)!;
+          pb.total++;
+          if (isTransfer) pb.xfer++; else pb.hs++;
+          if (starRating === 'FIVE_STAR') pb.fiveStars++;
+          else if (starRating === 'FOUR_STAR') pb.fourStars++;
+          else if (starRating === 'THREE_STAR') pb.threeStars++;
+          else if (starRating === 'TWO_STAR') pb.twoStars++;
+          else if (starRating === 'ONE_STAR') pb.oneStars++;
+        }
+
+        // Collect individual recruit record
+        if (!signedRecruitsByTeam.has(teamName)) signedRecruitsByTeam.set(teamName, []);
+        signedRecruitsByTeam.get(teamName)!.push({
+          firstName: (prec.FirstName as string) ?? '',
+          lastName: (prec.LastName as string) ?? '',
+          position: rawPos,
+          posGroup: posGroup ?? rawPos,
+          starRating,
+          overall: typeof prec.OverallRating === 'number' ? prec.OverallRating : null,
+          recruitType: isTransfer ? 'Transfer' : 'HS',
+        });
+        if (isTransfer) {
           breakdown.transfer++;
           const xf = XFER_STAR_MAP[starRating];
           if (xf) (breakdown[xf] as number)++;
@@ -179,6 +232,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
 
     if (breakdown.total > 0) byTeam.set(teamName, breakdown);
+    if (posMap.size > 0) posRecruitsByTeam.set(teamName, posMap);
     if (pipelineMap.size > 0) pipelineRecruitsByTeam.set(teamName, pipelineMap);
   }
 
@@ -222,7 +276,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
   }
 
-  return { byTeam, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
+  return { byTeam, posRecruitsByTeam, pipelineRecruitsByTeam, signedRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -383,7 +437,53 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
   } catch { /* pipeline table absent — skip */ }
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, pipelineRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
+  const { byTeam: recruitData, posRecruitsByTeam, pipelineRecruitsByTeam, signedRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx } = await analyzeRecruits(franchise, teamTable);
+
+  // Extract roster player OVR ratings per team for the distribution table, plus individual player records
+  type RatingBuckets = { r95_99: number; r90_94: number; r85_89: number; r80_84: number; r75_79: number; r70_74: number; rSub70: number; total: number };
+  type RosterPlayerData = { firstName: string; lastName: string; position: string; posGroup: string; overall: number | null; starRating: string | null; schoolYear: string | null };
+  const ratingsByTeamIdx = new Map<number, Map<string, RatingBuckets>>();
+  const rosterByTeamIdx = new Map<number, RosterPlayerData[]>();
+  try {
+    const pTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    await pTable.readRecords(['Position', 'TeamIndex', 'OverallRating', 'FirstName', 'LastName', 'SchoolYear', 'ProspectStarRating']);
+    for (const p of (pTable.records as any[])) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (p.isEmpty) continue;
+      const teamIdx = p.TeamIndex as number;
+      if (teamIdx == null || teamIdx === 255) continue;
+      const rawPos = p.Position as string;
+      const posGroup = POS_GROUP_MAP[rawPos];
+      if (!posGroup) continue;
+      const ovr = p.OverallRating as number;
+      if (typeof ovr !== 'number') continue;
+
+      if (!ratingsByTeamIdx.has(teamIdx)) ratingsByTeamIdx.set(teamIdx, new Map());
+      const teamMap = ratingsByTeamIdx.get(teamIdx)!;
+      if (!teamMap.has(posGroup)) teamMap.set(posGroup, { r95_99: 0, r90_94: 0, r85_89: 0, r80_84: 0, r75_79: 0, r70_74: 0, rSub70: 0, total: 0 });
+      const b = teamMap.get(posGroup)!;
+      b.total++;
+      if (ovr >= 95) b.r95_99++;
+      else if (ovr >= 90) b.r90_94++;
+      else if (ovr >= 85) b.r85_89++;
+      else if (ovr >= 80) b.r80_84++;
+      else if (ovr >= 75) b.r75_79++;
+      else if (ovr >= 70) b.r70_74++;
+      else b.rSub70++;
+
+      // Collect individual roster player
+      if (!rosterByTeamIdx.has(teamIdx)) rosterByTeamIdx.set(teamIdx, []);
+      const starRaw = p.ProspectStarRating as string;
+      rosterByTeamIdx.get(teamIdx)!.push({
+        firstName: (p.FirstName as string) ?? '',
+        lastName: (p.LastName as string) ?? '',
+        position: rawPos,
+        posGroup,
+        overall: ovr,
+        starRating: (starRaw && starRaw !== 'Invalid' && starRaw !== 'Invalid_') ? starRaw : null,
+        schoolYear: (p.SchoolYear as string) ?? null,
+      });
+    }
+  } catch { /* player table absent — skip */ }
   const settings = await extractSettings(franchise);
 
   const season = await prisma.season.upsert({
@@ -547,6 +647,44 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
         where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline } },
         update: counts,
         create: { teamId: team.id, seasonId: season.id, pipeline, ...counts },
+      });
+    }
+
+    // Upsert per-position recruit counts for this team/season
+    const posRecruits = posRecruitsByTeam.get(name) ?? new Map();
+    for (const [posGroup, counts] of posRecruits) {
+      await prisma.teamPositionRecruit.upsert({
+        where: { teamId_seasonId_posGroup: { teamId: team.id, seasonId: season.id, posGroup } },
+        update: counts,
+        create: { teamId: team.id, seasonId: season.id, posGroup, ...counts },
+      });
+    }
+
+    // Write signed recruit records (delete existing first for clean re-import)
+    await prisma.signedRecruit.deleteMany({ where: { teamId: team.id, seasonId: season.id } });
+    const signedRecruits = signedRecruitsByTeam.get(name) ?? [];
+    if (signedRecruits.length > 0) {
+      await prisma.signedRecruit.createMany({
+        data: signedRecruits.map((r) => ({ teamId: team.id, seasonId: season.id, ...r })),
+      });
+    }
+
+    // Write roster player records (delete existing first for clean re-import)
+    await prisma.rosterPlayer.deleteMany({ where: { teamId: team.id, seasonId: season.id } });
+    const rosterPlayers = rosterByTeamIdx.get(teamIdx) ?? [];
+    if (rosterPlayers.length > 0) {
+      await prisma.rosterPlayer.createMany({
+        data: rosterPlayers.map((r) => ({ teamId: team.id, seasonId: season.id, ...r })),
+      });
+    }
+
+    // Upsert per-position player rating distributions for this team/season
+    const ratingBuckets = ratingsByTeamIdx.get(teamIdx) ?? new Map();
+    for (const [posGroup, buckets] of ratingBuckets) {
+      await prisma.teamPlayerRating.upsert({
+        where: { teamId_seasonId_posGroup: { teamId: team.id, seasonId: season.id, posGroup } },
+        update: buckets,
+        create: { teamId: team.id, seasonId: season.id, posGroup, ...buckets },
       });
     }
 

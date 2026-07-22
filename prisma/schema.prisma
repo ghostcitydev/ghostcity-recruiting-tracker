@@ -25,6 +25,10 @@ model Team {
   stats            TeamSeasonStat[]
   pipelines        TeamPipeline[]
   pipelineRecruits TeamPipelineRecruit[]
+  positionRecruits TeamPositionRecruit[]
+  playerRatings    TeamPlayerRating[]
+  signedRecruits   SignedRecruit[]
+  rosterPlayers    RosterPlayer[]
 }
 
 model Season {
@@ -38,6 +42,10 @@ model Season {
   settings         SeasonSettings?
   pipelines        TeamPipeline[]
   pipelineRecruits TeamPipelineRecruit[]
+  positionRecruits TeamPositionRecruit[]
+  playerRatings    TeamPlayerRating[]
+  signedRecruits   SignedRecruit[]
+  rosterPlayers    RosterPlayer[]
 }
 
 model SeasonSettings {
@@ -198,4 +206,72 @@ model TeamPipelineRecruit {
   total      Int @default(0)
 
   @@unique([teamId, seasonId, pipeline])
+}
+
+model TeamPositionRecruit {
+  id         String @id @default(cuid())
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId     String
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId   String
+  posGroup   String
+  total      Int @default(0)
+  fiveStars  Int @default(0)
+  fourStars  Int @default(0)
+  threeStars Int @default(0)
+  twoStars   Int @default(0)
+  oneStars   Int @default(0)
+  hs         Int @default(0)
+  xfer       Int @default(0)
+
+  @@unique([teamId, seasonId, posGroup])
+}
+
+model SignedRecruit {
+  id          String @id @default(cuid())
+  team        Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId      String
+  season      Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId    String
+  firstName   String
+  lastName    String
+  position    String
+  posGroup    String
+  starRating  String
+  overall     Int?
+  recruitType String
+}
+
+model RosterPlayer {
+  id         String @id @default(cuid())
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId     String
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId   String
+  firstName  String
+  lastName   String
+  position   String
+  posGroup   String
+  overall    Int?
+  starRating String?
+  schoolYear String?
+}
+
+model TeamPlayerRating {
+  id       String @id @default(cuid())
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId   String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId String
+  posGroup String
+  r95_99   Int @default(0)
+  r90_94   Int @default(0)
+  r85_89   Int @default(0)
+  r80_84   Int @default(0)
+  r75_79   Int @default(0)
+  r70_74   Int @default(0)
+  rSub70   Int @default(0)
+  total    Int @default(0)
+
+  @@unique([teamId, seasonId, posGroup])
 }

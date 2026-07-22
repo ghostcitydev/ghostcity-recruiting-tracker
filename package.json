@@ -1,6 +1,6 @@
 {
   "name": "ghost-city-rlt",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -9,13 +9,13 @@
     "start": "next start",
     "lint": "eslint",
     "electron:dev": "electron .",
-    "dist": "next build && node scripts/prepare-standalone.js && electron-builder --win --x64"
+    "dist": "next build && node scripts/prepare-standalone.js && electron-rebuild -f -w better-sqlite3 && electron-builder --win --x64"
   },
   "build": {
     "appId": "com.ghostcityrlt",
     "productName": "Ghost City RLT",
     "copyright": "Copyright © 2026",
-    "npmRebuild": true,
+    "npmRebuild": false,
     "afterPack": "./scripts/after-pack.js",
     "files": [
       "electron/**/*",

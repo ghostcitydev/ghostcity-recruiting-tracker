@@ -102,28 +102,43 @@ const LINE_INDICATORS = [
 ] as const;
 type IndicatorKey = (typeof LINE_INDICATORS)[number]['key'];
 
-const COLORS = ['#34d399', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#22d3ee', '#f97316', '#818cf8', '#4ade80'];
+const COLORS = ['#003f5c', '#006b71', '#009446', '#65a31c', '#b1aa00', '#ffa600'];
 
 const STAR_COLORS = {
-  fiveStars: '#fbbf24',
-  fourStars: '#a78bfa',
-  threeStars: '#60a5fa',
-  twoStars: '#34d399',
-  oneStars: '#94a3b8',
+  fiveStars: '#003f5c',
+  fourStars: '#006b71',
+  threeStars: '#009446',
+  twoStars:  '#65a31c',
+  oneStars:  '#b1aa00',
 };
 
 const OVR_BANDS = [
-  { label: '90–99', min: 90, max: 99, color: '#34d399' },
-  { label: '80–89', min: 80, max: 89, color: '#60a5fa' },
-  { label: '70–79', min: 70, max: 79, color: '#fbbf24' },
-  { label: '60–69', min: 60, max: 69, color: '#f97316' },
-  { label: '<60',   min: 0,  max: 59, color: '#fb7185' },
+  { label: '90–99', min: 90, max: 99, color: '#003f5c' },
+  { label: '80–89', min: 80, max: 89, color: '#006b71' },
+  { label: '70–79', min: 70, max: 79, color: '#009446' },
+  { label: '60–69', min: 60, max: 69, color: '#b1aa00' },
+  { label: '<60',   min: 0,  max: 59, color: '#ffa600' },
 ];
 
-const AXIS_STYLE = { ticks: { color: '#5a9ad4' }, grid: { color: 'rgba(19,45,84,0.8)' } };
-const LEGEND_STYLE = { labels: { color: '#b8d8f2' } };
+const AXIS_STYLE = {
+  ticks: { color: '#666', font: { family: 'Inter, system-ui, sans-serif', size: 11 } },
+  grid: { color: 'rgba(160,160,160,0.3)', borderDash: [2, 4] as [number, number] },
+};
+const LEGEND_STYLE = {
+  position: 'bottom' as const,
+  align: 'start' as const,
+  labels: { color: '#333', boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 11, family: 'Inter, system-ui, sans-serif' } },
+};
 
-type ChartMode = 'line' | 'composition' | 'ovr-bands' | 'unsigned-national' | 'net-transfers-national';
+const PRESTIGE_BANDS = [
+  { label: 'Elite (9–10)',     min: 9,  max: 10,  color: '#003f5c' },
+  { label: 'High (7–8)',       min: 7,  max: 8,   color: '#006b71' },
+  { label: 'Mid (5–6)',        min: 5,  max: 6,   color: '#009446' },
+  { label: 'Low (3–4)',        min: 3,  max: 4,   color: '#b1aa00' },
+  { label: 'Bottom (1–2)',     min: 1,  max: 2,   color: '#ffa600' },
+];
+
+type ChartMode = 'line' | 'composition' | 'ovr-bands' | 'unsigned-national' | 'net-transfers-national' | 'star-access-national';
 const NATIONAL_MODES: ChartMode[] = ['ovr-bands', 'unsigned-national', 'net-transfers-national'];
 const REVERSED_INDICATORS = new Set(['recruitingRank', 'prestigeRank', 'teamRank']);
 
@@ -302,7 +317,9 @@ function ChartPanel({
   selectedTeams: string[];
   compact: boolean;
 }) {
-  const chartHeight = compact ? 260 : 620;
+  const isStarAccess = panel.mode === 'star-access-national';
+  const chartHeight = compact ? (isStarAccess ? 510 : 260) : 580;
+  const [starPrestigeFilter, setStarPrestigeFilter] = useState('All');
 
   const lineChartData = useMemo(() => {
     const datasets = selectedTeams.map((teamId, i) => {
@@ -356,12 +373,12 @@ function ChartPanel({
     return {
       labels: sorted.map((s) => s.year),
       datasets: [
-        { label: 'HS 5★',   data: sorted.map((s) => s.unsignedHSFiveStar ?? 0),   backgroundColor: '#fbbf24', stack: 'hs' },
-        { label: 'HS 4★',   data: sorted.map((s) => s.unsignedHSFourStar ?? 0),   backgroundColor: '#a78bfa', stack: 'hs' },
-        { label: 'HS 3★',   data: sorted.map((s) => s.unsignedHSThreeStar ?? 0),  backgroundColor: '#60a5fa', stack: 'hs' },
-        { label: 'Xfer 5★', data: sorted.map((s) => s.unsignedXferFiveStar ?? 0), backgroundColor: '#fbbf2480', stack: 'xfer' },
-        { label: 'Xfer 4★', data: sorted.map((s) => s.unsignedXferFourStar ?? 0), backgroundColor: '#a78bfa80', stack: 'xfer' },
-        { label: 'Xfer 3★', data: sorted.map((s) => s.unsignedXferThreeStar ?? 0),backgroundColor: '#60a5fa80', stack: 'xfer' },
+        { label: 'HS 5★',   data: sorted.map((s) => s.unsignedHSFiveStar ?? 0),   backgroundColor: '#003f5c', stack: 'hs' },
+        { label: 'HS 4★',   data: sorted.map((s) => s.unsignedHSFourStar ?? 0),   backgroundColor: '#006b71', stack: 'hs' },
+        { label: 'HS 3★',   data: sorted.map((s) => s.unsignedHSThreeStar ?? 0),  backgroundColor: '#009446', stack: 'hs' },
+        { label: 'Xfer 5★', data: sorted.map((s) => s.unsignedXferFiveStar ?? 0), backgroundColor: 'rgba(0,63,92,0.5)', stack: 'xfer' },
+        { label: 'Xfer 4★', data: sorted.map((s) => s.unsignedXferFourStar ?? 0), backgroundColor: 'rgba(0,107,113,0.5)', stack: 'xfer' },
+        { label: 'Xfer 3★', data: sorted.map((s) => s.unsignedXferThreeStar ?? 0),backgroundColor: 'rgba(0,148,70,0.5)', stack: 'xfer' },
       ],
     };
   }, [settings]);
@@ -374,50 +391,120 @@ function ChartPanel({
         data: seasonYears.map((year) =>
           history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersIn ?? 0), 0)
         ),
-        backgroundColor: '#34d399',
+        backgroundColor: '#009446',
       },
       {
         label: 'Transfers Out',
         data: seasonYears.map((year) =>
           history.filter((h) => h.season.year === year).reduce((s, h) => s + (h.transfersOut ?? 0), 0)
         ),
-        backgroundColor: '#fb7185',
+        backgroundColor: '#ffa600',
       },
     ],
   }), [history, seasonYears]);
 
   const indicatorLabel = LINE_INDICATORS.find((i) => i.key === panel.indicator)?.label ?? panel.indicator;
 
+  const chartTitle =
+    panel.mode === 'line' ? indicatorLabel
+    : panel.mode === 'composition' ? 'Recruit Composition by Star'
+    : panel.mode === 'ovr-bands' ? 'OVR Band Distribution'
+    : panel.mode === 'unsigned-national' ? 'Unsigned Recruits — National'
+    : panel.mode === 'net-transfers-national' ? 'Transfer Volume — National'
+    : 'Star Recruiting Reach by Prestige';
+
+  const starKeys = ['fiveStars', 'fourStars', 'threeStars', 'twoStars', 'oneStars'] as const;
+  const starLabels = ['5★', '4★', '3★', '2★', '1★'];
+  const starColours = [STAR_COLORS.fiveStars, STAR_COLORS.fourStars, STAR_COLORS.threeStars, STAR_COLORS.twoStars, STAR_COLORS.oneStars];
+
+  const starAccessLineData = useMemo(() => {
+    const band = PRESTIGE_BANDS.find(b => b.label === starPrestigeFilter);
+    const filterFn = (h: HistoryRow) => {
+      if (!band) return true;
+      const p = h.prestige ?? 0;
+      return p >= band.min && p <= band.max;
+    };
+    const datasets = starKeys.map((key, ki) => ({
+      label: starLabels[ki],
+      data: seasonYears.map((year) =>
+        history.filter(h => h.season.year === year && filterFn(h)).filter(h => (h[key] ?? 0) >= 1).length
+      ),
+      borderColor: starColours[ki],
+      backgroundColor: starColours[ki],
+      spanGaps: true,
+      tension: 0.25,
+      pointRadius: 3,
+    }));
+    return { labels: seasonYears, datasets };
+  }, [history, seasonYears, starPrestigeFilter]);
+
+  // [yearIdx][starKeyIdx] → sorted team names for star access tooltip
+  const starAccessTeams = useMemo(() => {
+    const band = PRESTIGE_BANDS.find(b => b.label === starPrestigeFilter);
+    const filterFn = (h: HistoryRow) => {
+      if (!band) return true;
+      const p = h.prestige ?? 0;
+      return p >= band.min && p <= band.max;
+    };
+    return seasonYears.map((year) =>
+      starKeys.map((key) =>
+        history
+          .filter(h => h.season.year === year && filterFn(h) && (h[key] ?? 0) >= 1)
+          .map(h => h.team.name)
+          .sort()
+      )
+    );
+  }, [history, seasonYears, starPrestigeFilter]);
+
+  const starAccessBarData = useMemo(() => {
+    const recentYear = seasonYears.length ? Math.max(...seasonYears) : 0;
+    const recentRows = history.filter(h => h.season.year === recentYear);
+    const datasets = PRESTIGE_BANDS.map((band) => ({
+      label: band.label,
+      data: starKeys.map((key) => {
+        const inBand = recentRows.filter(h => { const p = h.prestige ?? 0; return p >= band.min && p <= band.max; });
+        return inBand.filter(h => (h[key] ?? 0) >= 1).length;
+      }),
+      backgroundColor: band.color,
+      stack: 'prestige',
+    }));
+    return { labels: starLabels, datasets };
+  }, [history, seasonYears]);
+
+  const selStyle = { background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-200)' };
+
   return (
-    <div className="rounded-lg border p-4" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-      {/* Panel controls */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <select value={panel.mode} onChange={(e) => onChange({ mode: e.target.value as ChartMode })}
-          className="rounded border px-2 py-1 text-xs font-medium outline-none"
-          style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
-          <option value="line">Trend Line</option>
-          <option value="composition">Recruit Composition</option>
-          <option disabled>──────────</option>
-          <option value="ovr-bands">Nat: OVR Bands</option>
-          <option value="unsigned-national">Nat: Unsigned Recruits</option>
-          <option value="net-transfers-national">Nat: Net Transfers</option>
-        </select>
-
-        {panel.mode === 'line' && (
-          <select value={panel.indicator} onChange={(e) => onChange({ indicator: e.target.value as IndicatorKey })}
-            className="rounded border px-2 py-1 text-xs font-medium outline-none"
-            style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
-            {LINE_INDICATORS.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+    <div className="rounded-lg border p-4" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)' }}>
+      {/* Panel header: title left, controls right */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: 'var(--ocean-700)' }}>
+        <h3 className="text-base font-semibold" style={{ color: 'var(--ocean-100)' }}>
+          {chartTitle}
+        </h3>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {panel.mode === 'star-access-national' && (
+            <select value={starPrestigeFilter} onChange={(e) => setStarPrestigeFilter(e.target.value)}
+              className="rounded border px-2 py-1 text-xs font-medium outline-none" style={selStyle}>
+              <option value="All">All Prestige</option>
+              {PRESTIGE_BANDS.map(b => <option key={b.label} value={b.label}>{b.label}</option>)}
+            </select>
+          )}
+          {panel.mode === 'line' && (
+            <select value={panel.indicator} onChange={(e) => onChange({ indicator: e.target.value as IndicatorKey })}
+              className="rounded border px-2 py-1 text-xs font-medium outline-none" style={selStyle}>
+              {LINE_INDICATORS.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+            </select>
+          )}
+          <select value={panel.mode} onChange={(e) => onChange({ mode: e.target.value as ChartMode })}
+            className="rounded border px-2 py-1 text-xs font-medium outline-none" style={selStyle}>
+            <option value="line">Trend Line</option>
+            <option value="composition">Recruit Composition</option>
+            <option disabled>──────────</option>
+            <option value="ovr-bands">Nat: OVR Bands</option>
+            <option value="unsigned-national">Nat: Unsigned Recruits</option>
+            <option value="net-transfers-national">Nat: Net Transfers</option>
+            <option value="star-access-national">Nat: Star Recruiting Reach</option>
           </select>
-        )}
-
-        <span className="ml-auto text-xs" style={{ color: 'var(--ocean-500)' }}>
-          {panel.mode === 'line' ? indicatorLabel
-            : panel.mode === 'composition' ? 'Recruit Composition'
-            : panel.mode === 'ovr-bands' ? 'OVR Distribution'
-            : panel.mode === 'unsigned-national' ? 'Unsigned Recruits (Nat.)'
-            : 'Transfer Volume (Nat.)'}
-        </span>
+        </div>
       </div>
 
       <div style={{ height: chartHeight }}>
@@ -428,7 +515,7 @@ function ChartPanel({
               x: AXIS_STYLE,
               y: { reverse: REVERSED_INDICATORS.has(panel.indicator), ...AXIS_STYLE },
             },
-            plugins: { legend: LEGEND_STYLE },
+            plugins: { legend: { ...LEGEND_STYLE, display: selectedTeams.length <= 20 } },
           }} />
         )}
 
@@ -461,7 +548,7 @@ function ChartPanel({
             responsive: true, maintainAspectRatio: false,
             scales: {
               x: { stacked: true, ...AXIS_STYLE },
-              y: { stacked: true, ...AXIS_STYLE, title: { display: !compact, text: 'Teams', color: '#5a9ad4' } },
+              y: { stacked: true, ...AXIS_STYLE },
             },
             plugins: { legend: LEGEND_STYLE },
           }} />
@@ -473,10 +560,7 @@ function ChartPanel({
           ) : (
             <Bar data={unsignedNationalData} options={{
               responsive: true, maintainAspectRatio: false,
-              scales: {
-                x: AXIS_STYLE,
-                y: { ...AXIS_STYLE, title: { display: !compact, text: 'Unsigned', color: '#5a9ad4' } },
-              },
+              scales: { x: AXIS_STYLE, y: AXIS_STYLE },
               plugins: { legend: LEGEND_STYLE },
             }} />
           )
@@ -485,12 +569,58 @@ function ChartPanel({
         {panel.mode === 'net-transfers-national' && (
           <Bar data={netTransfersNationalData} options={{
             responsive: true, maintainAspectRatio: false,
-            scales: {
-              x: AXIS_STYLE,
-              y: { ...AXIS_STYLE, title: { display: !compact, text: 'Players', color: '#5a9ad4' } },
-            },
+            scales: { x: AXIS_STYLE, y: AXIS_STYLE },
             plugins: { legend: LEGEND_STYLE },
           }} />
+        )}
+
+        {panel.mode === 'star-access-national' && (
+          seasonYears.length === 0 ? (
+            <div className="grid h-full place-items-center text-sm" style={{ color: 'var(--ocean-400)' }}>No data — import a save first.</div>
+          ) : (
+            <div className="flex h-full flex-col gap-2">
+              {/* Line: time series — teams with ≥1 of each star */}
+              <div>
+                <div className="mb-1 text-xs font-medium" style={{ color: 'var(--ocean-400)' }}>
+                  Teams with ≥1 recruit at each star level — over time
+                  {starPrestigeFilter !== 'All' && <span className="ml-2" style={{ color: 'var(--ocean-600)' }}>{starPrestigeFilter}</span>}
+                </div>
+                <div style={{ height: compact ? 200 : 260 }}>
+                  <Line data={starAccessLineData} options={{
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { x: AXIS_STYLE, y: { ...AXIS_STYLE, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 } } },
+                    plugins: {
+                      legend: LEGEND_STYLE,
+                      tooltip: {
+                        callbacks: {
+                          afterLabel: (ctx) => {
+                            const teams = starAccessTeams[ctx.dataIndex]?.[ctx.datasetIndex] ?? [];
+                            return teams.length ? teams.join(', ') : '';
+                          },
+                        },
+                      },
+                    },
+                  }} />
+                </div>
+              </div>
+              {/* Bar: stacked by prestige for most recent season */}
+              <div>
+                <div className="mb-1 text-xs font-medium" style={{ color: 'var(--ocean-400)' }}>
+                  Teams recruiting each star tier — by prestige (most recent season)
+                </div>
+                <div style={{ height: compact ? 200 : 260 }}>
+                  <Bar data={starAccessBarData} options={{
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                      x: AXIS_STYLE,
+                      y: { ...AXIS_STYLE, stacked: true, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 } },
+                    },
+                    plugins: { legend: LEGEND_STYLE },
+                  }} />
+                </div>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>

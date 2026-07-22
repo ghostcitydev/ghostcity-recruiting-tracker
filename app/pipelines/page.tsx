@@ -55,11 +55,11 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 const LEVEL_COLORS: Record<string, { bg: string; text: string }> = {
-  CulturalPillar: { bg: 'rgba(234,179,8,0.25)', text: '#fde047' },
-  HouseholdName: { bg: 'rgba(59,130,246,0.25)', text: '#93c5fd' },
-  Popular: { bg: 'rgba(34,197,94,0.25)', text: '#86efac' },
-  Respected: { bg: 'rgba(168,85,247,0.2)', text: '#d8b4fe' },
-  NicheInterest: { bg: 'rgba(156,163,175,0.15)', text: '#9ca3af' },
+  CulturalPillar: { bg: 'rgba(0,63,92,0.1)',   text: '#003f5c' },
+  HouseholdName:  { bg: 'rgba(0,107,113,0.1)', text: '#006b71' },
+  Popular:        { bg: 'rgba(0,148,70,0.1)',   text: '#007a3a' },
+  Respected:      { bg: 'rgba(101,163,28,0.1)', text: '#4a7a00' },
+  NicheInterest:  { bg: 'rgba(177,170,0,0.1)',  text: '#7a7200' },
 };
 
 function LevelBadge({ level }: { level: string }) {
@@ -264,11 +264,14 @@ export default function PipelinesPage() {
     padding: '6px 10px', fontSize: '0.875rem',
   };
 
-  const toggleBtnStyle = (active: boolean) => ({
-    padding: '6px 16px', fontSize: '0.8rem', fontWeight: 600,
+  const toggleBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '6px 12px',
+    fontSize: '0.75rem',
+    fontWeight: 500,
     background: active ? 'var(--ocean-600)' : 'var(--ocean-800)',
-    color: active ? 'var(--ocean-100)' : 'var(--ocean-400)',
-    border: 'none', cursor: 'pointer',
+    color: active ? '#fff' : 'var(--ocean-400)',
+    border: 'none',
+    cursor: 'pointer',
   });
 
   return (
@@ -364,7 +367,10 @@ export default function PipelinesPage() {
       {/* Team / Influence view */}
       {viewMode === 'team' && dataMode === 'influence' && teamViewRows.length > 0 && (
         <div>
-          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
+          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {teamViewRows[0]?.team.logoUrl && (
+              <img src={teamViewRows[0].team.logoUrl} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            )}
             {selectedTeam} — Pipeline Influence
           </h2>
           <div style={{ overflowX: 'auto' }}>
@@ -377,8 +383,8 @@ export default function PipelinesPage() {
                 </tr>
               </thead>
               <tbody>
-                {teamViewRows.map(r => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                {teamViewRows.map((r, i) => (
+                  <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
                     <td style={{ padding: '7px 12px' }}><LevelBadge level={r.level} /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.value}</td>
@@ -393,7 +399,10 @@ export default function PipelinesPage() {
       {/* Team / Recruits view */}
       {viewMode === 'team' && dataMode === 'recruits' && (
         <div>
-          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12 }}>
+          <h2 style={{ color: 'var(--ocean-100)', fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {teamRecruitRows[0]?.team.logoUrl && (
+              <img src={teamRecruitRows[0].team.logoUrl} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            )}
             {selectedTeam} — HS Recruits by Pipeline
           </h2>
           <p style={{ color: 'var(--ocean-600)', fontSize: '0.72rem', marginBottom: 10 }}>
@@ -420,21 +429,21 @@ export default function PipelinesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teamRecruitRows.map(r => {
+                  {teamRecruitRows.map((r, i) => {
                     const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
                     return (
-                    <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                    <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                       <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                       <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#003f5c" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#006b71" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#009446" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="#65a31c" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="#b1aa00" /></td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fde047', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
                     </tr>
                     );
                   })}
@@ -467,7 +476,7 @@ export default function PipelinesPage() {
               </thead>
               <tbody>
                 {regionViewRows.map((r, i) => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                  <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-500)', fontSize: '0.75rem' }}>{i + 1}</td>
                     <td style={{ padding: '7px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -528,7 +537,7 @@ export default function PipelinesPage() {
                 {regionRecruitRows.map((r, i) => {
                     const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
                     return (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                  <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-500)', fontSize: '0.75rem' }}>{i + 1}</td>
                     <td style={{ padding: '7px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -544,13 +553,13 @@ export default function PipelinesPage() {
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                     <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#fde047" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#93c5fd" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#86efac" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="var(--ocean-300)" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="var(--ocean-500)" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#003f5c" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#006b71" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#009446" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="#65a31c" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="#b1aa00" /></td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fde047', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
                   </tr>
                   );
                 })}

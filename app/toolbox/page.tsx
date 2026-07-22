@@ -34,10 +34,7 @@ function gradeRangePreview(mid: string, halfDev: number): string {
 export default function ToolboxPage() {
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-8 space-y-6">
-      <h1 style={{ fontFamily: 'Franchise, sans-serif', fontSize: '2rem', color: 'var(--ocean-100)', letterSpacing: '0.02em' }}>
-        Toolbox
-      </h1>
-      <NilResetCard />
+<NilResetCard />
       <ProgramSetupCard />
       <RebalanceRostersCard />
     </div>
@@ -93,7 +90,7 @@ function RebalanceRostersCard() {
             <br /><br />
             <span style={{ color: 'var(--ocean-300)' }}>How it works:</span> per player, attributes are split into <em>position-relevant</em> (Throw* for QB, Kick* for K, etc. — plus universals like Speed/Awareness for everyone) and <em>irrelevant</em>. Relevant attributes are set to your target; irrelevant attributes are floored (default 40). <Field>OverallRating</Field> is written as a proxy (mean of relevant attributes); the game refines it via its archetype formula on next sim tick.
             <br /><br />
-            <span style={{ color: '#f59e0b' }}>Timing matters.</span> The game recomputes team OVR once, between <em>Encourage Transfers</em> and <em>Preseason</em>. <strong>Run this tool before Encourage Transfers</strong> so that recompute uses your rebalanced player OVRs (which it combines with prestige scaling). Direct writes to team OVR fields get clobbered by that recompute — this tool intentionally doesn&apos;t attempt them.
+            <span style={{ color: '#003f5c' }}>Timing matters.</span> The game recomputes team OVR once, between <em>Encourage Transfers</em> and <em>Preseason</em>. <strong>Run this tool before Encourage Transfers</strong> so that recompute uses your rebalanced player OVRs (which it combines with prestige scaling). Direct writes to team OVR fields get clobbered by that recompute — this tool intentionally doesn&apos;t attempt them.
           </>
         }
       />
@@ -328,11 +325,11 @@ function GradesPanel() {
       <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
         Writes <Field>MySchoolTrackingTable</Field> grades. Split into two groups because only the static ones truly stick.
         <br />
-        <span style={{ color: '#f59e0b' }}>Run in pre-season only</span> — same as <Field>Rebalance Rosters</Field>.
+        <span style={{ color: '#003f5c' }}>Run in pre-season only</span> — same as <Field>Rebalance Rosters</Field>.
       </p>
 
       {/* Static group */}
-      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'rgba(13,31,60,0.4)' }}>
+      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'var(--ocean-800)' }}>
         <div>
           <div className="text-sm font-semibold" style={{ color: 'var(--ocean-100)' }}>Static grades</div>
           <div className="text-xs" style={{ color: 'var(--ocean-500)' }}>Academic Prestige · Campus Lifestyle — sim never touches these</div>
@@ -383,7 +380,7 @@ function GradesPanel() {
       </div>
 
       {/* Derived group */}
-      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'rgba(13,31,60,0.4)' }}>
+      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'var(--ocean-800)' }}>
         <div>
           <div className="text-sm font-semibold" style={{ color: 'var(--ocean-100)' }}>Derived grades</div>
           <div className="text-xs" style={{ color: 'var(--ocean-500)' }}>
@@ -626,12 +623,16 @@ function HistoryPanel() {
 // ─── Shared components ────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  background: 'var(--ocean-950)', border: '1px solid var(--ocean-800)', color: 'var(--ocean-100)',
+  background: 'var(--ocean-800)', border: '1px solid var(--ocean-700)', color: 'var(--ocean-200)',
 };
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl p-6 space-y-4" style={{ background: 'var(--ocean-900)', border: '1px solid var(--ocean-800)' }}>
+    <div className="rounded-xl p-6 space-y-4" style={{
+      background: 'var(--ocean-900)',
+      border: '1px solid var(--ocean-700)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+    }}>
       {children}
     </div>
   );
@@ -647,7 +648,7 @@ function SectionHeader({ title, description }: { title: string; description: Rea
 }
 
 function Field({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: '#f59e0b', fontFamily: 'inherit', fontWeight: 600 }}>{children}</span>;
+  return <span style={{ color: '#003f5c', fontFamily: 'inherit', fontWeight: 600 }}>{children}</span>;
 }
 
 function PanelBody({ children }: { children: React.ReactNode }) {
@@ -661,7 +662,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       className="px-4 py-2 text-sm font-medium"
       style={{
         color: active ? 'var(--ocean-100)' : 'var(--ocean-400)',
-        borderBottom: active ? '2px solid #f59e0b' : '2px solid transparent',
+        borderBottom: active ? '2px solid #003f5c' : '2px solid transparent',
         marginBottom: '-1px',
       }}
     >
@@ -675,7 +676,7 @@ function ModeChip({ label, active, onClick }: { label: string; active: boolean; 
     <button
       onClick={onClick}
       className="rounded-md px-3 py-1.5 text-sm font-medium"
-      style={{ background: active ? 'var(--ocean-700)' : 'var(--ocean-800)', color: active ? 'var(--ocean-100)' : 'var(--ocean-300)' }}
+      style={{ background: active ? 'var(--ocean-600)' : 'var(--ocean-800)', color: active ? '#fff' : 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}
     >
       {label}
     </button>
@@ -685,7 +686,7 @@ function ModeChip({ label, active, onClick }: { label: string; active: boolean; 
 function PrimaryButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} className="rounded-md px-4 py-2 text-sm font-medium"
-      style={{ background: 'var(--ocean-700)', color: 'var(--ocean-100)' }}>
+      style={{ background: 'var(--ocean-600)', color: '#fff' }}>
       {children}
     </button>
   );
@@ -696,7 +697,7 @@ function ConfirmRow({ warning, confirmLabel, onConfirm, onCancel }: {
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium" style={{ color: '#f59e0b' }}>{warning}</p>
+      <p className="text-sm font-medium" style={{ color: '#003f5c' }}>{warning}</p>
       <div className="flex gap-3">
         <button onClick={onConfirm} className="rounded-md px-4 py-2 text-sm font-medium" style={{ background: '#dc2626', color: '#fff' }}>
           {confirmLabel}

@@ -14,18 +14,35 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'NatureBeauty';
+  src: url('/NatureBeauty.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
-  --ocean-950: #0a1628;
-  --ocean-900: #0d1f3c;
-  --ocean-800: #132d54;
-  --ocean-700: #1a3d6d;
-  --ocean-600: #245694;
-  --ocean-500: #2e6db8;
-  --ocean-400: #5a9ad4;
-  --ocean-300: #8bbde6;
-  --ocean-200: #b8d8f2;
-  --ocean-100: #dfedfb;
-  --ocean-50: #f0f6fe;
+  /* Light / WSJ palette */
+  --ocean-950: #F7F7F7;   /* body background */
+  --ocean-900: #FFFFFF;   /* panel / card backgrounds */
+  --ocean-800: #F3F3F3;   /* alternating table rows */
+  --ocean-700: #E0E0E0;   /* borders */
+  --ocean-600: #1A5FA8;   /* primary accent (blue) */
+  --ocean-500: #777777;   /* muted labels */
+  --ocean-400: #555555;   /* secondary text */
+  --ocean-300: #333333;   /* body text */
+  --ocean-200: #1A1A1A;   /* strong text */
+  --ocean-100: #111111;   /* headings */
+  --ocean-50:  #000000;
+
+  /* Data colours — adjusted for legibility on white */
+  --data-green:  #16A34A;
+  --data-blue:   #1D4ED8;
+  --data-amber:  #D97706;
+  --data-red:    #DC2626;
+  --data-purple: #7C3AED;
+  --data-gold:   #B45309;
+  --data-gray:   #6B7280;
 }
 
 @theme inline {
@@ -35,12 +52,12 @@
 
 body {
   background: var(--ocean-950);
-  color: #e2e8f0;
+  color: var(--ocean-200);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--ocean-900); }
-::-webkit-scrollbar-thumb { background: var(--ocean-700); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--ocean-600); }
+::-webkit-scrollbar-track { background: var(--ocean-800); }
+::-webkit-scrollbar-thumb { background: #BBBBBB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #999999; }

@@ -23,6 +23,7 @@ export default function ImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [seasons, setSeasons] = useState<Season[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showFolderEdit, setShowFolderEdit] = useState(false);
   const [folderInput, setFolderInput] = useState('');
   const [folderSaving, setFolderSaving] = useState(false);
@@ -219,7 +220,7 @@ export default function ImportPage() {
       </form>
 
       {status === 'error' && (
-        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: '#991b1b', background: 'rgba(153,27,27,0.15)', color: '#fca5a5' }}>
+        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: '#FCA5A5', background: 'rgba(220,38,38,0.08)', color: '#991b1b' }}>
           {error}
         </div>
       )}
@@ -252,21 +253,41 @@ export default function ImportPage() {
                 style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}
               >
                 <span className="text-sm font-medium" style={{ color: 'var(--ocean-200)' }}>{s.label}</span>
-                <button
-                  onClick={async () => {
-                    if (!confirm(`Delete all data for ${s.label}?`)) return;
-                    await fetch('/api/seasons', {
-                      method: 'DELETE',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ seasonId: s.id }),
-                    });
-                    loadSeasons();
-                  }}
-                  className="rounded px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
-                  style={{ background: 'rgba(153,27,27,0.3)', color: '#fca5a5' }}
-                >
-                  Delete
-                </button>
+                {confirmDeleteId === s.id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs" style={{ color: 'var(--ocean-400)' }}>Delete all data?</span>
+                    <button
+                      onClick={async () => {
+                        setConfirmDeleteId(null);
+                        await fetch('/api/seasons', {
+                          method: 'DELETE',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ seasonId: s.id }),
+                        });
+                        loadSeasons();
+                      }}
+                      className="rounded px-2.5 py-1 text-xs font-medium"
+                      style={{ background: '#DC2626', color: '#fff' }}
+                    >
+                      Yes, delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded px-2.5 py-1 text-xs font-medium"
+                      style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(s.id)}
+                    className="rounded px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+                    style={{ background: '#DC2626', color: '#fff' }}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             ))}
           </div>
