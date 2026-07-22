@@ -146,11 +146,12 @@ export default function PlayersPage() {
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerRow[]>([]);
   const [tooltip, setTooltip] = useState<{ teamId: string; posGroup: string; x: number; y: number } | null>(null);
   const [starFilter, setStarFilter] = useState<StarFilter>('all');
-  const [view, setView] = useState<'recruiting' | 'ratings'>('recruiting');
+  const [view, setView] = useState<'recruiting' | 'ratings' | 'depth'>('recruiting');
   const [ratingsPos, setRatingsPos] = useState<PosGroup | 'ALL'>('ALL');
 
   const [recruitSort, setRecruitSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [ratingsSort, setRatingsSort] = useState<{ key: RatingsSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [depthSort, setDepthSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
 
   useEffect(() => {
     safeJson<Season[]>('/api/seasons').then((res) => {
@@ -340,6 +341,58 @@ export default function PlayersPage() {
     return m;
   }, [signedRecruits]);
 
+  // Positional depth: teamId → posGroup → player count
+  const depthPivot = useMemo(() => {
+    const map = new Map<string, Map<PosGroup, number>>();
+    for (const r of rosterPlayers) {
+      if (!filteredTeamIds.has(r.teamId)) continue;
+      if (!map.has(r.teamId)) map.set(r.teamId, new Map());
+      const pg = r.posGroup as PosGroup;
+      if (POS_GROUPS.includes(pg)) {
+        map.get(r.teamId)!.set(pg, (map.get(r.teamId)!.get(pg) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [rosterPlayers, filteredTeamIds]);
+
+  const depthTeams = useMemo(() => {
+    if (!data) return [];
+    const seen = new Map<string, PosRecruit['team']>();
+    for (const r of data.posRecruits) {
+      if (filteredTeamIds.has(r.team.id)) seen.set(r.team.id, r.team);
+    }
+    const teams = Array.from(seen.values());
+    const { key, dir } = depthSort;
+    const mul = dir === 'asc' ? 1 : -1;
+    return [...teams].sort((a, b) => {
+      if (key === 'name') return mul * a.name.localeCompare(b.name);
+      if (key === 'conf') return mul * a.conference.localeCompare(b.conference);
+      if (key === 'total') {
+        const aT = POS_GROUPS.reduce((s, p) => s + (depthPivot.get(a.id)?.get(p) ?? 0), 0);
+        const bT = POS_GROUPS.reduce((s, p) => s + (depthPivot.get(b.id)?.get(p) ?? 0), 0);
+        return mul * (aT - bT);
+      }
+      return mul * ((depthPivot.get(a.id)?.get(key as PosGroup) ?? 0) - (depthPivot.get(b.id)?.get(key as PosGroup) ?? 0));
+    });
+  }, [data, filteredTeamIds, depthPivot, depthSort]);
+
+  const colDepthStats = useMemo(() => {
+    const stats: Record<PosGroup, { min: number; max: number }> = {} as Record<PosGroup, { min: number; max: number }>;
+    for (const pos of POS_GROUPS) {
+      const vals = depthTeams.map((t) => depthPivot.get(t.id)?.get(pos) ?? 0).filter((v) => v > 0);
+      stats[pos] = vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : { min: 0, max: 0 };
+    }
+    return stats;
+  }, [depthTeams, depthPivot]);
+
+  const depthTotals = useMemo(() => {
+    const t: Record<PosGroup, number> = {} as Record<PosGroup, number>;
+    for (const pos of POS_GROUPS) {
+      t[pos] = depthTeams.reduce((s, team) => s + (depthPivot.get(team.id)?.get(pos) ?? 0), 0);
+    }
+    return t;
+  }, [depthTeams, depthPivot]);
+
   const rosterByKey = useMemo(() => {
     const m = new Map<string, RosterPlayerRow[]>();
     for (const r of rosterPlayers) {
@@ -352,6 +405,11 @@ export default function PlayersPage() {
 
   function toggleRecruitSort(key: string) {
     setRecruitSort((prev) =>
+      prev.key === key ? { key: key as RecruitSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: key as RecruitSortKey, dir: 'desc' }
+    );
+  }
+  function toggleDepthSort(key: string) {
+    setDepthSort((prev) =>
       prev.key === key ? { key: key as RecruitSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: key as RecruitSortKey, dir: 'desc' }
     );
   }
@@ -413,15 +471,15 @@ export default function PlayersPage() {
         )}
         {/* View toggle */}
         <div className="ml-auto flex rounded-md border overflow-hidden" style={{ borderColor: 'var(--ocean-700)' }}>
-          {(['recruiting', 'ratings'] as const).map((v) => (
-            <button key={v} onClick={() => { setView(v); if (v === 'ratings') { setPipelineFilter('All'); setRecruitTypeFilter('All'); } }}
+          {(['recruiting', 'ratings', 'depth'] as const).map((v, i, arr) => (
+            <button key={v} onClick={() => { setView(v); if (v !== 'recruiting') { setPipelineFilter('All'); setRecruitTypeFilter('All'); } }}
               className="px-3 py-1.5 text-xs font-medium transition-colors"
               style={{
                 background: view === v ? 'var(--ocean-600)' : 'var(--ocean-800)',
                 color: view === v ? '#fff' : 'var(--ocean-400)',
-                borderRight: v === 'recruiting' ? '1px solid var(--ocean-700)' : undefined,
+                borderRight: i < arr.length - 1 ? '1px solid var(--ocean-700)' : undefined,
               }}>
-              {v === 'recruiting' ? 'Recruiting' : 'Roster Ratings'}
+              {v === 'recruiting' ? 'Recruiting' : v === 'ratings' ? 'Roster Ratings' : 'Positional Depth'}
             </button>
           ))}
         </div>
@@ -492,6 +550,79 @@ export default function PlayersPage() {
                       })}
                       <td className="px-3 py-1.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>
                         {rowTotal || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : view === 'depth' ? (
+        /* Positional Depth view */
+        <>
+          <SectionHeader>Positional Depth — Players on Roster by Position</SectionHeader>
+          <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
+                  <th className="w-8 px-2 py-2.5" />
+                  <SortTh label="Team"  sortKey="name"  active={depthSort} onSort={toggleDepthSort} left />
+                  <SortTh label="Conf"  sortKey="conf"  active={depthSort} onSort={toggleDepthSort} left />
+                  {POS_GROUPS.map((pos) => (
+                    <SortTh key={pos} label={pos} sortKey={pos} active={depthSort} onSort={toggleDepthSort} />
+                  ))}
+                  <SortTh label="Total" sortKey="total" active={depthSort} onSort={toggleDepthSort} highlight />
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background: '#EBF2FF', borderBottom: '2px solid var(--ocean-700)' }}>
+                  <td />
+                  <td className="px-3 py-2 font-bold text-xs uppercase tracking-widest" colSpan={2} style={{ color: 'var(--ocean-500)' }}>All Teams</td>
+                  {POS_GROUPS.map((pos) => (
+                    <td key={pos} className="px-2 py-2 text-center">
+                      {depthTotals[pos] > 0
+                        ? <span style={heatBubble(depthTotals[pos], colDepthStats[pos].min, colDepthStats[pos].max)}>{depthTotals[pos]}</span>
+                        : <span style={{ color: 'var(--ocean-600)', fontSize: '0.75rem' }}>0</span>}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 text-center tabular-nums font-bold" style={{ color: 'var(--ocean-100)' }}>
+                    {POS_GROUPS.reduce((s, p) => s + depthTotals[p], 0)}
+                  </td>
+                </tr>
+                {depthTeams.length === 0 ? (
+                  <tr>
+                    <td colSpan={POS_GROUPS.length + 3} className="px-4 py-6 text-center text-sm" style={{ color: 'var(--ocean-500)' }}>
+                      No roster data — re-import your save to populate this table.
+                    </td>
+                  </tr>
+                ) : depthTeams.map((team, i) => {
+                  const posMap = depthPivot.get(team.id) ?? new Map<PosGroup, number>();
+                  const rowTotal = POS_GROUPS.reduce((s, p) => s + (posMap.get(p) ?? 0), 0);
+                  const rowBg = i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)';
+                  return (
+                    <tr key={team.id} style={{ background: rowBg }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#EBF2FF'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = rowBg}>
+                      <td className="px-2 py-1.5">
+                        {team.logoUrl
+                          ? <img src={team.logoUrl} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                          : <div style={{ width: 22, height: 22, borderRadius: 3, background: 'var(--ocean-700)' }} />}
+                      </td>
+                      <td className="px-3 py-1.5 font-medium" style={{ color: 'var(--ocean-200)' }}>{team.name}</td>
+                      <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>{team.conference}</td>
+                      {POS_GROUPS.map((pos) => {
+                        const val = posMap.get(pos) ?? 0;
+                        return (
+                          <td key={pos} className="px-2 py-1.5 text-center">
+                            {val > 0
+                              ? <span style={heatBubble(val, colDepthStats[pos].min, colDepthStats[pos].max)}>{val}</span>
+                              : <span style={{ color: 'var(--ocean-600)', fontSize: '0.75rem' }}>0</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-1.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>
+                        {rowTotal || 0}
                       </td>
                     </tr>
                   );
