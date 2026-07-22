@@ -341,19 +341,19 @@ export default function PlayersPage() {
     return m;
   }, [signedRecruits]);
 
-  // Positional depth: teamId → posGroup → player count
+  // Positional depth: teamId → posGroup → total count (existing roster + signed recruits)
   const depthPivot = useMemo(() => {
     const map = new Map<string, Map<PosGroup, number>>();
-    for (const r of rosterPlayers) {
-      if (!filteredTeamIds.has(r.teamId)) continue;
-      if (!map.has(r.teamId)) map.set(r.teamId, new Map());
-      const pg = r.posGroup as PosGroup;
-      if (POS_GROUPS.includes(pg)) {
-        map.get(r.teamId)!.set(pg, (map.get(r.teamId)!.get(pg) ?? 0) + 1);
-      }
-    }
+    const add = (teamId: string, pg: string, n = 1) => {
+      if (!filteredTeamIds.has(teamId)) return;
+      if (!POS_GROUPS.includes(pg as PosGroup)) return;
+      if (!map.has(teamId)) map.set(teamId, new Map());
+      map.get(teamId)!.set(pg as PosGroup, (map.get(teamId)!.get(pg as PosGroup) ?? 0) + n);
+    };
+    for (const r of rosterPlayers) add(r.teamId, r.posGroup);
+    for (const r of signedRecruits) add(r.teamId, r.posGroup);
     return map;
-  }, [rosterPlayers, filteredTeamIds]);
+  }, [rosterPlayers, signedRecruits, filteredTeamIds]);
 
   const depthTeams = useMemo(() => {
     if (!data) return [];
@@ -561,7 +561,7 @@ export default function PlayersPage() {
       ) : view === 'depth' ? (
         /* Positional Depth view */
         <>
-          <SectionHeader>Positional Depth — Players on Roster by Position</SectionHeader>
+          <SectionHeader>Positional Depth — Existing Roster + Signed Recruits by Position</SectionHeader>
           <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -614,7 +614,10 @@ export default function PlayersPage() {
                       {POS_GROUPS.map((pos) => {
                         const val = posMap.get(pos) ?? 0;
                         return (
-                          <td key={pos} className="px-2 py-1.5 text-center">
+                          <td key={pos} className="px-2 py-1.5 text-center"
+                            onMouseEnter={val > 0 ? (e) => setTooltip({ teamId: team.id, posGroup: pos, x: e.clientX, y: e.clientY }) : undefined}
+                            onMouseMove={val > 0 ? (e) => setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : t) : undefined}
+                            onMouseLeave={val > 0 ? () => setTooltip(null) : undefined}>
                             {val > 0
                               ? <span style={heatBubble(val, colDepthStats[pos].min, colDepthStats[pos].max)}>{val}</span>
                               : <span style={{ color: 'var(--ocean-600)', fontSize: '0.75rem' }}>0</span>}
@@ -718,6 +721,7 @@ export default function PlayersPage() {
           y={tooltip.y}
           recruits={recruitsByKey.get(`${tooltip.teamId}|${tooltip.posGroup}`) ?? []}
           roster={rosterByKey.get(`${tooltip.teamId}|${tooltip.posGroup}`) ?? []}
+          groupByYear={view === 'depth'}
         />
       )}
     </div>
@@ -789,66 +793,101 @@ const YEAR_SHORT: Record<string, string> = {
   'RS Freshman': 'RS FR', 'RS Sophomore': 'RS SO', 'RS Junior': 'RS JR',
 };
 
-function RecruitTooltip({ x, y, recruits, roster }: {
+function RecruitTooltip({ x, y, recruits, roster, groupByYear }: {
   x: number; y: number;
   recruits: SignedRecruitRow[];
   roster: RosterPlayerRow[];
+  groupByYear?: boolean;
 }) {
   const hasData = recruits.length > 0 || roster.length > 0;
   if (!hasData) return null;
 
-  // Sort recruits by star desc then OVR desc
-  const sortedRecruits = [...recruits].sort((a, b) => {
-    const starOrder = ['FIVE_STAR', 'FOUR_STAR', 'THREE_STAR', 'TWO_STAR', 'ONE_STAR'];
-    return starOrder.indexOf(a.starRating) - starOrder.indexOf(b.starRating) || (b.overall ?? 0) - (a.overall ?? 0);
-  });
-
-  // Position tooltip so it doesn't clip off-screen
-  const left = x + 12;
-  const top = y + 12;
+  const sortedRecruits = [...recruits].sort((a, b) =>
+    STAR_ORDER.indexOf(a.starRating) - STAR_ORDER.indexOf(b.starRating) || (b.overall ?? 0) - (a.overall ?? 0)
+  );
 
   const divStyle: React.CSSProperties = {
-    position: 'fixed', left, top, zIndex: 9999,
+    position: 'fixed', left: x + 12, top: y + 12, zIndex: 9999,
     background: 'var(--ocean-900)', border: '1px solid var(--ocean-700)',
-    borderRadius: 8, padding: '10px 14px', minWidth: 220, maxWidth: 320,
+    borderRadius: 8, padding: '10px 14px', minWidth: 220, maxWidth: 340,
     boxShadow: '0 8px 24px rgba(0,0,0,0.4)', pointerEvents: 'none',
   };
 
+  const PlayerRow = ({ name, year, overall, stars, type }: { name: string; year?: string | null; overall?: number | null; stars?: string; type?: string }) => (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span style={{ color: 'var(--ocean-200)' }}>{name}</span>
+      <span className="flex items-center gap-1.5 shrink-0">
+        {stars && <span style={{ color: '#b1aa00', fontSize: '0.65rem' }}>{STAR_LABEL[stars] ?? stars}</span>}
+        {type && <span style={{ color: 'var(--ocean-500)' }}>{type}</span>}
+        {year && <span style={{ color: 'var(--ocean-500)', fontSize: '0.65rem', fontWeight: 600 }}>{YEAR_SHORT[year] ?? year}</span>}
+        {overall != null && <span style={{ color: 'var(--ocean-300)', fontWeight: 600 }}>{overall}</span>}
+      </span>
+    </div>
+  );
+
+  const SectionLabel = ({ label, border }: { label: string; border?: boolean }) => (
+    <div className="mb-1.5 text-xs font-bold uppercase tracking-wide"
+      style={{ color: 'var(--ocean-500)', borderTop: border ? '1px solid var(--ocean-800)' : undefined, paddingTop: border ? 8 : 0 }}>
+      {label}
+    </div>
+  );
+
+  if (groupByYear) {
+    // Depth view: existing players grouped by class year, then incoming recruits
+    const byYear = new Map<string, RosterPlayerRow[]>();
+    for (const r of roster) {
+      const yr = r.schoolYear ?? 'Unknown';
+      if (!byYear.has(yr)) byYear.set(yr, []);
+      byYear.get(yr)!.push(r);
+    }
+    const yearGroups = YEAR_ORDER.filter((y) => byYear.has(y));
+    if (byYear.has('Unknown')) yearGroups.push('Unknown');
+
+    return (
+      <div style={divStyle}>
+        {yearGroups.map((yr, gi) => (
+          <div key={yr} className={gi > 0 ? 'mt-2' : ''}>
+            <SectionLabel label={YEAR_SHORT[yr] ?? yr} border={gi > 0} />
+            <div className="flex flex-col gap-0.5 mb-1">
+              {byYear.get(yr)!.sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0)).map((r, i) => (
+                <PlayerRow key={i} name={`${r.firstName} ${r.lastName}`} overall={r.overall} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {sortedRecruits.length > 0 && (
+          <div className={yearGroups.length > 0 ? 'mt-2' : ''}>
+            <SectionLabel label="Incoming" border={yearGroups.length > 0} />
+            <div className="flex flex-col gap-0.5">
+              {sortedRecruits.map((r, i) => (
+                <PlayerRow key={i} name={`${r.firstName} ${r.lastName}`} stars={r.starRating} type={r.recruitType} overall={r.overall} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Recruiting view: signed recruits first, then depth chart
   return (
     <div style={divStyle}>
       {sortedRecruits.length > 0 && (
         <>
-          <div className="mb-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
-            Signed Recruits
-          </div>
+          <SectionLabel label="Signed Recruits" />
           <div className="flex flex-col gap-0.5 mb-2">
             {sortedRecruits.map((r, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                <span style={{ color: 'var(--ocean-200)' }}>{r.firstName} {r.lastName}</span>
-                <span className="flex items-center gap-1.5 shrink-0" style={{ color: 'var(--ocean-400)' }}>
-                  <span style={{ color: '#b1aa00', fontSize: '0.65rem' }}>{STAR_LABEL[r.starRating] ?? r.starRating}</span>
-                  <span style={{ color: 'var(--ocean-500)' }}>{r.recruitType}</span>
-                  {r.overall != null && <span style={{ color: 'var(--ocean-300)', fontWeight: 600 }}>{r.overall}</span>}
-                </span>
-              </div>
+              <PlayerRow key={i} name={`${r.firstName} ${r.lastName}`} stars={r.starRating} type={r.recruitType} overall={r.overall} />
             ))}
           </div>
         </>
       )}
       {roster.length > 0 && (
         <>
-          <div className="mb-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-500)', borderTop: sortedRecruits.length ? '1px solid var(--ocean-800)' : undefined, paddingTop: sortedRecruits.length ? 8 : 0 }}>
-            Depth Chart
-          </div>
+          <SectionLabel label="Depth Chart" border={sortedRecruits.length > 0} />
           <div className="flex flex-col gap-0.5">
             {roster.map((r, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                <span style={{ color: 'var(--ocean-200)' }}>{r.firstName} {r.lastName}</span>
-                <span className="flex items-center gap-1.5 shrink-0">
-                  {r.schoolYear && <span style={{ color: 'var(--ocean-500)', fontSize: '0.65rem', fontWeight: 600 }}>{YEAR_SHORT[r.schoolYear] ?? r.schoolYear}</span>}
-                  {r.overall != null && <span style={{ color: 'var(--ocean-300)', fontWeight: 600 }}>{r.overall}</span>}
-                </span>
-              </div>
+              <PlayerRow key={i} name={`${r.firstName} ${r.lastName}`} year={r.schoolYear} overall={r.overall} />
             ))}
           </div>
         </>
