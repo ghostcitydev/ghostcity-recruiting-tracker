@@ -785,6 +785,9 @@ function Select({ value, onChange, children }: { value: string; onChange: (v: st
   );
 }
 
+const YEAR_ORDER = ['Senior', 'RS Junior', 'Junior', 'RS Sophomore', 'Sophomore', 'RS Freshman', 'Freshman'];
+const STAR_ORDER = ['FIVE_STAR', 'FOUR_STAR', 'THREE_STAR', 'TWO_STAR', 'ONE_STAR'];
+
 const STAR_LABEL: Record<string, string> = {
   FIVE_STAR: '★★★★★', FOUR_STAR: '★★★★', THREE_STAR: '★★★', TWO_STAR: '★★', ONE_STAR: '★',
 };
