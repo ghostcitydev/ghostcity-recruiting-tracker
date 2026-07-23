@@ -542,10 +542,12 @@ export default function PlayersPage() {
     return s;
   }, [accessTeams, accessPivot]);
 
-  const accessTotals = useMemo(() => {
+  const accessAverages = useMemo(() => {
     const t: Record<PosGroup, number> = {} as Record<PosGroup, number>;
+    const n = accessTeams.length || 1;
     for (const pos of POS_GROUPS) {
-      t[pos] = accessTeams.reduce((s, team) => s + (accessPivot.get(team.teamId)?.get(pos) ?? 0), 0);
+      const sum = accessTeams.reduce((s, team) => s + (accessPivot.get(team.teamId)?.get(pos) ?? 0), 0);
+      t[pos] = Math.round((sum / n) * 10) / 10;
     }
     return t;
   }, [accessTeams, accessPivot]);
@@ -811,16 +813,16 @@ export default function PlayersPage() {
               <tbody>
                 <tr style={{ background: '#EBF2FF', borderBottom: '2px solid var(--ocean-700)' }}>
                   <td />
-                  <td className="px-3 py-2 font-bold text-xs uppercase tracking-widest" colSpan={2} style={{ color: 'var(--ocean-500)' }}>All Teams</td>
+                  <td className="px-3 py-2 font-bold text-xs uppercase tracking-widest" colSpan={2} style={{ color: 'var(--ocean-500)' }}>Avg</td>
                   {POS_GROUPS.map((pos) => (
                     <td key={pos} className="px-2 py-2 text-center">
-                      {accessTotals[pos] > 0
-                        ? <span style={heatBubble(accessTotals[pos], colAccessStats[pos].min, colAccessStats[pos].max)}>{accessTotals[pos]}</span>
+                      {accessAverages[pos] > 0
+                        ? <span style={heatBubble(accessAverages[pos], colAccessStats[pos].min, colAccessStats[pos].max)}>{accessAverages[pos]}</span>
                         : <span style={{ color: 'var(--ocean-700)', fontSize: '0.75rem' }}>—</span>}
                     </td>
                   ))}
                   <td className="px-3 py-2 text-center tabular-nums font-bold" style={{ color: 'var(--ocean-100)' }}>
-                    {POS_GROUPS.reduce((s, p) => s + (accessTotals[p] ?? 0), 0) || '—'}
+                    {Math.round(POS_GROUPS.reduce((s, p) => s + (accessAverages[p] ?? 0), 0) * 10) / 10 || '—'}
                   </td>
                 </tr>
                 {accessTeams.length === 0 ? (
