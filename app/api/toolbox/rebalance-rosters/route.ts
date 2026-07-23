@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     const playerTable = franchise.tables.find((t: any) => t.name === 'Player');
     if (!playerTable) return NextResponse.json({ error: 'Player table not found' }, { status: 500 });
 
-    await playerTable.readRecords();
+    // offsetTable is available before readRecords — no need for a discovery pass
     const allFields = playerTable.offsetTable.map((o: any) => o.name);
     const ratingFields: string[] = allFields.filter((f: string) =>
       f.endsWith('Rating') && !SKIP_ALWAYS.has(f) && !f.startsWith('WearAndTear_')

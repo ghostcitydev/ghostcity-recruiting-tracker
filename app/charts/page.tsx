@@ -34,6 +34,12 @@ type HistoryRow = {
   oneStars: number | null;
   avgGrade: number | null;
   facilitiesScore: number | null;
+  gradeAtmosphere: string | null;
+  gradeBrand: string | null;
+  gradeBudget: string | null;
+  gradeTraditions: string | null;
+  gradeConference: string | null;
+  gradeFacilities: string | null;
   gradeAcademic: string | null;
   gradeCampus: string | null;
   gradeCoachStability: string | null;
@@ -84,6 +90,12 @@ const LINE_INDICATORS = [
   { key: 'netTransfers', label: 'Net Transfers (In − Out)' },
   { key: 'avgGrade', label: 'Avg School Grade' },
   { key: 'facilitiesScore', label: 'Facilities Score (0–100)' },
+  { key: 'gradeAtmosphere', label: 'Stadium Atmosphere Grade' },
+  { key: 'gradeBrand', label: 'Brand Exposure Grade' },
+  { key: 'gradeBudget', label: 'Program Budget Grade' },
+  { key: 'gradeTraditions', label: 'Program Traditions Grade' },
+  { key: 'gradeConference', label: 'Conference Prestige Grade' },
+  { key: 'gradeFacilities', label: 'Athletic Facilities Grade' },
   { key: 'gradeAcademic', label: 'Academic Prestige Grade' },
   { key: 'gradeCampus', label: 'Campus Lifestyle Grade' },
   { key: 'gradeChampion', label: 'Championship Contender Grade' },

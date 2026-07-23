@@ -262,11 +262,17 @@ export default function PlayersPage() {
     return map;
   }, [pipelineRows]);
 
+  // Union of teams from posRecruits (signing day) and playerRatings (preseason too)
+  const allTeamMap = useMemo(() => {
+    const map = new Map<string, PosRecruit['team']>();
+    if (!data) return map;
+    for (const r of data.posRecruits) map.set(r.team.id, r.team);
+    for (const r of data.playerRatings) map.set(r.team.id, r.team);
+    return map;
+  }, [data]);
+
   const filteredTeamIds = useMemo(() => {
-    if (!data) return new Set<string>();
-    const all = data.posRecruits.map((r) => r.team);
-    const unique = Array.from(new Map(all.map((t) => [t.id, t])).values());
-    let filtered = unique;
+    let filtered = Array.from(allTeamMap.values());
     if (confFilter === 'Power 4') filtered = filtered.filter((t) => P4.has(t.conference));
     else if (confFilter === 'Group of 5') filtered = filtered.filter((t) => G5.has(t.conference));
     else if (confFilter !== 'All') filtered = filtered.filter((t) => t.conference === confFilter);
@@ -274,7 +280,7 @@ export default function PlayersPage() {
       filtered = filtered.filter((t) => teamPipelineMap.get(t.id)?.has(pipelineFilter));
     }
     return new Set(filtered.map((t) => t.id));
-  }, [data, confFilter, pipelineFilter, teamPipelineMap]);
+  }, [allTeamMap, confFilter, pipelineFilter, teamPipelineMap]);
 
   const pivot = useMemo(() => {
     if (!data) return new Map<string, Map<PosGroup, number>>();
@@ -302,13 +308,12 @@ export default function PlayersPage() {
 
   // All unique teams in filtered set (with team object for logo)
   const baseTeams = useMemo(() => {
-    if (!data) return new Map<string, PosRecruit['team']>();
     const map = new Map<string, PosRecruit['team']>();
-    for (const r of data.posRecruits) {
-      if (filteredTeamIds.has(r.team.id)) map.set(r.team.id, r.team);
+    for (const [id, team] of allTeamMap) {
+      if (filteredTeamIds.has(id)) map.set(id, team);
     }
     return map;
-  }, [data, filteredTeamIds]);
+  }, [allTeamMap, filteredTeamIds]);
 
 
   const teamRows = useMemo(() => {
@@ -412,12 +417,7 @@ export default function PlayersPage() {
   }, [rosterPlayers, signedRecruits, filteredTeamIds]);
 
   const depthTeams = useMemo(() => {
-    if (!data) return [];
-    const seen = new Map<string, PosRecruit['team']>();
-    for (const r of data.posRecruits) {
-      if (filteredTeamIds.has(r.team.id)) seen.set(r.team.id, r.team);
-    }
-    const teams = Array.from(seen.values());
+    const teams = Array.from(baseTeams.values());
     const { key, dir } = depthSort;
     const mul = dir === 'asc' ? 1 : -1;
     return [...teams].sort((a, b) => {
@@ -433,7 +433,7 @@ export default function PlayersPage() {
       }
       return mul * ((depthPivot.get(a.id)?.get(key as PosGroup) ?? 0) - (depthPivot.get(b.id)?.get(key as PosGroup) ?? 0));
     });
-  }, [data, filteredTeamIds, depthPivot, depthSort]);
+  }, [baseTeams, depthPivot, depthSort]);
 
   const colDepthStats = useMemo(() => {
     const stats: Record<PosGroup, { min: number; max: number }> = {} as Record<PosGroup, { min: number; max: number }>;
