@@ -761,7 +761,12 @@ export default function PlayersPage() {
                   <td className="px-3 py-2 text-center tabular-nums font-bold" style={{ color: 'var(--ocean-100)' }}>
                     {POS_GROUPS.reduce((s, p) => s + depthTotals[p], 0)}
                   </td>
-                  <td />
+                  <td className="px-3 py-2 text-center">
+                    {depthTeams.length > 0 && (() => {
+                      const avg = depthTeams.reduce((s, t) => s + calcBalanceScore(depthPivot.get(t.id) ?? new Map()), 0) / depthTeams.length;
+                      return <span style={{ ...balanceBubble(avg), cursor: 'default' }}>{avg.toFixed(1)}</span>;
+                    })()}
+                  </td>
                 </tr>
                 {depthTeams.length === 0 ? (
                   <tr>
