@@ -68,7 +68,7 @@ function calcBalanceScore(posMap: Map<PosGroup, number>): number {
     const [lo, hi] = IDEAL_DEPTH[pos];
     const count = posMap.get(pos) ?? 0;
     const dev = Math.max(0, lo - count) + Math.max(0, count - hi);
-    penalty += Math.min(1, dev * 0.15);
+    penalty += dev * 0.15;
   }
   return Math.max(0, Math.round((10 - penalty) * 10) / 10);
 }
