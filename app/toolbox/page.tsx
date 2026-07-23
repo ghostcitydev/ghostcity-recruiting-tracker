@@ -34,7 +34,8 @@ function gradeRangePreview(mid: string, halfDev: number): string {
 export default function ToolboxPage() {
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-8 space-y-6">
-<NilResetCard />
+      <NilResetCard />
+      <RecruitDealBreakersCard />
       <ProgramSetupCard />
       <RebalanceRostersCard />
     </div>
@@ -157,7 +158,152 @@ function RebalanceRostersCard() {
   );
 }
 
-// ─── NIL Reset (unchanged) ────────────────────────────────
+// ─── Recruit Deal-Breakers ────────────────────────────────
+
+const DEAL_BREAKER_FACTORS = [
+  { value: 'PlayingTime',           label: 'Playing Time' },
+  { value: 'SchemeId',              label: 'Playing Style' },
+  { value: 'DistanceFromHome',      label: 'Proximity to Home' },
+  { value: 'AcademicReputation',    label: 'Academic Reputation' },
+  { value: 'CampusLifestyle',       label: 'Campus Lifestyle' },
+  { value: 'CoachStability',        label: 'Coach Stability' },
+  { value: 'ChampionshipPotential', label: 'Championship Potential' },
+  { value: 'ConferencePower',       label: 'Conference Prestige' },
+  { value: 'ProgramTradition',      label: 'Program Tradition' },
+  { value: 'StadiumAtmosphere',     label: 'Stadium Atmosphere' },
+  { value: 'NationalExposure',      label: 'National Exposure' },
+];
+
+const DB_GRADE_OPTIONS = [
+  { value: 'Aplus', label: 'A+' }, { value: 'A', label: 'A' }, { value: 'Aminus', label: 'A-' },
+  { value: 'Bplus', label: 'B+' }, { value: 'B', label: 'B' }, { value: 'Bminus', label: 'B-' },
+  { value: 'Cplus', label: 'C+' }, { value: 'C', label: 'C' }, { value: 'Cminus', label: 'C-' },
+  { value: 'Dplus', label: 'D+' }, { value: 'D', label: 'D' }, { value: 'Dminus', label: 'D-' },
+  { value: 'F', label: 'F' },
+];
+
+type DBResult = { success: boolean; editCount: number; fieldWriteCount: number; warning?: string };
+
+function RecruitDealBreakersCard() {
+  const [selectedFactors, setSelectedFactors] = useState<Set<string>>(new Set());
+  const [gradeValue, setGradeValue] = useState('Cplus');
+  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
+  const [result, setResult] = useState<DBResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggleFactor(v: string) {
+    setSelectedFactors((prev) => {
+      const next = new Set(prev);
+      next.has(v) ? next.delete(v) : next.add(v);
+      return next;
+    });
+  }
+
+  async function run() {
+    setState('running'); setError(null);
+    try {
+      const res = await fetch('/api/toolbox/recruit-dealbreakers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ factors: [...selectedFactors], gradeValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
+      else { setResult(data); setState('done'); }
+    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
+  }
+
+  const gradeLabel = DB_GRADE_OPTIONS.find((o) => o.value === gradeValue)?.label ?? gradeValue;
+  const factorLabels = DEAL_BREAKER_FACTORS.filter((f) => selectedFactors.has(f.value)).map((f) => f.label);
+
+  return (
+    <Card>
+      <SectionHeader
+        title="Set Recruit Grade Requirements"
+        description={
+          <>
+            For every unsigned recruit that has a selected factor as a need, set the minimum grade threshold to a uniform value.
+            Run in preseason before recruiting begins. Modifies your save file directly.
+          </>
+        }
+      />
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
+          Factors to target
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {DEAL_BREAKER_FACTORS.map((f) => {
+            const active = selectedFactors.has(f.value);
+            return (
+              <button
+                key={f.value}
+                onClick={() => toggleFactor(f.value)}
+                className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  background: active ? 'var(--ocean-600)' : 'var(--ocean-800)',
+                  color: active ? '#fff' : 'var(--ocean-400)',
+                  border: `1px solid ${active ? 'var(--ocean-500)' : 'var(--ocean-700)'}`,
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Minimum grade required:</label>
+        <select
+          value={gradeValue}
+          onChange={(e) => setGradeValue(e.target.value)}
+          className="rounded-md border px-2.5 py-1.5 text-sm outline-none"
+          style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
+        >
+          {DB_GRADE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>
+          Recruits with these factors set must see at least {gradeLabel} from a school.
+        </span>
+      </div>
+
+      {state === 'idle' && (
+        <PrimaryButton
+          onClick={() => setState('confirm')}
+          disabled={selectedFactors.size === 0}
+        >
+          Apply Grade Requirements
+        </PrimaryButton>
+      )}
+      {state === 'confirm' && (
+        <ConfirmRow
+          warning={`Set minimum grade to ${gradeLabel} for: ${factorLabels.join(', ')}. This modifies your save file directly and affects all unsigned recruits with these factors.`}
+          confirmLabel="Confirm — Apply"
+          onConfirm={run}
+          onCancel={() => setState('idle')}
+        />
+      )}
+      {state === 'running' && <RunningText />}
+      {state === 'done' && result && (
+        <ResultRow
+          color={result.editCount > 0 ? '#4ade80' : '#facc15'}
+          message={
+            result.warning
+              ? result.warning
+              : `Done — ${result.editCount.toLocaleString()} recruits updated · ${result.fieldWriteCount.toLocaleString()} grade fields set to ${gradeLabel}.`
+          }
+          onReset={() => { setState('idle'); setResult(null); }}
+        />
+      )}
+      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
+    </Card>
+  );
+}
+
+// ─── NIL Reset ────────────────────────────────────────────
 
 function NilResetCard() {
   const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');

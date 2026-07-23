@@ -191,6 +191,7 @@ export default function PlayersPage() {
   const [signedRecruits, setSignedRecruits] = useState<SignedRecruitRow[]>([]);
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerRow[]>([]);
   const [tooltip, setTooltip] = useState<{ teamId: string; posGroup: string; x: number; y: number } | null>(null);
+  const [balTooltip, setBalTooltip] = useState<{ teamName: string; posMap: Map<PosGroup, number>; x: number; y: number } | null>(null);
   const [starFilter, setStarFilter] = useState<StarFilter>('all');
   const [view, setView] = useState<'recruiting' | 'ratings' | 'depth' | 'access'>('recruiting');
   const [ratingsPos, setRatingsPos] = useState<PosGroup | 'ALL'>('ALL');
@@ -799,8 +800,13 @@ export default function PlayersPage() {
                       <td className="px-3 py-1.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>
                         {rowTotal || 0}
                       </td>
-                      <td className="px-3 py-1.5 text-center">
-                        <span style={balanceBubble(calcBalanceScore(posMap))}>{calcBalanceScore(posMap).toFixed(1)}</span>
+                      <td className="px-3 py-1.5 text-center"
+                        onMouseEnter={(e) => setBalTooltip({ teamName: team.name, posMap, x: e.clientX, y: e.clientY })}
+                        onMouseMove={(e) => setBalTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : t)}
+                        onMouseLeave={() => setBalTooltip(null)}>
+                        <span style={{ ...balanceBubble(calcBalanceScore(posMap)), cursor: 'default' }}>
+                          {calcBalanceScore(posMap).toFixed(1)}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -963,6 +969,14 @@ export default function PlayersPage() {
           </div>
         </>
       )}
+      {balTooltip && (
+        <DepthBalanceTooltip
+          teamName={balTooltip.teamName}
+          posMap={balTooltip.posMap}
+          x={balTooltip.x}
+          y={balTooltip.y}
+        />
+      )}
       {tooltip && (
         <RecruitTooltip
           x={tooltip.x}
@@ -1043,6 +1057,43 @@ const YEAR_SHORT: Record<string, string> = {
   Freshman: 'FR', Sophomore: 'SO', Junior: 'JR', Senior: 'SR',
   'RS Freshman': 'RS FR', 'RS Sophomore': 'RS SO', 'RS Junior': 'RS JR',
 };
+
+function DepthBalanceTooltip({ teamName, posMap, x, y }: { teamName: string; posMap: Map<PosGroup, number>; x: number; y: number }) {
+  const score = calcBalanceScore(posMap);
+  return (
+    <div style={{
+      position: 'fixed', left: x + 14, top: y - 8, zIndex: 9999, pointerEvents: 'none',
+      background: 'var(--ocean-900)', border: '1px solid var(--ocean-700)',
+      borderRadius: 8, padding: '10px 14px', minWidth: 200,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+    }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ocean-400)', marginBottom: 8 }}>
+        {teamName} — Depth Balance
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {POS_GROUPS.map((pos) => {
+          const [lo, hi] = IDEAL_DEPTH[pos];
+          const count = posMap.get(pos) ?? 0;
+          const isLow = count < lo;
+          const isHigh = count > hi;
+          const color = isLow ? 'var(--data-red)' : isHigh ? 'var(--data-amber)' : 'var(--data-green)';
+          return (
+            <div key={pos} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem' }}>
+              <span style={{ width: 24, fontWeight: 700, color: 'var(--ocean-300)' }}>{pos}</span>
+              <span style={{ width: 20, textAlign: 'right', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+              <span style={{ color: 'var(--ocean-600)', fontSize: '0.65rem' }}>[{lo}–{hi}]</span>
+              <span style={{ color, fontSize: '0.65rem', fontWeight: 600 }}>{isLow ? '↓ low' : isHigh ? '↑ high' : '✓'}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--ocean-800)', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--ocean-500)' }}>
+        <span>Balance Score</span>
+        <span style={{ fontWeight: 700, color: score >= 9 ? 'var(--data-green)' : score >= 8 ? 'var(--data-blue)' : score >= 7 ? 'var(--data-amber)' : 'var(--data-red)' }}>{score.toFixed(1)} / 10</span>
+      </div>
+    </div>
+  );
+}
 
 function RecruitTooltip({ x, y, recruits, roster, groupByYear }: {
   x: number; y: number;

@@ -173,7 +173,6 @@ model TeamSeasonStat {
   gradeProK        String?
   gradeProP        String?
   avgGrade         Float?
-  balanceScore     Float?
 
   coachName      String?
   coachArchetype String?

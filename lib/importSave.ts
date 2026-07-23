@@ -391,19 +391,7 @@ export type ImportResult = {
   teamsSkipped: string[];
 };
 
-function computeBalanceScore(rawGrades: string[]): number | null {
-  const GRADE_NUMS: Record<string, number> = {
-    Aplus: 4.3, A: 4.0, Aminus: 3.7,
-    Bplus: 3.3, B: 3.0, Bminus: 2.7,
-    Cplus: 2.3, C: 2.0, Cminus: 1.7,
-    Dplus: 1.3, D: 1.0, Dminus: 0.7,
-    F: 0.0,
-  };
-  const vals = rawGrades.map(g => GRADE_NUMS[g]).filter((v): v is number => v != null);
-  if (vals.length < 2) return null;
-  const range = Math.max(...vals) - Math.min(...vals);
-  return Math.round((1 - range / 4.3) * 100);
-}
+
 
 export async function importSaveFile(savePath: string, snapshot: SnapshotType = 'signing_day'): Promise<ImportResult> {
   const franchise = await Franchise.create(savePath, { autoParse: true });
@@ -682,7 +670,6 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
       gradeProK: traw('ProPotentialGradeK') ? gradeToDisplay(traw('ProPotentialGradeK')) : null,
       gradeProP: traw('ProPotentialGradeP') ? gradeToDisplay(traw('ProPotentialGradeP')) : null,
       avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')),
-      balanceScore: computeBalanceScore([gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')].filter(Boolean)),
       coachName: coach?.name ?? null,
       coachArchetype: coach?.archetype ?? null,
       coachLevel: coach?.level ?? null,

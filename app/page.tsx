@@ -350,12 +350,13 @@ export default function Dashboard() {
           </Select>
         </ControlGroup>
 
-        <ControlGroup label="Compare">
-          <Select value={compareSeasonId} onChange={setCompareSeasonId}>
-            <option value="">None</option>
-            {seasons.filter((s) => s.id !== seasonId).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </Select>
-        </ControlGroup>
+        {seasons.filter((s) => s.id !== seasonId).length > 0 && (
+          <ControlGroup label="Compare">
+            <Select value={compareSeasonId} onChange={setCompareSeasonId}>
+              {seasons.filter((s) => s.id !== seasonId).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </Select>
+          </ControlGroup>
+        )}
 
         <ControlGroup label="Conference">
           <Select value={conferenceFilter} onChange={setConferenceFilter}>
@@ -556,7 +557,7 @@ export default function Dashboard() {
                 <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-400)' }}>{r.team.conference}</td>
                 {/* Ratings */}
                 <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: ovrColor(r.overall), borderLeft: BL }}>{r.overall ?? '—'}</td>
-                <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}</td>
+                <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}{rankArrow(r.prestige, cmp?.prestige ?? null)}</td>
                 {/* Rankings (default) */}
                 {!showGrades && !showCoach && <>
                   <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>

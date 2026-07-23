@@ -72,6 +72,10 @@ function runMigrations(dbPath) {
     }
   }
 
+  // Enable WAL mode once — persists across connections, improves read concurrency
+  db.exec('PRAGMA journal_mode=WAL');
+  db.exec('PRAGMA synchronous=NORMAL');
+
   db.close();
 }
 
