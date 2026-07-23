@@ -165,7 +165,7 @@ const G5 = new Set(['American', 'CUSA', 'MAC', 'MWC', 'Sun Belt', 'Pac-12']);
 
 type StarFilter = 'all' | '5' | '4' | '3' | '2' | '1';
 type RecruitTypeFilter = 'All' | 'HS' | 'Transfer';
-type RecruitSortKey = 'name' | 'conf' | PosGroup | 'total';
+type RecruitSortKey = 'name' | 'conf' | PosGroup | 'total' | 'balance';
 type RatingsSortKey = 'name' | 'conf' | 'r95_99' | 'r90_94' | 'r85_89' | 'r80_84' | 'r75_79' | 'r70_74' | 'rSub70';
 
 const RATING_BUCKETS: { key: keyof PlayerRating; label: string }[] = [
@@ -426,6 +426,9 @@ export default function PlayersPage() {
         const aT = POS_GROUPS.reduce((s, p) => s + (depthPivot.get(a.id)?.get(p) ?? 0), 0);
         const bT = POS_GROUPS.reduce((s, p) => s + (depthPivot.get(b.id)?.get(p) ?? 0), 0);
         return mul * (aT - bT);
+      }
+      if (key === 'balance') {
+        return mul * (calcBalanceScore(depthPivot.get(a.id) ?? new Map()) - calcBalanceScore(depthPivot.get(b.id) ?? new Map()));
       }
       return mul * ((depthPivot.get(a.id)?.get(key as PosGroup) ?? 0) - (depthPivot.get(b.id)?.get(key as PosGroup) ?? 0));
     });
@@ -739,8 +742,8 @@ export default function PlayersPage() {
                   {POS_GROUPS.map((pos) => (
                     <SortTh key={pos} label={pos} sortKey={pos} active={depthSort} onSort={toggleDepthSort} />
                   ))}
-                  <SortTh label="Total" sortKey="total" active={depthSort} onSort={toggleDepthSort} highlight />
-                  <th className="px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-200)' }}>Balance</th>
+                  <SortTh label="Total"   sortKey="total"   active={depthSort} onSort={toggleDepthSort} highlight />
+                  <SortTh label="Balance" sortKey="balance" active={depthSort} onSort={toggleDepthSort} />
                 </tr>
               </thead>
               <tbody>

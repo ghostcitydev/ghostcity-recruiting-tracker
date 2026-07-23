@@ -54,7 +54,6 @@ type TeamStat = {
   gradeProOL: string | null; gradeProDL: string | null; gradeProLB: string | null; gradeProDB: string | null;
   gradeProK: string | null; gradeProP: string | null;
   avgGrade: number | null;
-  balanceScore: number | null;
   coachName: string | null;
   coachArchetype: string | null;
   coachLevel: number | null;
@@ -78,8 +77,7 @@ type SortKey =
   | 'gradeCoachStability' | 'gradeCoachPrestige'
   | 'gradeProQB' | 'gradeProRB' | 'gradeProWR' | 'gradeProTE' | 'gradeProOL'
   | 'gradeProDL' | 'gradeProLB' | 'gradeProDB' | 'gradeProK' | 'gradeProP'
-  | 'coachName' | 'coachArchetype' | 'coachLevel'
-  | 'balanceScore';
+  | 'coachName' | 'coachArchetype' | 'coachLevel';
 
 export default function Dashboard() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -100,10 +98,6 @@ export default function Dashboard() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [compareSeasonId, setCompareSeasonId] = useState('');
   const [compareStats, setCompareStats] = useState<TeamStat[]>([]);
-  const [balTooltip, setBalTooltip] = useState<{ stat: TeamStat; x: number; y: number } | null>(null);
-  const [showBalanceChart, setShowBalanceChart] = useState(false);
-  const [allSeasonStats, setAllSeasonStats] = useState<Map<string, TeamStat[]>>(new Map());
-  const [chartTeams, setChartTeams] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     safeJson<Season[]>('/api/seasons').then((res) => {
@@ -136,21 +130,6 @@ export default function Dashboard() {
       if (res.ok) setCompareStats(res.data ?? []);
     });
   }, [compareSeasonId]);
-
-  // Load all seasons for balance chart when opened
-  useEffect(() => {
-    if (!showBalanceChart || !seasons.length) return;
-    const missing = seasons.filter((s) => !allSeasonStats.has(s.id));
-    if (!missing.length) return;
-    Promise.all(missing.map((s) => safeJson<TeamStat[]>(`/api/stats?seasonId=${s.id}`).then((r) => ({ id: s.id, data: r.data ?? [] }))))
-      .then((results) => {
-        setAllSeasonStats((prev) => {
-          const next = new Map(prev);
-          results.forEach(({ id, data }) => next.set(id, data));
-          return next;
-        });
-      });
-  }, [showBalanceChart, seasons]);
 
   const compareMap = useMemo(() => {
     const m = new Map<string, TeamStat>();
@@ -216,7 +195,6 @@ export default function Dashboard() {
         case 'twoStars': return dir * (s2v(a) - s2v(b));
         case 'oneStars': return dir * (s1v(a) - s1v(b));
         case 'avgGrade': return dir * ((a.avgGrade ?? -1) - (b.avgGrade ?? -1));
-        case 'balanceScore': return dir * ((a.balanceScore ?? -1) - (b.balanceScore ?? -1));
         case 'gradeAtmosphere': return dir * (gv(a.gradeAtmosphere) - gv(b.gradeAtmosphere));
         case 'gradeBrand': return dir * (gv(a.gradeBrand) - gv(b.gradeBrand));
         case 'gradeBudget': return dir * (gv(a.gradeBudget) - gv(b.gradeBudget));
@@ -418,35 +396,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Balance Score Chart toggle */}
-      <div className="mb-3 flex items-center gap-3">
-        <button
-          onClick={() => setShowBalanceChart((v) => !v)}
-          className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
-          style={{
-            background: showBalanceChart ? 'var(--ocean-700)' : 'var(--ocean-900)',
-            borderColor: 'var(--ocean-700)',
-            color: showBalanceChart ? 'var(--ocean-100)' : 'var(--ocean-400)',
-          }}
-        >
-          {showBalanceChart ? '▼' : '▶'} Balance Score History
-        </button>
-      </div>
-
-      {/* Balance Score Line Chart */}
-      {showBalanceChart && (
-        <BalanceChart
-          seasons={seasons}
-          allSeasonStats={allSeasonStats}
-          chartTeams={chartTeams}
-          setChartTeams={setChartTeams}
-          currentStats={stats}
-        />
-      )}
-
-      {/* Balance score tooltip */}
-      {balTooltip && <BalanceTooltip stat={balTooltip.stat} x={balTooltip.x} y={balTooltip.y} />}
-
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-800)' }}>
         <table className="w-full border-collapse text-sm">
@@ -457,7 +406,6 @@ export default function Dashboard() {
               <GH colSpan={2} label="Ratings" bl />
               {!showGrades && !showCoach && <>
                 <GH colSpan={3} label="Rankings" bl />
-                <GH colSpan={1} label="Balance" bl />
                 <GH colSpan={6} label="Class" bl />
                 <GH colSpan={3} label="Transfers" bl />
                 <GH colSpan={3} label="Volume" bl />
@@ -490,7 +438,6 @@ export default function Dashboard() {
                 <Th label="Recr"   k="recruitingRank" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <Th label="Record" k="record"          sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               </>}
-              {!showGrades && !showCoach && <Th label="Bal" k="balanceScore" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} borderLeft />}
               {/* Class: default only */}
               {!showGrades && !showCoach && <>
                 <Th label="★5" k="fiveStars"  sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} borderLeft />
@@ -587,6 +534,7 @@ export default function Dashboard() {
               const net = (r.transfersIn ?? 0) - (r.transfersOut ?? 0);
               const rowBg = i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)';
               const BL = '1px solid var(--ocean-700)';
+              const cmp = compareMap.get(r.team.id);
               return (
               <tr
                 key={r.id}
@@ -610,35 +558,15 @@ export default function Dashboard() {
                 <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: ovrColor(r.overall), borderLeft: BL }}>{r.overall ?? '—'}</td>
                 <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.prestige ?? '—'}</td>
                 {/* Rankings (default) */}
-                {!showGrades && !showCoach && (() => {
-                  const cmp = compareMap.get(r.team.id);
-                  const rankArrow = (cur: number | null, prev: number | null, lower: boolean) => {
-                    if (cur == null || prev == null || cur === prev) return null;
-                    const better = lower ? cur < prev : cur > prev;
-                    return <span style={{ fontSize: 9, marginLeft: 2, color: better ? 'var(--data-green)' : 'var(--data-red)' }}>{better ? '▲' : '▼'}</span>;
-                  };
-                  return <>
-                    <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
-                      {r.teamRank ?? '—'}{rankArrow(r.teamRank, cmp?.teamRank ?? null, true)}
-                    </td>
-                    <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>
-                      {r.recruitingRank ?? '—'}{rankArrow(r.recruitingRank, cmp?.recruitingRank ?? null, true)}
-                    </td>
-                    <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
-                  </>;
-                })()}
-                {/* Balance score (default) */}
-                {!showGrades && !showCoach && (
-                  <td
-                    className="px-3 py-1.5 tabular-nums font-semibold"
-                    style={{ color: balanceColor(r.balanceScore), borderLeft: BL, cursor: r.balanceScore != null ? 'default' : undefined }}
-                    onMouseEnter={r.balanceScore != null ? (e) => setBalTooltip({ stat: r, x: e.clientX, y: e.clientY }) : undefined}
-                    onMouseMove={r.balanceScore != null ? (e) => setBalTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : t) : undefined}
-                    onMouseLeave={r.balanceScore != null ? () => setBalTooltip(null) : undefined}
-                  >
-                    {r.balanceScore != null ? r.balanceScore : '—'}
+                {!showGrades && !showCoach && <>
+                  <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
+                    {r.teamRank ?? '—'}{rankArrow(r.teamRank, cmp?.teamRank ?? null, true)}
                   </td>
-                )}
+                  <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>
+                    {r.recruitingRank ?? '—'}{rankArrow(r.recruitingRank, cmp?.recruitingRank ?? null, true)}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
+                </>}
                 {/* Class (default) */}
                 {!showGrades && !showCoach && <>
                   <td className="px-3 py-1.5 tabular-nums font-medium" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>{s5 || '—'}</td>
@@ -664,53 +592,127 @@ export default function Dashboard() {
                 </>}
                 {/* Grades: All */}
                 {showGrades && gradeTab === 'all' && <>
-                  <td className="px-2 py-1.5 tabular-nums font-semibold text-xs" style={{ color: gradeColor(r.avgGrade), borderLeft: BL }}>{r.avgGrade?.toFixed(1) ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>{r.gradeAtmosphere ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBrand ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBudget ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeTraditions ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeConference ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>{r.gradeFacilities ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAcademic ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCampus ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeChampion ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachStability ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachPrestige ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>{r.gradeProQB ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProRB ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProWR ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProTE ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProOL ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProDL ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProLB ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProDB ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProK ?? '—'}</td>
-                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeProP ?? '—'}</td>
+                  <td className="px-2 py-1.5 tabular-nums font-semibold text-xs" style={{ color: gradeColor(r.avgGrade), borderLeft: BL }}>
+                    {r.avgGrade?.toFixed(1) ?? '—'}{rankArrow(r.avgGrade, cmp?.avgGrade ?? null)}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
+                    {r.gradeAtmosphere ?? '—'}{rankArrow(gv(r.gradeAtmosphere), gv(cmp?.gradeAtmosphere ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeBrand ?? '—'}{rankArrow(gv(r.gradeBrand), gv(cmp?.gradeBrand ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeBudget ?? '—'}{rankArrow(gv(r.gradeBudget), gv(cmp?.gradeBudget ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeTraditions ?? '—'}{rankArrow(gv(r.gradeTraditions), gv(cmp?.gradeTraditions ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeConference ?? '—'}{rankArrow(gv(r.gradeConference), gv(cmp?.gradeConference ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
+                    {r.gradeFacilities ?? '—'}{rankArrow(gv(r.gradeFacilities), gv(cmp?.gradeFacilities ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeAcademic ?? '—'}{rankArrow(gv(r.gradeAcademic), gv(cmp?.gradeAcademic ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCampus ?? '—'}{rankArrow(gv(r.gradeCampus), gv(cmp?.gradeCampus ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeChampion ?? '—'}{rankArrow(gv(r.gradeChampion), gv(cmp?.gradeChampion ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCoachStability ?? '—'}{rankArrow(gv(r.gradeCoachStability), gv(cmp?.gradeCoachStability ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCoachPrestige ?? '—'}{rankArrow(gv(r.gradeCoachPrestige), gv(cmp?.gradeCoachPrestige ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
+                    {r.gradeProQB ?? '—'}{rankArrow(gv(r.gradeProQB), gv(cmp?.gradeProQB ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProRB ?? '—'}{rankArrow(gv(r.gradeProRB), gv(cmp?.gradeProRB ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProWR ?? '—'}{rankArrow(gv(r.gradeProWR), gv(cmp?.gradeProWR ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProTE ?? '—'}{rankArrow(gv(r.gradeProTE), gv(cmp?.gradeProTE ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProOL ?? '—'}{rankArrow(gv(r.gradeProOL), gv(cmp?.gradeProOL ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProDL ?? '—'}{rankArrow(gv(r.gradeProDL), gv(cmp?.gradeProDL ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProLB ?? '—'}{rankArrow(gv(r.gradeProLB), gv(cmp?.gradeProLB ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProDB ?? '—'}{rankArrow(gv(r.gradeProDB), gv(cmp?.gradeProDB ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProK ?? '—'}{rankArrow(gv(r.gradeProK), gv(cmp?.gradeProK ?? null))}
+                  </td>
+                  <td className="px-2 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeProP ?? '—'}{rankArrow(gv(r.gradeProP), gv(cmp?.gradeProP ?? null))}
+                  </td>
                 </>}
                 {/* Grades: Program */}
                 {showGrades && gradeTab === 'program' && <>
-                  <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: gradeColor(r.avgGrade), borderLeft: BL }}>{r.avgGrade?.toFixed(1) ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAtmosphere ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBrand ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeBudget ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeTraditions ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeConference ?? '—'}</td>
+                  <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: gradeColor(r.avgGrade), borderLeft: BL }}>
+                    {r.avgGrade?.toFixed(1) ?? '—'}{rankArrow(r.avgGrade, cmp?.avgGrade ?? null)}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeAtmosphere ?? '—'}{rankArrow(gv(r.gradeAtmosphere), gv(cmp?.gradeAtmosphere ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeBrand ?? '—'}{rankArrow(gv(r.gradeBrand), gv(cmp?.gradeBrand ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeBudget ?? '—'}{rankArrow(gv(r.gradeBudget), gv(cmp?.gradeBudget ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeTraditions ?? '—'}{rankArrow(gv(r.gradeTraditions), gv(cmp?.gradeTraditions ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeConference ?? '—'}{rankArrow(gv(r.gradeConference), gv(cmp?.gradeConference ?? null))}
+                  </td>
                 </>}
                 {/* Grades: School */}
                 {showGrades && gradeTab === 'school' && <>
                   <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', borderLeft: BL }}>
-                    {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}
+                    {r.gradeFacilities ?? '—'}{r.facilitiesScore != null ? ` (${r.facilitiesScore})` : ''}{rankArrow(gv(r.gradeFacilities), gv(cmp?.gradeFacilities ?? null))}
                   </td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeAcademic ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCampus ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeChampion ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachStability ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>{r.gradeCoachPrestige ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeAcademic ?? '—'}{rankArrow(gv(r.gradeAcademic), gv(cmp?.gradeAcademic ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCampus ?? '—'}{rankArrow(gv(r.gradeCampus), gv(cmp?.gradeCampus ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeChampion ?? '—'}{rankArrow(gv(r.gradeChampion), gv(cmp?.gradeChampion ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCoachStability ?? '—'}{rankArrow(gv(r.gradeCoachStability), gv(cmp?.gradeCoachStability ?? null))}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                    {r.gradeCoachPrestige ?? '—'}{rankArrow(gv(r.gradeCoachPrestige), gv(cmp?.gradeCoachPrestige ?? null))}
+                  </td>
                 </>}
                 {/* Grades: Pro */}
                 {showGrades && gradeTab === 'pro' && <>
-                  {([r.gradeProQB,r.gradeProRB,r.gradeProWR,r.gradeProTE,r.gradeProOL,r.gradeProDL,r.gradeProLB,r.gradeProDB,r.gradeProK,r.gradeProP] as (string|null)[]).map((g, gi) => (
-                    <td key={gi} className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', ...(gi === 0 ? { borderLeft: BL } : {}) }}>{g ?? '—'}</td>
+                  {([
+                    [r.gradeProQB, cmp?.gradeProQB], [r.gradeProRB, cmp?.gradeProRB],
+                    [r.gradeProWR, cmp?.gradeProWR], [r.gradeProTE, cmp?.gradeProTE],
+                    [r.gradeProOL, cmp?.gradeProOL], [r.gradeProDL, cmp?.gradeProDL],
+                    [r.gradeProLB, cmp?.gradeProLB], [r.gradeProDB, cmp?.gradeProDB],
+                    [r.gradeProK, cmp?.gradeProK],   [r.gradeProP, cmp?.gradeProP],
+                  ] as [string | null | undefined, string | null | undefined][]).map(([g, gc], gi) => (
+                    <td key={gi} className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-200)', ...(gi === 0 ? { borderLeft: BL } : {}) }}>
+                      {g ?? '—'}{rankArrow(gv(g ?? null), gv(gc ?? null))}
+                    </td>
                   ))}
                 </>}
                 {/* Coaches */}
@@ -719,7 +721,9 @@ export default function Dashboard() {
                   <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--ocean-200)' }}>{r.wins ?? 0}-{r.losses ?? 0}</td>
                   <td className="px-3 py-1.5 text-xs font-medium" style={{ color: 'var(--ocean-100)', borderLeft: BL }}>{r.coachName ?? '—'}</td>
                   <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-300)' }}>{r.coachArchetype ?? '—'}</td>
-                  <td className="px-3 py-1.5 tabular-nums text-xs font-semibold" style={{ color: 'var(--ocean-200)' }}>{r.coachLevel ?? '—'}</td>
+                  <td className="px-3 py-1.5 tabular-nums text-xs font-semibold" style={{ color: 'var(--ocean-200)' }}>
+                    {r.coachLevel ?? '—'}{rankArrow(r.coachLevel, cmp?.coachLevel ?? null)}
+                  </td>
                 </>}
               </tr>
               );
@@ -740,6 +744,12 @@ const GRADE_VAL: Record<string, number> = {
 };
 function gv(g: string | null): number { return g != null ? (GRADE_VAL[g] ?? -1) : -1; }
 
+function rankArrow(cur: number | null | undefined, prev: number | null | undefined, lower = false): React.ReactNode {
+  if (cur == null || prev == null || cur === prev || prev < 0) return null;
+  const better = lower ? cur < prev : cur > prev;
+  return <span style={{ fontSize: 9, marginLeft: 2, color: better ? 'var(--data-green)' : 'var(--data-red)' }}>{better ? '▲' : '▼'}</span>;
+}
+
 function netColor(n: number): string {
   if (n > 0) return 'var(--data-green)';
   if (n < 0) return 'var(--data-red)';
@@ -756,14 +766,6 @@ function ovrColor(ovr: number | null): string {
   if (ovr >= 88) return 'var(--data-green)';
   if (ovr >= 80) return 'var(--data-blue)';
   if (ovr >= 72) return 'var(--data-amber)';
-  return 'var(--data-red)';
-}
-
-function balanceColor(score: number | null): string {
-  if (score == null) return 'var(--ocean-500)';
-  if (score >= 80) return 'var(--data-green)';
-  if (score >= 60) return 'var(--data-blue)';
-  if (score >= 40) return 'var(--data-amber)';
   return 'var(--data-red)';
 }
 
@@ -827,214 +829,6 @@ function GH({ colSpan, label, bl }: { colSpan: number; label?: string; bl?: bool
     >
       {label ?? ''}
     </th>
-  );
-}
-
-const BALANCE_GRADES: { key: keyof TeamStat; label: string }[] = [
-  { key: 'gradeAtmosphere', label: 'Atmosphere' },
-  { key: 'gradeBrand',      label: 'Brand' },
-  { key: 'gradeBudget',     label: 'Budget' },
-  { key: 'gradeTraditions', label: 'Traditions' },
-  { key: 'gradeConference', label: 'Conference' },
-  { key: 'gradeFacilities', label: 'Facilities' },
-];
-
-function BalanceTooltip({ stat, x, y }: { stat: TeamStat; x: number; y: number }) {
-  const entries = BALANCE_GRADES.map(({ key, label }) => ({
-    label,
-    grade: stat[key] as string | null,
-    val: gv(stat[key] as string | null),
-  })).filter((e) => e.grade != null);
-
-  const vals = entries.map((e) => e.val);
-  const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-
-  const left = x + 14;
-  const top = y - 8;
-
-  return (
-    <div
-      style={{
-        position: 'fixed', left, top, zIndex: 9999, pointerEvents: 'none',
-        background: 'var(--ocean-900)', border: '1px solid var(--ocean-700)',
-        borderRadius: 8, padding: '10px 14px', minWidth: 180,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-      }}
-    >
-      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ocean-400)', marginBottom: 8 }}>
-        Program Balance
-      </div>
-      {entries.map(({ label, grade, val }) => {
-        const isWeak   = val === min && max - min >= 0.6;
-        const isStrong = val === max && max - min >= 0.6;
-        const diff = val - avg;
-        const color = isWeak ? 'var(--data-red)' : isStrong ? 'var(--data-green)' : 'var(--ocean-300)';
-        return (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 3 }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--ocean-400)' }}>
-              {isWeak   && <span style={{ color: 'var(--data-red)',   marginRight: 4 }}>↓</span>}
-              {isStrong && <span style={{ color: 'var(--data-green)', marginRight: 4 }}>↑</span>}
-              {!isWeak && !isStrong && <span style={{ marginRight: 20 }} />}
-              {label}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums', minWidth: 28, textAlign: 'right' }}>
-                {grade}
-              </span>
-              <span style={{ fontSize: '0.65rem', color: diff > 0.15 ? 'var(--data-green)' : diff < -0.15 ? 'var(--data-red)' : 'var(--ocean-600)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'right' }}>
-                {diff > 0.05 ? `+${diff.toFixed(1)}` : diff < -0.05 ? diff.toFixed(1) : '±0'}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-      <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--ocean-800)', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--ocean-500)' }}>
-        <span>Score</span>
-        <span style={{ fontWeight: 700, color: balanceColor(stat.balanceScore) }}>{stat.balanceScore ?? '—'} / 100</span>
-      </div>
-    </div>
-  );
-}
-
-// 10-team distinct palette for chart lines (#6)
-const CHART_PALETTE = [
-  '#2196f3', '#f95d6a', '#ffa600', '#57a773', '#a05195',
-  '#003f5c', '#ff7c43', '#665191', '#009688', '#e91e63',
-];
-
-type BalanceChartProps = {
-  seasons: Season[];
-  allSeasonStats: Map<string, TeamStat[]>;
-  chartTeams: Set<string>;
-  setChartTeams: React.Dispatch<React.SetStateAction<Set<string>>>;
-  currentStats: TeamStat[];
-};
-
-function BalanceChart({ seasons, allSeasonStats, chartTeams, setChartTeams, currentStats }: BalanceChartProps) {
-  // Build sorted season list (signing_day only, chronological for chart)
-  const sdSeasons = [...seasons].filter((s) => s.snapshot === 'signing_day').sort((a, b) => a.year - b.year);
-
-  // Gather all team names with balance scores across loaded seasons
-  const teamSet = new Set<string>();
-  for (const [, stats] of allSeasonStats) {
-    for (const s of stats) {
-      if (s.balanceScore != null) teamSet.add(s.team.name);
-    }
-  }
-  const allTeams = [...teamSet].sort();
-
-  // Default: top 6 teams by current season balance score
-  const defaultTeams = React.useMemo(() => {
-    return [...currentStats]
-      .filter((s) => s.balanceScore != null)
-      .sort((a, b) => (b.balanceScore ?? 0) - (a.balanceScore ?? 0))
-      .slice(0, 6)
-      .map((s) => s.team.name);
-  }, [currentStats]);
-
-  const activeTeams = chartTeams.size > 0 ? [...chartTeams] : defaultTeams;
-
-  // Chart data: for each active team, array of { year, score } per signing_day season
-  const seriesData = activeTeams.map((teamName) => {
-    const points = sdSeasons.map((s) => {
-      const stats = allSeasonStats.get(s.id) ?? [];
-      const teamStat = stats.find((t) => t.team.name === teamName);
-      return { year: s.year, score: teamStat?.balanceScore ?? null };
-    });
-    return { teamName, points };
-  });
-
-  // SVG chart dimensions
-  const W = 720, H = 260, PAD = { t: 16, r: 16, b: 36, l: 44 };
-  const chartW = W - PAD.l - PAD.r;
-  const chartH = H - PAD.t - PAD.b;
-
-  const yearCount = sdSeasons.length;
-  const xScale = (i: number) => yearCount <= 1 ? chartW / 2 : (i / (yearCount - 1)) * chartW;
-  const yScale = (v: number) => chartH - (v / 100) * chartH;
-
-  const yTicks = [0, 25, 50, 75, 100];
-
-  const loaded = sdSeasons.every((s) => allSeasonStats.has(s.id));
-
-  return (
-    <div className="mb-4 rounded-lg border p-4" style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-800)' }}>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Teams</span>
-        {allTeams.slice(0, 20).map((name, i) => {
-          const active = activeTeams.includes(name);
-          const colorIdx = activeTeams.indexOf(name);
-          return (
-            <button
-              key={name}
-              onClick={() => setChartTeams((prev) => {
-                const next = new Set(prev.size === 0 ? defaultTeams : [...prev]);
-                next.has(name) ? next.delete(name) : next.add(name);
-                return next;
-              })}
-              className="rounded px-2 py-0.5 text-xs font-medium transition-opacity"
-              style={{
-                background: active ? (CHART_PALETTE[colorIdx % CHART_PALETTE.length] + '22') : 'var(--ocean-800)',
-                color: active ? CHART_PALETTE[colorIdx % CHART_PALETTE.length] : 'var(--ocean-500)',
-                border: `1px solid ${active ? CHART_PALETTE[colorIdx % CHART_PALETTE.length] : 'var(--ocean-700)'}`,
-              }}
-            >
-              {name}
-            </button>
-          );
-        })}
-      </div>
-      {!loaded ? (
-        <p style={{ color: 'var(--ocean-500)', fontSize: '0.8rem' }}>Loading season data…</p>
-      ) : sdSeasons.length < 2 ? (
-        <p style={{ color: 'var(--ocean-500)', fontSize: '0.8rem' }}>Import at least 2 Signing Day seasons to view chart.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ fontFamily: 'inherit' }}>
-            {/* Y grid + labels */}
-            {yTicks.map((v) => (
-              <g key={v}>
-                <line x1={PAD.l} x2={PAD.l + chartW} y1={PAD.t + yScale(v)} y2={PAD.t + yScale(v)}
-                  stroke="var(--ocean-800)" strokeWidth={1} />
-                <text x={PAD.l - 6} y={PAD.t + yScale(v) + 4} textAnchor="end"
-                  style={{ fontSize: 10, fill: 'var(--ocean-500)' }}>{v}</text>
-              </g>
-            ))}
-            {/* X axis labels */}
-            {sdSeasons.map((s, i) => (
-              <text key={s.id} x={PAD.l + xScale(i)} y={H - PAD.b + 18} textAnchor="middle"
-                style={{ fontSize: 10, fill: 'var(--ocean-500)' }}>{s.year}</text>
-            ))}
-            {/* Series lines */}
-            {seriesData.map(({ teamName, points }, si) => {
-              const color = CHART_PALETTE[si % CHART_PALETTE.length];
-              const validPoints = points.filter((p) => p.score != null);
-              if (validPoints.length < 2) return null;
-              const d = validPoints.map((p, pi) => {
-                const xi = sdSeasons.findIndex((s) => s.year === p.year);
-                const x = PAD.l + xScale(xi);
-                const y = PAD.t + yScale(p.score!);
-                return `${pi === 0 ? 'M' : 'L'}${x},${y}`;
-              }).join(' ');
-              return (
-                <g key={teamName}>
-                  <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
-                  {validPoints.map((p) => {
-                    const xi = sdSeasons.findIndex((s) => s.year === p.year);
-                    return (
-                      <circle key={p.year} cx={PAD.l + xScale(xi)} cy={PAD.t + yScale(p.score!)} r={3}
-                        fill={color} />
-                    );
-                  })}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      )}
-    </div>
   );
 }
 
