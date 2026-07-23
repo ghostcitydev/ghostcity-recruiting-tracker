@@ -239,11 +239,6 @@ export default function PlayersPage() {
     });
   }, [seasonId]);
 
-  const conferences = useMemo(() => {
-    const set = new Set(Array.from(allTeamMap.values()).map((t) => t.conference));
-    return ['All', 'Power 4', 'Group of 5', ...Array.from(set).sort()];
-  }, [allTeamMap]);
-
   const pipelineNames = useMemo(() => {
     const names = new Set(pipelineRows.map((r) => r.pipeline));
     return ['All', ...Array.from(names).sort()];
@@ -269,6 +264,11 @@ export default function PlayersPage() {
     for (const r of data.playerRatings) map.set(r.team.id, r.team);
     return map;
   }, [data]);
+
+  const conferences = useMemo(() => {
+    const set = new Set(Array.from(allTeamMap.values()).map((t) => t.conference));
+    return ['All', 'Power 4', 'Group of 5', ...Array.from(set).sort()];
+  }, [allTeamMap]);
 
   const filteredTeamIds = useMemo(() => {
     let filtered = Array.from(allTeamMap.values());
