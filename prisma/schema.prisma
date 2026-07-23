@@ -27,8 +27,9 @@ model Team {
   pipelineRecruits TeamPipelineRecruit[]
   positionRecruits TeamPositionRecruit[]
   playerRatings    TeamPlayerRating[]
-  signedRecruits   SignedRecruit[]
-  rosterPlayers    RosterPlayer[]
+  signedRecruits          SignedRecruit[]
+  rosterPlayers           RosterPlayer[]
+  pipelinePosRecruits     TeamPipelinePositionRecruit[]
 }
 
 model Season {
@@ -44,8 +45,10 @@ model Season {
   pipelineRecruits TeamPipelineRecruit[]
   positionRecruits TeamPositionRecruit[]
   playerRatings    TeamPlayerRating[]
-  signedRecruits   SignedRecruit[]
-  rosterPlayers    RosterPlayer[]
+  signedRecruits          SignedRecruit[]
+  rosterPlayers           RosterPlayer[]
+  pipelinePosRecruits     TeamPipelinePositionRecruit[]
+  prospectPool            PipelineProspect[]
 }
 
 model SeasonSettings {
@@ -255,6 +258,42 @@ model RosterPlayer {
   overall    Int?
   starRating String?
   schoolYear String?
+}
+
+// Per-team pipeline recruit counts broken down by position group
+model TeamPipelinePositionRecruit {
+  id         String @id @default(cuid())
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId     String
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId   String
+  pipeline   String
+  posGroup   String
+  fiveStars  Int @default(0)
+  fourStars  Int @default(0)
+  threeStars Int @default(0)
+  twoStars   Int @default(0)
+  oneStars   Int @default(0)
+  total      Int @default(0)
+
+  @@unique([teamId, seasonId, pipeline, posGroup])
+}
+
+// Unsigned prospect pool counts by pipeline + position + star (for Access to Recruits)
+model PipelineProspect {
+  id         String @id @default(cuid())
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId   String
+  pipeline   String
+  posGroup   String
+  fiveStars  Int @default(0)
+  fourStars  Int @default(0)
+  threeStars Int @default(0)
+  twoStars   Int @default(0)
+  oneStars   Int @default(0)
+  total      Int @default(0)
+
+  @@unique([seasonId, pipeline, posGroup])
 }
 
 model TeamPlayerRating {
