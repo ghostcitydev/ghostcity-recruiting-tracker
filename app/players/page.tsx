@@ -38,10 +38,12 @@ type PlayersData = {
   playerRatings: PlayerRating[];
 };
 
-type TeamStat = { id: string; prestige: number | null; team: { name: string; conference: string } };
+type TeamStat = { id: string; teamId: string; prestige: number | null; team: { id: string; name: string; conference: string; logoUrl: string | null } };
 type PipelineRow = { teamId: string; pipeline: string; total: number };
 type SignedRecruitRow = { teamId: string; firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string };
 type RosterPlayerRow = { teamId: string; firstName: string; lastName: string; position: string; posGroup: string; overall: number | null; starRating: string | null; schoolYear: string | null };
+type ProspectRow = { pipeline: string; posGroup: string; fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
+type TeamInfluenceRow = { teamId: string; pipeline: string; level: string; value: number; team: { name: string; conference: string; logoUrl: string | null } };
 
 const POS_GROUPS = ['QB', 'HB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB', 'K', 'P'] as const;
 type PosGroup = typeof POS_GROUPS[number];
@@ -189,12 +191,15 @@ export default function PlayersPage() {
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerRow[]>([]);
   const [tooltip, setTooltip] = useState<{ teamId: string; posGroup: string; x: number; y: number } | null>(null);
   const [starFilter, setStarFilter] = useState<StarFilter>('all');
-  const [view, setView] = useState<'recruiting' | 'ratings' | 'depth'>('recruiting');
+  const [view, setView] = useState<'recruiting' | 'ratings' | 'depth' | 'access'>('recruiting');
   const [ratingsPos, setRatingsPos] = useState<PosGroup | 'ALL'>('ALL');
 
   const [recruitSort, setRecruitSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [ratingsSort, setRatingsSort] = useState<{ key: RatingsSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [depthSort, setDepthSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [accessSort, setAccessSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [prospectPool, setProspectPool] = useState<ProspectRow[]>([]);
+  const [teamInfluence, setTeamInfluence] = useState<TeamInfluenceRow[]>([]);
 
   useEffect(() => {
     safeJson<Season[]>('/api/seasons').then((res) => {
@@ -211,18 +216,24 @@ export default function PlayersPage() {
     setPipelineRows([]);
     setSignedRecruits([]);
     setRosterPlayers([]);
+    setProspectPool([]);
+    setTeamInfluence([]);
     Promise.all([
       safeJson<PlayersData>(`/api/players?seasonId=${seasonId}`),
       safeJson<TeamStat[]>(`/api/stats?seasonId=${seasonId}`),
       safeJson<PipelineRow[]>(`/api/pipeline-recruits?seasonId=${seasonId}`),
       safeJson<SignedRecruitRow[]>(`/api/recruits?seasonId=${seasonId}`),
       safeJson<RosterPlayerRow[]>(`/api/roster-players?seasonId=${seasonId}`),
-    ]).then(([playerRes, statsRes, pipelineRes, recruitsRes, rosterRes]) => {
+      safeJson<ProspectRow[]>(`/api/prospect-pool?seasonId=${seasonId}`),
+      safeJson<TeamInfluenceRow[]>(`/api/pipelines?seasonId=${seasonId}`),
+    ]).then(([playerRes, statsRes, pipelineRes, recruitsRes, rosterRes, prospectRes, influenceRes]) => {
       if (playerRes.ok && playerRes.data) setData(playerRes.data);
       if (statsRes.ok && statsRes.data) setStats(statsRes.data);
       if (pipelineRes.ok && pipelineRes.data) setPipelineRows(pipelineRes.data);
       if (recruitsRes.ok && recruitsRes.data) setSignedRecruits(recruitsRes.data);
       if (rosterRes.ok && rosterRes.data) setRosterPlayers(rosterRes.data);
+      if (prospectRes.ok && prospectRes.data) setProspectPool(prospectRes.data);
+      if (influenceRes.ok && influenceRes.data) setTeamInfluence(influenceRes.data);
     });
   }, [seasonId]);
 
@@ -446,6 +457,99 @@ export default function PlayersPage() {
     return m;
   }, [rosterPlayers]);
 
+  // Access to Recruits: prospect pool keyed by pipeline|posGroup
+  const prospectPoolMap = useMemo(() => {
+    const m = new Map<string, ProspectRow>();
+    for (const r of prospectPool) m.set(`${r.pipeline}|${r.posGroup}`, r);
+    return m;
+  }, [prospectPool]);
+
+  // teamId → set of pipelines where they have any influence
+  const teamInfluencePipelines = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const r of teamInfluence) {
+      if (!m.has(r.teamId)) m.set(r.teamId, new Set());
+      m.get(r.teamId)!.add(r.pipeline);
+    }
+    return m;
+  }, [teamInfluence]);
+
+  // Prestige → max star accessible (9-10→5, 7-8→4, 5-6→3, 3-4→2, 1-2→1)
+  function starCeiling(prestige: number | null): number {
+    if (!prestige) return 0;
+    if (prestige >= 9) return 5;
+    if (prestige >= 7) return 4;
+    if (prestige >= 5) return 3;
+    if (prestige >= 3) return 2;
+    return 1;
+  }
+
+  function accessibleCount(row: ProspectRow, ceiling: number): number {
+    if (ceiling >= 5) return row.total;
+    if (ceiling === 4) return row.fourStars + row.threeStars + row.twoStars + row.oneStars;
+    if (ceiling === 3) return row.threeStars + row.twoStars + row.oneStars;
+    if (ceiling === 2) return row.twoStars + row.oneStars;
+    return row.oneStars;
+  }
+
+  // teamId → posGroup → accessible prospect count
+  const accessPivot = useMemo(() => {
+    const map = new Map<string, Map<PosGroup, number>>();
+    for (const stat of stats) {
+      const ceiling = starCeiling(stat.prestige);
+      const pipelines = teamInfluencePipelines.get(stat.teamId) ?? new Set<string>();
+      const posMap = new Map<PosGroup, number>();
+      for (const pos of POS_GROUPS) {
+        let total = 0;
+        for (const pipeline of pipelines) {
+          const poolRow = prospectPoolMap.get(`${pipeline}|${pos}`);
+          if (poolRow) total += accessibleCount(poolRow, ceiling);
+        }
+        posMap.set(pos, total);
+      }
+      map.set(stat.teamId, posMap);
+    }
+    return map;
+  }, [stats, teamInfluencePipelines, prospectPoolMap]);
+
+  const accessTeams = useMemo(() => {
+    let teamList = stats.filter((s) => {
+      if (confFilter === 'Power 4') return P4.has(s.team.conference);
+      if (confFilter === 'Group of 5') return G5.has(s.team.conference);
+      if (confFilter !== 'All') return s.team.conference === confFilter;
+      return true;
+    });
+    const { key, dir } = accessSort;
+    const mul = dir === 'asc' ? 1 : -1;
+    return [...teamList].sort((a, b) => {
+      if (key === 'name') return mul * a.team.name.localeCompare(b.team.name);
+      if (key === 'conf') return mul * a.team.conference.localeCompare(b.team.conference);
+      if (key === 'total') {
+        const aT = POS_GROUPS.reduce((s, p) => s + (accessPivot.get(a.teamId)?.get(p) ?? 0), 0);
+        const bT = POS_GROUPS.reduce((s, p) => s + (accessPivot.get(b.teamId)?.get(p) ?? 0), 0);
+        return mul * (aT - bT);
+      }
+      return mul * ((accessPivot.get(a.teamId)?.get(key as PosGroup) ?? 0) - (accessPivot.get(b.teamId)?.get(key as PosGroup) ?? 0));
+    });
+  }, [stats, accessPivot, confFilter, accessSort]);
+
+  const colAccessStats = useMemo(() => {
+    const s: Record<PosGroup, { min: number; max: number }> = {} as Record<PosGroup, { min: number; max: number }>;
+    for (const pos of POS_GROUPS) {
+      const vals = accessTeams.map((t) => accessPivot.get(t.teamId)?.get(pos) ?? 0).filter((v) => v > 0);
+      s[pos] = vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : { min: 0, max: 0 };
+    }
+    return s;
+  }, [accessTeams, accessPivot]);
+
+  const accessTotals = useMemo(() => {
+    const t: Record<PosGroup, number> = {} as Record<PosGroup, number>;
+    for (const pos of POS_GROUPS) {
+      t[pos] = accessTeams.reduce((s, team) => s + (accessPivot.get(team.teamId)?.get(pos) ?? 0), 0);
+    }
+    return t;
+  }, [accessTeams, accessPivot]);
+
   function toggleRecruitSort(key: string) {
     setRecruitSort((prev) =>
       prev.key === key ? { key: key as RecruitSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: key as RecruitSortKey, dir: 'desc' }
@@ -459,6 +563,11 @@ export default function PlayersPage() {
   function toggleRatingsSort(key: string) {
     setRatingsSort((prev) =>
       prev.key === key ? { key: key as RatingsSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: key as RatingsSortKey, dir: 'desc' }
+    );
+  }
+  function toggleAccessSort(key: string) {
+    setAccessSort((prev) =>
+      prev.key === key ? { key: key as RecruitSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: key as RecruitSortKey, dir: 'desc' }
     );
   }
 
@@ -514,7 +623,7 @@ export default function PlayersPage() {
         )}
         {/* View toggle */}
         <div className="ml-auto flex rounded-md border overflow-hidden" style={{ borderColor: 'var(--ocean-700)' }}>
-          {(['recruiting', 'ratings', 'depth'] as const).map((v, i, arr) => (
+          {(['recruiting', 'ratings', 'depth', 'access'] as const).map((v, i, arr) => (
             <button key={v} onClick={() => { setView(v); if (v !== 'recruiting') { setPipelineFilter('All'); setRecruitTypeFilter('All'); } }}
               className="px-3 py-1.5 text-xs font-medium transition-colors"
               style={{
@@ -522,7 +631,7 @@ export default function PlayersPage() {
                 color: view === v ? '#fff' : 'var(--ocean-400)',
                 borderRight: i < arr.length - 1 ? '1px solid var(--ocean-700)' : undefined,
               }}>
-              {v === 'recruiting' ? 'Recruiting' : v === 'ratings' ? 'Roster Ratings' : 'Positional Depth'}
+              {v === 'recruiting' ? 'Recruiting' : v === 'ratings' ? 'Roster Ratings' : v === 'depth' ? 'Positional Depth' : 'Access to Recruits'}
             </button>
           ))}
         </div>
@@ -674,6 +783,79 @@ export default function PlayersPage() {
                       </td>
                       <td className="px-3 py-1.5 text-center">
                         <span style={balanceBubble(calcBalanceScore(posMap))}>{calcBalanceScore(posMap).toFixed(1)}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : view === 'access' ? (
+        /* Access to Recruits view */
+        <>
+          <SectionHeader>Access to Recruits — Unsigned HS Prospects in Active Pipelines, Within Prestige Star Ceiling</SectionHeader>
+          <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
+                  <th className="w-8 px-2 py-2.5" />
+                  <SortTh label="Team"  sortKey="name"  active={accessSort} onSort={toggleAccessSort} left />
+                  <SortTh label="Conf"  sortKey="conf"  active={accessSort} onSort={toggleAccessSort} left />
+                  {POS_GROUPS.map((pos) => (
+                    <SortTh key={pos} label={pos} sortKey={pos} active={accessSort} onSort={toggleAccessSort} />
+                  ))}
+                  <SortTh label="Total" sortKey="total" active={accessSort} onSort={toggleAccessSort} highlight />
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background: '#EBF2FF', borderBottom: '2px solid var(--ocean-700)' }}>
+                  <td />
+                  <td className="px-3 py-2 font-bold text-xs uppercase tracking-widest" colSpan={2} style={{ color: 'var(--ocean-500)' }}>All Teams</td>
+                  {POS_GROUPS.map((pos) => (
+                    <td key={pos} className="px-2 py-2 text-center">
+                      {accessTotals[pos] > 0
+                        ? <span style={heatBubble(accessTotals[pos], colAccessStats[pos].min, colAccessStats[pos].max)}>{accessTotals[pos]}</span>
+                        : <span style={{ color: 'var(--ocean-700)', fontSize: '0.75rem' }}>—</span>}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 text-center tabular-nums font-bold" style={{ color: 'var(--ocean-100)' }}>
+                    {POS_GROUPS.reduce((s, p) => s + (accessTotals[p] ?? 0), 0) || '—'}
+                  </td>
+                </tr>
+                {accessTeams.length === 0 ? (
+                  <tr>
+                    <td colSpan={POS_GROUPS.length + 3} className="px-4 py-6 text-center text-sm" style={{ color: 'var(--ocean-500)' }}>
+                      No prospect data — re-import your save to populate this table.
+                    </td>
+                  </tr>
+                ) : accessTeams.map((stat, i) => {
+                  const posMap = accessPivot.get(stat.teamId) ?? new Map<PosGroup, number>();
+                  const rowTotal = POS_GROUPS.reduce((s, p) => s + (posMap.get(p) ?? 0), 0);
+                  const rowBg = i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)';
+                  return (
+                    <tr key={stat.teamId} style={{ background: rowBg }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#EBF2FF'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = rowBg}>
+                      <td className="px-2 py-1.5">
+                        {stat.team.logoUrl
+                          ? <img src={stat.team.logoUrl} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                          : <div style={{ width: 22, height: 22, borderRadius: 3, background: 'var(--ocean-700)' }} />}
+                      </td>
+                      <td className="px-3 py-1.5 font-medium" style={{ color: 'var(--ocean-200)' }}>{stat.team.name}</td>
+                      <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>{stat.team.conference}</td>
+                      {POS_GROUPS.map((pos) => {
+                        const val = posMap.get(pos) ?? 0;
+                        return (
+                          <td key={pos} className="px-2 py-1.5 text-center">
+                            {val > 0
+                              ? <span style={heatBubble(val, colAccessStats[pos].min, colAccessStats[pos].max)}>{val}</span>
+                              : <span style={{ color: 'var(--ocean-700)', fontSize: '0.75rem' }}>—</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-1.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>
+                        {rowTotal || '—'}
                       </td>
                     </tr>
                   );

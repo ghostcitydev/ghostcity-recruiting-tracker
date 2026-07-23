@@ -28,6 +28,20 @@ type RecruitRow = {
   team: { name: string; conference: string; logoUrl: string | null; stats: { prestige: number | null }[] };
 };
 
+type PipelinePosRow = {
+  teamId: string;
+  pipeline: string;
+  posGroup: string;
+  fiveStars: number;
+  fourStars: number;
+  threeStars: number;
+  twoStars: number;
+  oneStars: number;
+  total: number;
+};
+
+const POS_GROUPS = ['QB', 'HB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB', 'K', 'P'] as const;
+
 const PIPELINE_LABELS: Record<string, string> = {
   Alabama: 'Alabama', Arizona: 'Arizona', Arkansas: 'Arkansas',
   BigApple: 'New York Metro', BigSky: 'Big Sky (MT/ID/WY)', CentralFlorida: 'Central Florida',
@@ -108,6 +122,8 @@ export default function PipelinesPage() {
   const [sortKey, setSortKey] = useState<SortKey>('value');
   const [sortAsc, setSortAsc] = useState(false);
   const [minLevel, setMinLevel] = useState('NicheInterest');
+  const [pipelinePosRows, setPipelinePosRows] = useState<PipelinePosRow[]>([]);
+  const [posGroupFilter, setPosGroupFilter] = useState('All');
 
   useEffect(() => {
     fetch('/api/seasons').then(r => r.json()).then((s: Season[]) => {
@@ -122,9 +138,11 @@ export default function PipelinesPage() {
     Promise.all([
       fetch(`/api/pipelines?seasonId=${selectedSeasonId}`).then(r => r.json()),
       fetch(`/api/pipeline-recruits?seasonId=${selectedSeasonId}`).then(r => r.json()),
-    ]).then(([pipelineData, recruitData]: [PipelineRow[], RecruitRow[]]) => {
+      fetch(`/api/pipeline-pos-recruits?seasonId=${selectedSeasonId}`).then(r => r.json()),
+    ]).then(([pipelineData, recruitData, posData]: [PipelineRow[], RecruitRow[], PipelinePosRow[]]) => {
       setRows(pipelineData);
       setRecruitRows(recruitData);
+      setPipelinePosRows(posData);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [selectedSeasonId]);
@@ -162,6 +180,22 @@ export default function PipelinesPage() {
       .filter(r => r.team.name === selectedTeam)
       .sort((a, b) => b.value - a.value);
   }, [rows, viewMode, selectedTeam]);
+
+  // Reset pos group filter when switching to influence mode
+  useEffect(() => {
+    if (dataMode === 'influence') setPosGroupFilter('All');
+  }, [dataMode]);
+
+  // Lookup map: teamId|pipeline → posGroup → PipelinePosRow
+  const posFilterMap = useMemo(() => {
+    const m = new Map<string, Map<string, PipelinePosRow>>();
+    for (const r of pipelinePosRows) {
+      const key = `${r.teamId}|${r.pipeline}`;
+      if (!m.has(key)) m.set(key, new Map());
+      m.get(key)!.set(r.posGroup, r);
+    }
+    return m;
+  }, [pipelinePosRows]);
 
   // Lookup map: teamName|pipeline → { level, value } from influence rows
   const influenceByTeamPipeline = useMemo(() => {
@@ -300,6 +334,13 @@ export default function PipelinesPage() {
           ))}
         </div>
 
+        {dataMode === 'recruits' && (
+          <select value={posGroupFilter} onChange={e => setPosGroupFilter(e.target.value)} style={selStyle}>
+            <option value="All">All Positions</option>
+            {POS_GROUPS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+
         {viewMode === 'team' && (
           <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} style={selStyle}>
             {teamNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -431,19 +472,21 @@ export default function PipelinesPage() {
                 <tbody>
                   {teamRecruitRows.map((r, i) => {
                     const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
+                    const posRow = posGroupFilter !== 'All' ? posFilterMap.get(`${r.teamId}|${r.pipeline}`)?.get(posGroupFilter) : null;
+                    const d = posRow ?? r;
                     return (
                     <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                       <td style={{ padding: '7px 12px', color: 'var(--ocean-100)' }}>{PIPELINE_LABELS[r.pipeline] ?? r.pipeline}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                       <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#003f5c" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#006b71" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#009446" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="#65a31c" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="#b1aa00" /></td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
-                      <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.fiveStars} color="#003f5c" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.fourStars} color="#006b71" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.threeStars} color="#009446" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.twoStars} color="#65a31c" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.oneStars} color="#b1aa00" /></td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{d.total}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(d)}</td>
                     </tr>
                     );
                   })}
@@ -536,6 +579,8 @@ export default function PipelinesPage() {
               <tbody>
                 {regionRecruitRows.map((r, i) => {
                     const inf = influenceByTeamPipeline.get(`${r.team.name}|${r.pipeline}`);
+                    const posRow = posGroupFilter !== 'All' ? posFilterMap.get(`${r.teamId}|${r.pipeline}`)?.get(posGroupFilter) : null;
+                    const d = posRow ?? r;
                     return (
                   <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-700)' }}>
                     <td style={{ padding: '7px 12px', color: 'var(--ocean-500)', fontSize: '0.75rem' }}>{i + 1}</td>
@@ -553,13 +598,13 @@ export default function PipelinesPage() {
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{r.team.stats[0]?.prestige ?? '—'}</td>
                     <td style={{ padding: '7px 12px' }}>{inf ? <LevelBadge level={inf.level} /> : <span style={{ color: 'var(--ocean-600)' }}>—</span>}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-300)', fontVariantNumeric: 'tabular-nums' }}>{inf?.value ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fiveStars} color="#003f5c" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.fourStars} color="#006b71" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.threeStars} color="#009446" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.twoStars} color="#65a31c" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={r.oneStars} color="#b1aa00" /></td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.total}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(r)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.fiveStars} color="#003f5c" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.fourStars} color="#006b71" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.threeStars} color="#009446" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.twoStars} color="#65a31c" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right' }}><StarCell n={d.oneStars} color="#b1aa00" /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'var(--ocean-200)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{d.total}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#003f5c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{pts(d)}</td>
                   </tr>
                   );
                 })}
