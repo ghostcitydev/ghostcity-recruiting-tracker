@@ -100,6 +100,7 @@ export default function Dashboard() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [compareSeasonId, setCompareSeasonId] = useState('');
   const [compareStats, setCompareStats] = useState<TeamStat[]>([]);
+  const [balTooltip, setBalTooltip] = useState<{ stat: TeamStat; x: number; y: number } | null>(null);
   const [showBalanceChart, setShowBalanceChart] = useState(false);
   const [allSeasonStats, setAllSeasonStats] = useState<Map<string, TeamStat[]>>(new Map());
   const [chartTeams, setChartTeams] = useState<Set<string>>(new Set());
@@ -443,6 +444,9 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Balance score tooltip */}
+      {balTooltip && <BalanceTooltip stat={balTooltip.stat} x={balTooltip.x} y={balTooltip.y} />}
+
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-800)' }}>
         <table className="w-full border-collapse text-sm">
@@ -625,7 +629,13 @@ export default function Dashboard() {
                 })()}
                 {/* Balance score (default) */}
                 {!showGrades && !showCoach && (
-                  <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: balanceColor(r.balanceScore), borderLeft: BL }}>
+                  <td
+                    className="px-3 py-1.5 tabular-nums font-semibold"
+                    style={{ color: balanceColor(r.balanceScore), borderLeft: BL, cursor: r.balanceScore != null ? 'default' : undefined }}
+                    onMouseEnter={r.balanceScore != null ? (e) => setBalTooltip({ stat: r, x: e.clientX, y: e.clientY }) : undefined}
+                    onMouseMove={r.balanceScore != null ? (e) => setBalTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : t) : undefined}
+                    onMouseLeave={r.balanceScore != null ? () => setBalTooltip(null) : undefined}
+                  >
                     {r.balanceScore != null ? r.balanceScore : '—'}
                   </td>
                 )}
@@ -817,6 +827,74 @@ function GH({ colSpan, label, bl }: { colSpan: number; label?: string; bl?: bool
     >
       {label ?? ''}
     </th>
+  );
+}
+
+const BALANCE_GRADES: { key: keyof TeamStat; label: string }[] = [
+  { key: 'gradeAtmosphere', label: 'Atmosphere' },
+  { key: 'gradeBrand',      label: 'Brand' },
+  { key: 'gradeBudget',     label: 'Budget' },
+  { key: 'gradeTraditions', label: 'Traditions' },
+  { key: 'gradeConference', label: 'Conference' },
+  { key: 'gradeFacilities', label: 'Facilities' },
+];
+
+function BalanceTooltip({ stat, x, y }: { stat: TeamStat; x: number; y: number }) {
+  const entries = BALANCE_GRADES.map(({ key, label }) => ({
+    label,
+    grade: stat[key] as string | null,
+    val: gv(stat[key] as string | null),
+  })).filter((e) => e.grade != null);
+
+  const vals = entries.map((e) => e.val);
+  const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+
+  const left = x + 14;
+  const top = y - 8;
+
+  return (
+    <div
+      style={{
+        position: 'fixed', left, top, zIndex: 9999, pointerEvents: 'none',
+        background: 'var(--ocean-900)', border: '1px solid var(--ocean-700)',
+        borderRadius: 8, padding: '10px 14px', minWidth: 180,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+      }}
+    >
+      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ocean-400)', marginBottom: 8 }}>
+        Program Balance
+      </div>
+      {entries.map(({ label, grade, val }) => {
+        const isWeak   = val === min && max - min >= 0.6;
+        const isStrong = val === max && max - min >= 0.6;
+        const diff = val - avg;
+        const color = isWeak ? 'var(--data-red)' : isStrong ? 'var(--data-green)' : 'var(--ocean-300)';
+        return (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 3 }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--ocean-400)' }}>
+              {isWeak   && <span style={{ color: 'var(--data-red)',   marginRight: 4 }}>↓</span>}
+              {isStrong && <span style={{ color: 'var(--data-green)', marginRight: 4 }}>↑</span>}
+              {!isWeak && !isStrong && <span style={{ marginRight: 20 }} />}
+              {label}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums', minWidth: 28, textAlign: 'right' }}>
+                {grade}
+              </span>
+              <span style={{ fontSize: '0.65rem', color: diff > 0.15 ? 'var(--data-green)' : diff < -0.15 ? 'var(--data-red)' : 'var(--ocean-600)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'right' }}>
+                {diff > 0.05 ? `+${diff.toFixed(1)}` : diff < -0.05 ? diff.toFixed(1) : '±0'}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--ocean-800)', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--ocean-500)' }}>
+        <span>Score</span>
+        <span style={{ fontWeight: 700, color: balanceColor(stat.balanceScore) }}>{stat.balanceScore ?? '—'} / 100</span>
+      </div>
+    </div>
   );
 }
 
