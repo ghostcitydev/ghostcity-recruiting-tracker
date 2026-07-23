@@ -126,7 +126,8 @@ const BUCKET_STYLES = [
 ] as const;
 
 function heatBubble(val: number, min: number, max: number): React.CSSProperties {
-  const t = max === min ? 1 : (val - min) / (max - min);
+  const raw = max === min ? 1 : (val - min) / (max - min);
+  const t = Math.max(0, Math.min(1, raw));
   const idx = Math.min(Math.floor(t * HEAT_PALETTE.length), HEAT_PALETTE.length - 1);
   const { rgb, text } = HEAT_PALETTE[idx];
   return {
