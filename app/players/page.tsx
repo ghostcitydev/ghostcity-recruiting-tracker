@@ -529,6 +529,9 @@ export default function PlayersPage() {
       if (confFilter !== 'All') return s.team.conference === confFilter;
       return true;
     });
+    if (starFilter !== 'all') {
+      teamList = teamList.filter((t) => POS_GROUPS.some((p) => (accessPivot.get(t.teamId)?.get(p) ?? 0) > 0));
+    }
     const { key, dir } = accessSort;
     const mul = dir === 'asc' ? 1 : -1;
     return [...teamList].sort((a, b) => {
@@ -806,7 +809,7 @@ export default function PlayersPage() {
       ) : view === 'access' ? (
         /* Access to Recruits view */
         <>
-          <SectionHeader>Access to Recruits — Unsigned HS Prospects in Active Pipelines, Within Prestige Star Ceiling</SectionHeader>
+          <SectionHeader>Access to Recruits — HS Prospects in Active Pipelines, Within Prestige Star Ceiling</SectionHeader>
           <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
             <table className="w-full border-collapse text-sm">
               <thead>

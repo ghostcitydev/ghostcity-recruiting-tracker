@@ -8,6 +8,7 @@ type SaveFile = { name: string; path: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
   seasonYear: number;
+  snapshot: 'preseason' | 'signing_day';
   teamsImported: number;
   teamsSkipped: string[];
 };
@@ -23,6 +24,7 @@ export default function ImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [seasons, setSeasons] = useState<Season[]>([]);
+  const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showFolderEdit, setShowFolderEdit] = useState(false);
   const [folderInput, setFolderInput] = useState('');
@@ -101,7 +103,7 @@ export default function ImportPage() {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedPath }),
+        body: JSON.stringify({ path: selectedPath, snapshot }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Import failed');
@@ -118,11 +120,8 @@ export default function ImportPage() {
       <h1 className="text-xl font-bold" style={{ color: 'var(--ocean-100)' }}>Import Dynasty Save</h1>
       <p className="mt-2 text-sm" style={{ color: 'var(--ocean-400)' }}>
         Select a dynasty save file below. Read-only — the file is never modified.
-        <br />
-        <span className="mt-1 inline-block">
-          Import after <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong> each season to capture recruit commitments.
-          Import from the same autosave file each time — the tracker detects the season year automatically.
-        </span>
+        Import twice per season: once at <strong style={{ color: 'var(--ocean-200)' }}>Preseason</strong> and once after <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong>.
+        The tracker detects the season year automatically.
       </p>
 
       <form onSubmit={handleImport} className="mt-6 flex flex-col gap-3">
@@ -208,6 +207,34 @@ export default function ImportPage() {
           )}
         </div>
 
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
+            Snapshot Type
+          </label>
+          <div className="flex gap-3">
+            {(['signing_day', 'preseason'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSnapshot(s)}
+                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                style={{
+                  background: snapshot === s ? 'var(--ocean-600)' : 'var(--ocean-900)',
+                  borderColor: snapshot === s ? 'var(--ocean-500)' : 'var(--ocean-700)',
+                  color: snapshot === s ? '#fff' : 'var(--ocean-400)',
+                }}
+              >
+                {s === 'signing_day' ? 'Signing Day' : 'Preseason'}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>
+            {snapshot === 'signing_day'
+              ? 'Import after National Signing Day to capture final class commitments.'
+              : 'Import at season start to capture preseason roster and pipeline state.'}
+          </p>
+        </div>
+
         <button
           type="submit"
           disabled={status === 'loading' || !selectedPath}
@@ -227,7 +254,7 @@ export default function ImportPage() {
 
       {status === 'done' && result && (
         <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
-          <p>Imported season <strong style={{ color: 'var(--ocean-100)' }}>{result.seasonYear}</strong> — {result.teamsImported} teams with recruit breakdowns.</p>
+          <p>Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {result.snapshot === 'preseason' ? 'Preseason' : 'Signing Day'}</strong> · {result.teamsImported} teams.</p>
           {result.teamsSkipped.length > 0 && (
             <p className="mt-1" style={{ color: 'var(--ocean-400)' }}>Skipped: {result.teamsSkipped.join(', ')}</p>
           )}

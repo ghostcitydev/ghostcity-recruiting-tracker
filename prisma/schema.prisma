@@ -34,7 +34,8 @@ model Team {
 
 model Season {
   id         String   @id @default(cuid())
-  year       Int      @unique
+  year       Int
+  snapshot   String   @default("signing_day")
   label      String
   importedAt DateTime @default(now())
   sourceFile String?
@@ -49,6 +50,8 @@ model Season {
   rosterPlayers           RosterPlayer[]
   pipelinePosRecruits     TeamPipelinePositionRecruit[]
   prospectPool            PipelineProspect[]
+
+  @@unique([year, snapshot])
 }
 
 model SeasonSettings {
@@ -170,6 +173,7 @@ model TeamSeasonStat {
   gradeProK        String?
   gradeProP        String?
   avgGrade         Float?
+  balanceScore     Float?
 
   coachName      String?
   coachArchetype String?

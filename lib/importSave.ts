@@ -382,13 +382,30 @@ async function extractSettings(franchise: any) {
   };
 }
 
+export type SnapshotType = 'preseason' | 'signing_day';
+
 export type ImportResult = {
   seasonYear: number;
+  snapshot: SnapshotType;
   teamsImported: number;
   teamsSkipped: string[];
 };
 
-export async function importSaveFile(savePath: string): Promise<ImportResult> {
+function computeBalanceScore(rawGrades: string[]): number | null {
+  const GRADE_NUMS: Record<string, number> = {
+    Aplus: 4.3, A: 4.0, Aminus: 3.7,
+    Bplus: 3.3, B: 3.0, Bminus: 2.7,
+    Cplus: 2.3, C: 2.0, Cminus: 1.7,
+    Dplus: 1.3, D: 1.0, Dminus: 0.7,
+    F: 0.0,
+  };
+  const vals = rawGrades.map(g => GRADE_NUMS[g]).filter((v): v is number => v != null);
+  if (vals.length < 2) return null;
+  const range = Math.max(...vals) - Math.min(...vals);
+  return Math.round((1 - range / 4.3) * 100);
+}
+
+export async function importSaveFile(savePath: string, snapshot: SnapshotType = 'signing_day'): Promise<ImportResult> {
   const franchise = await Franchise.create(savePath, { autoParse: true });
 
   if (franchise.gameType !== 'college') {
@@ -531,10 +548,11 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
   } catch { /* player table absent — skip */ }
   const settings = await extractSettings(franchise);
 
+  const snapshotLabel = snapshot === 'preseason' ? 'Preseason' : 'Signing Day';
   const season = await prisma.season.upsert({
-    where: { year },
+    where: { year_snapshot: { year, snapshot } },
     update: { sourceFile: savePath },
-    create: { year, label: `Season ${year}`, sourceFile: savePath },
+    create: { year, snapshot, label: `Season ${year} — ${snapshotLabel}`, sourceFile: savePath },
   });
 
   const unsignedPayload = {
@@ -664,6 +682,7 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
       gradeProK: traw('ProPotentialGradeK') ? gradeToDisplay(traw('ProPotentialGradeK')) : null,
       gradeProP: traw('ProPotentialGradeP') ? gradeToDisplay(traw('ProPotentialGradeP')) : null,
       avgGrade: avgGradeValue(gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')),
+      balanceScore: computeBalanceScore([gAtm, gBrand, gBudget, gTrad, gConf, traw('AthleticFacilitiesGrade')].filter(Boolean)),
       coachName: coach?.name ?? null,
       coachArchetype: coach?.archetype ?? null,
       coachLevel: coach?.level ?? null,
@@ -758,5 +777,5 @@ export async function importSaveFile(savePath: string): Promise<ImportResult> {
     });
   }
 
-  return { seasonYear: year, teamsImported, teamsSkipped };
+  return { seasonYear: year, snapshot, teamsImported, teamsSkipped };
 }

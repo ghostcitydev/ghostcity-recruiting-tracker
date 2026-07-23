@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const seasons = await prisma.season.findMany({ orderBy: { year: 'desc' } });
+    const seasons = await prisma.season.findMany({ orderBy: [{ year: 'desc' }, { snapshot: 'desc' }] });
     return Response.json(seasons);
   } catch (err: any) {
     console.error('[api/seasons]', err);
