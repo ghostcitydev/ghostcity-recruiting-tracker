@@ -484,7 +484,16 @@ export default function PlayersPage() {
     return 1;
   }
 
-  function accessibleCount(row: ProspectRow, ceiling: number): number {
+  function accessibleCount(row: ProspectRow, ceiling: number, sf: StarFilter): number {
+    if (sf !== 'all') {
+      const n = parseInt(sf);
+      if (n > ceiling) return 0;
+      if (sf === '5') return row.fiveStars;
+      if (sf === '4') return row.fourStars;
+      if (sf === '3') return row.threeStars;
+      if (sf === '2') return row.twoStars;
+      return row.oneStars;
+    }
     if (ceiling >= 5) return row.total;
     if (ceiling === 4) return row.fourStars + row.threeStars + row.twoStars + row.oneStars;
     if (ceiling === 3) return row.threeStars + row.twoStars + row.oneStars;
@@ -503,14 +512,14 @@ export default function PlayersPage() {
         let total = 0;
         for (const pipeline of pipelines) {
           const poolRow = prospectPoolMap.get(`${pipeline}|${pos}`);
-          if (poolRow) total += accessibleCount(poolRow, ceiling);
+          if (poolRow) total += accessibleCount(poolRow, ceiling, starFilter);
         }
         posMap.set(pos, total);
       }
       map.set(stat.teamId, posMap);
     }
     return map;
-  }, [stats, teamInfluencePipelines, prospectPoolMap]);
+  }, [stats, teamInfluencePipelines, prospectPoolMap, starFilter]);
 
   const accessTeams = useMemo(() => {
     let teamList = stats.filter((s) => {

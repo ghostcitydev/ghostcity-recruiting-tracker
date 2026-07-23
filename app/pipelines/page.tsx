@@ -96,7 +96,7 @@ function StarCell({ n, color }: { n: number; color: string }) {
 
 type ViewMode = 'team' | 'region';
 type DataMode = 'influence' | 'recruits';
-type SortKey = 'team' | 'conference' | 'value' | 'level' | 'total' | 'points' | 'fiveStars' | 'fourStars' | 'threeStars';
+type SortKey = 'team' | 'conference' | 'value' | 'level' | 'total' | 'points' | 'fiveStars' | 'fourStars' | 'threeStars' | 'twoStars' | 'oneStars';
 
 const P4 = new Set(['ACC', 'Big 12', 'Big Ten', 'SEC']);
 const G5 = new Set(['American', 'CUSA', 'MAC', 'MWC', 'Sun Belt', 'Pac-12']);
@@ -124,6 +124,8 @@ export default function PipelinesPage() {
   const [minLevel, setMinLevel] = useState('NicheInterest');
   const [pipelinePosRows, setPipelinePosRows] = useState<PipelinePosRow[]>([]);
   const [posGroupFilter, setPosGroupFilter] = useState('All');
+  const [teamSortKey, setTeamSortKey] = useState<SortKey>('total');
+  const [teamSortAsc, setTeamSortAsc] = useState(false);
 
   useEffect(() => {
     fetch('/api/seasons').then(r => r.json()).then((s: Season[]) => {
@@ -204,21 +206,34 @@ export default function PipelinesPage() {
     return m;
   }, [rows]);
 
-  const pts = (r: RecruitRow) => r.fiveStars * 5 + r.fourStars * 3 + r.threeStars * 1;
+  const pts = (r: { fiveStars: number; fourStars: number; threeStars: number }) => r.fiveStars * 5 + r.fourStars * 3 + r.threeStars * 1;
 
   // Team recruit view: per-pipeline breakdown for selected team
   const teamRecruitRows = useMemo(() => {
     if (viewMode !== 'team' || !selectedTeam) return [];
-    const rows = recruitRows.filter(r => r.team.name === selectedTeam);
-    return rows.sort((a, b) => {
-      if (posGroupFilter !== 'All') {
-        const at = posFilterMap.get(`${a.teamId}|${a.pipeline}`)?.get(posGroupFilter)?.total ?? 0;
-        const bt = posFilterMap.get(`${b.teamId}|${b.pipeline}`)?.get(posGroupFilter)?.total ?? 0;
-        return bt - at;
-      }
-      return b.total - a.total;
+    const rrows = recruitRows.filter(r => r.team.name === selectedTeam);
+    const ZERO = { fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, total: 0 };
+    const getD = (r: RecruitRow) => posGroupFilter !== 'All'
+      ? (posFilterMap.get(`${r.teamId}|${r.pipeline}`)?.get(posGroupFilter) ?? ZERO) : r;
+    return rrows.sort((a, b) => {
+      const da = getD(a), db = getD(b);
+      const infA = influenceByTeamPipeline.get(`${a.team.name}|${a.pipeline}`);
+      const infB = influenceByTeamPipeline.get(`${b.team.name}|${b.pipeline}`);
+      const mul = teamSortAsc ? 1 : -1;
+      let cmp = 0;
+      if (teamSortKey === 'total') cmp = da.total - db.total;
+      else if (teamSortKey === 'points') cmp = pts(da) - pts(db);
+      else if (teamSortKey === 'fiveStars') cmp = da.fiveStars - db.fiveStars;
+      else if (teamSortKey === 'fourStars') cmp = da.fourStars - db.fourStars;
+      else if (teamSortKey === 'threeStars') cmp = da.threeStars - db.threeStars;
+      else if (teamSortKey === 'twoStars') cmp = da.twoStars - db.twoStars;
+      else if (teamSortKey === 'oneStars') cmp = da.oneStars - db.oneStars;
+      else if (teamSortKey === 'value') cmp = (infA?.value ?? -1) - (infB?.value ?? -1);
+      else if (teamSortKey === 'level') cmp = (LEVEL_ORDER[infA?.level ?? ''] ?? 0) - (LEVEL_ORDER[infB?.level ?? ''] ?? 0);
+      else if (teamSortKey === 'team') cmp = (PIPELINE_LABELS[a.pipeline] ?? a.pipeline).localeCompare(PIPELINE_LABELS[b.pipeline] ?? b.pipeline);
+      return mul * cmp;
     });
-  }, [recruitRows, viewMode, selectedTeam, posGroupFilter, posFilterMap]);
+  }, [recruitRows, viewMode, selectedTeam, posGroupFilter, posFilterMap, teamSortKey, teamSortAsc, influenceByTeamPipeline]);
 
   const minLevelOrder = LEVEL_ORDER[minLevel] ?? 2;
 
@@ -268,6 +283,8 @@ export default function PipelinesPage() {
       else if (sortKey === 'fiveStars') cmp = da.fiveStars - db.fiveStars;
       else if (sortKey === 'fourStars') cmp = da.fourStars - db.fourStars;
       else if (sortKey === 'threeStars') cmp = da.threeStars - db.threeStars;
+      else if (sortKey === 'twoStars') cmp = da.twoStars - db.twoStars;
+      else if (sortKey === 'oneStars') cmp = da.oneStars - db.oneStars;
       else if (sortKey === 'team') cmp = a.team.name.localeCompare(b.team.name);
       else if (sortKey === 'conference') cmp = a.team.conference.localeCompare(b.team.conference);
       else if (sortKey === 'value') cmp = (infA?.value ?? -1) - (infB?.value ?? -1);
@@ -286,11 +303,21 @@ export default function PipelinesPage() {
     else { setSortKey(key); setSortAsc(false); }
   }
 
-  function SortHeader({ label, k, right }: { label: string; k: SortKey; right?: boolean }) {
-    const active = sortKey === k;
+  function toggleTeamSort(key: SortKey) {
+    if (teamSortKey === key) setTeamSortAsc(a => !a);
+    else { setTeamSortKey(key); setTeamSortAsc(false); }
+  }
+
+  function SortHeader({ label, k, right, activeKey, isAsc, onToggle }: {
+    label: string; k: SortKey; right?: boolean;
+    activeKey?: SortKey; isAsc?: boolean; onToggle?: (k: SortKey) => void;
+  }) {
+    const active = (activeKey ?? sortKey) === k;
+    const dir = isAsc ?? sortAsc;
+    const fn = onToggle ?? toggleSort;
     return (
       <th
-        onClick={() => toggleSort(k)}
+        onClick={() => fn(k)}
         style={{
           cursor: 'pointer', userSelect: 'none', padding: '8px 12px',
           textAlign: right ? 'right' : 'left',
@@ -299,7 +326,7 @@ export default function PipelinesPage() {
           fontSize: '0.7rem', letterSpacing: '0.06em', textTransform: 'uppercase',
         }}
       >
-        {label} {active ? (sortAsc ? '▲' : '▼') : ''}
+        {label} {active ? (dir ? '▲' : '▼') : ''}
       </th>
     );
   }
@@ -468,17 +495,17 @@ export default function PipelinesPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ocean-700)' }}>
-                    <th style={TH_STYLE}>Region</th>
+                    <SortHeader label="Region"    k="team"       activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
                     <th style={{ ...TH_STYLE, textAlign: 'right' }}>Prestige</th>
-                    <th style={TH_STYLE}>Tier</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Influence</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★★</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★★</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★★</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Total</th>
-                    <th style={{ ...TH_STYLE, textAlign: 'right' }}>Pts</th>
+                    <SortHeader label="Tier"      k="level"      activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="Influence" k="value"      right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="★★★★★"     k="fiveStars"  right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="★★★★"      k="fourStars"  right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="★★★"       k="threeStars" right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="★★"        k="twoStars"   right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="★"         k="oneStars"   right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="Total"     k="total"      right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
+                    <SortHeader label="Pts"       k="points"     right activeKey={teamSortKey} isAsc={teamSortAsc} onToggle={toggleTeamSort} />
                   </tr>
                 </thead>
                 <tbody>
@@ -583,8 +610,8 @@ export default function PipelinesPage() {
                   <SortHeader label="★★★★★" k="fiveStars" right />
                   <SortHeader label="★★★★" k="fourStars" right />
                   <SortHeader label="★★★" k="threeStars" right />
-                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>★★</th>
-                  <th style={{ ...TH_STYLE, textAlign: 'right' }}>★</th>
+                  <SortHeader label="★★" k="twoStars" right />
+                  <SortHeader label="★" k="oneStars" right />
                   <SortHeader label="Total" k="total" right />
                   <SortHeader label="Pts" k="points" right />
                 </tr>
