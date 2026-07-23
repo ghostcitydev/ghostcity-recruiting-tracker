@@ -276,29 +276,33 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   const unsigned = emptyBreakdown();
   const unsignedHSStars = emptyBreakdown();
   const unsignedXferStars = emptyBreakdown();
+  // Prospect pool = ALL HS recruits this cycle (signed or not), keyed by pipeline|posGroup
   const prospectPool = new Map<string, PipelinePosStar>();
   for (const rec of recruitTable.records) {
     if (rec.isEmpty) continue;
-    if (rec.RecruitStage === 'Signed') continue;
+    const isSigned = rec.RecruitStage === 'Signed';
     const ref = parseRef(rec.Player);
     if (!ref) continue;
     const prec = playerTable.records[ref.row];
     if (!prec || prec.isEmpty) continue;
 
-    unsigned.total++;
     const cls: string = rec.Class ?? '';
     const isTransfer = !cls.startsWith('HighSchool') && !cls.startsWith('JuniorCollege');
-    if (isTransfer) unsigned.transfer++;
-    else unsigned.hs++;
     const starRatingU = prec.ProspectStarRating as string;
     const starField = STAR_MAP[starRatingU];
-    if (starField) {
-      (unsigned[starField] as number)++;
-      if (isTransfer) (unsignedXferStars[starField] as number)++;
-      else (unsignedHSStars[starField] as number)++;
+
+    if (!isSigned) {
+      unsigned.total++;
+      if (isTransfer) unsigned.transfer++;
+      else unsigned.hs++;
+      if (starField) {
+        (unsigned[starField] as number)++;
+        if (isTransfer) (unsignedXferStars[starField] as number)++;
+        else (unsignedHSStars[starField] as number)++;
+      }
     }
 
-    // Build prospect pool: HS/JUCO only, keyed by pipeline|posGroup
+    // Build prospect pool: ALL HS/JUCO this cycle (signed + unsigned), keyed by pipeline|posGroup
     if (!isTransfer) {
       const homePipeline = prec.HomePipeline as string;
       const rawPos = prec.Position as string;

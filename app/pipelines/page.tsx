@@ -209,10 +209,16 @@ export default function PipelinesPage() {
   // Team recruit view: per-pipeline breakdown for selected team
   const teamRecruitRows = useMemo(() => {
     if (viewMode !== 'team' || !selectedTeam) return [];
-    return recruitRows
-      .filter(r => r.team.name === selectedTeam)
-      .sort((a, b) => b.total - a.total);
-  }, [recruitRows, viewMode, selectedTeam]);
+    const rows = recruitRows.filter(r => r.team.name === selectedTeam);
+    return rows.sort((a, b) => {
+      if (posGroupFilter !== 'All') {
+        const at = posFilterMap.get(`${a.teamId}|${a.pipeline}`)?.get(posGroupFilter)?.total ?? 0;
+        const bt = posFilterMap.get(`${b.teamId}|${b.pipeline}`)?.get(posGroupFilter)?.total ?? 0;
+        return bt - at;
+      }
+      return b.total - a.total;
+    });
+  }, [recruitRows, viewMode, selectedTeam, posGroupFilter, posFilterMap]);
 
   const minLevelOrder = LEVEL_ORDER[minLevel] ?? 2;
 
@@ -247,15 +253,21 @@ export default function PipelinesPage() {
     else if (conferenceFilter === 'Group of 5') filtered = filtered.filter(r => G5.has(r.team.conference));
     else if (conferenceFilter !== 'All') filtered = filtered.filter(r => r.team.conference === conferenceFilter);
 
+    const ZERO = { fiveStars: 0, fourStars: 0, threeStars: 0, twoStars: 0, oneStars: 0, total: 0 };
+    const getD = (r: RecruitRow) => posGroupFilter !== 'All'
+      ? (posFilterMap.get(`${r.teamId}|${r.pipeline}`)?.get(posGroupFilter) ?? ZERO)
+      : r;
+
     filtered.sort((a, b) => {
       const infA = influenceByTeamPipeline.get(`${a.team.name}|${a.pipeline}`);
       const infB = influenceByTeamPipeline.get(`${b.team.name}|${b.pipeline}`);
+      const da = getD(a), db = getD(b);
       let cmp = 0;
-      if (sortKey === 'total') cmp = a.total - b.total;
-      else if (sortKey === 'points') cmp = pts(a) - pts(b);
-      else if (sortKey === 'fiveStars') cmp = a.fiveStars - b.fiveStars;
-      else if (sortKey === 'fourStars') cmp = a.fourStars - b.fourStars;
-      else if (sortKey === 'threeStars') cmp = a.threeStars - b.threeStars;
+      if (sortKey === 'total') cmp = da.total - db.total;
+      else if (sortKey === 'points') cmp = pts(da) - pts(db);
+      else if (sortKey === 'fiveStars') cmp = da.fiveStars - db.fiveStars;
+      else if (sortKey === 'fourStars') cmp = da.fourStars - db.fourStars;
+      else if (sortKey === 'threeStars') cmp = da.threeStars - db.threeStars;
       else if (sortKey === 'team') cmp = a.team.name.localeCompare(b.team.name);
       else if (sortKey === 'conference') cmp = a.team.conference.localeCompare(b.team.conference);
       else if (sortKey === 'value') cmp = (infA?.value ?? -1) - (infB?.value ?? -1);
@@ -263,7 +275,7 @@ export default function PipelinesPage() {
       return sortAsc ? cmp : -cmp;
     });
     return filtered;
-  }, [recruitRows, influenceByTeamPipeline, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc]);
+  }, [recruitRows, influenceByTeamPipeline, viewMode, selectedRegion, conferenceFilter, sortKey, sortAsc, posGroupFilter, posFilterMap]);
 
   const conferences = useMemo(() => {
     return [...new Set(rows.map(r => r.team.conference))].sort();
