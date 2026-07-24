@@ -1,0 +1,48 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild better-sqlite3 for Electron
+        run: npx @electron/rebuild -f -w better-sqlite3
+
+      - name: Build Next.js
+        run: npx next build
+
+      - name: Prepare standalone assets
+        run: node scripts/prepare-standalone.js
+
+      - name: Package with electron-builder
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Read version
+        id: pkg
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.VERSION }}
+          name: Ghost City RLT v${{ steps.pkg.outputs.VERSION }}
+          files: dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
