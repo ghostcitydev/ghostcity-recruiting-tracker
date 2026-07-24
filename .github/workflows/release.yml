@@ -61,5 +61,44 @@ jobs:
           tag_name: v${{ steps.pkg.outputs.VERSION }}
           name: Ghost City RLT v${{ steps.pkg.outputs.VERSION }}
           files: dist/*.exe
+          body: |
+            ## What's New
+
+            ### Dashboard
+            - **Prestige arrow** — compare arrows now appear on the Prestige column alongside grades and coach level
+            - **Compare control hidden** when only one season exists — the "None" option is gone; the control hides until there's something to compare against
+            - **Compare arrows extended** to all school grade columns (Program, School, Pro tabs) and Coach Level
+
+            ### Players — Positional Depth
+            - **Balance score tooltip** — hover any balance bubble to see a per-position breakdown with count vs ideal range and low/high/ok flags
+            - **Balance column sortable** in the Depth tab
+            - **Average balance score** shown in the All Teams total row
+            - **Updated ideal depth ranges** based on community data (QB=4, HB=5, WR=9, TE=4, OL=19, DL=13, LB=13, DB=16, K=1, P=1)
+
+            ### Charts
+            - **6 missing grade types added** to the indicator dropdown: Stadium Atmosphere, Brand Exposure, Program Budget, Program Traditions, Conference Prestige, Athletic Facilities
+
+            ### Toolbox
+            - **Feature #8 — Recruit Deal-Breaker Grade Setter**: select which recruiting factors matter (Playing Time, Scheme, Proximity, etc.) and set a minimum grade threshold for all unsigned recruits at once
+
+            ### App Startup
+            - **Loading screen** — the app now shows "Starting Ghost City RLT..." immediately on launch so you know it's working
+            - **Startup timeout increased** from 30s to 120s — fixes cold-start failures on slower machines
+
+            ---
+
+            ## Bug Fixes
+
+            - **Preseason snapshots**: Positional Depth and Roster Ratings tabs were empty when a preseason save was selected — now correctly populated from player data
+            - **Conference filter**: dropdown was empty for preseason snapshots — now shows all teams
+            - **Charts time-series**: was mixing preseason and signing day data in the same chart — now signing day only so year-over-year trends are accurate
+            - **Rebalance Rosters crash**: intermittent crash from a redundant internal read call — resolved
+            - **Balance score**: extreme imbalances (e.g. 0 punters, heavily overstacked positions) now score lower instead of being capped
+
+            ---
+
+            ## Performance
+            - **WAL mode** enabled on the SQLite database — faster reads, less write contention
+            - **Database slimmed down** — balance score column removed (computed on the fly), making imports faster
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
