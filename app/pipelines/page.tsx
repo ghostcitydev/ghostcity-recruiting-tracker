@@ -128,7 +128,7 @@ export default function PipelinesPage() {
   const [teamSortAsc, setTeamSortAsc] = useState(false);
 
   useEffect(() => {
-    fetch('/api/seasons').then(r => r.json()).then((s: Season[]) => {
+    fetch('/api/seasons?snapshot=signing_day').then(r => r.json()).then((s: Season[]) => {
       setSeasons(s);
       if (s.length) setSelectedSeasonId(s[0].id);
     });

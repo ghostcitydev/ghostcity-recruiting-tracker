@@ -1,8 +1,12 @@
 import { prisma } from '@/lib/prisma';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const snapshot = new URL(request.url).searchParams.get('snapshot') ?? undefined;
   try {
-    const seasons = await prisma.season.findMany({ orderBy: [{ year: 'desc' }, { snapshot: 'desc' }] });
+    const seasons = await prisma.season.findMany({
+      where: snapshot ? { snapshot } : undefined,
+      orderBy: [{ year: 'desc' }, { snapshot: 'desc' }],
+    });
     return Response.json(seasons);
   } catch (err: any) {
     console.error('[api/seasons]', err);

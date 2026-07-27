@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { safeJson } from '@/lib/safeFetch';
 
-type Season = { id: string; year: number; label: string };
+type Season = { id: string; year: number; label: string; snapshot: string };
 
 type PosRecruit = {
   id: string;
@@ -212,6 +212,18 @@ export default function PlayersPage() {
       setLoading(false);
     });
   }, []);
+
+  const availableSeasons = useMemo(() => {
+    if (view === 'recruiting') return seasons.filter((s) => s.snapshot === 'signing_day');
+    if (view === 'ratings') return seasons.filter((s) => s.snapshot === 'preseason');
+    return seasons;
+  }, [seasons, view]);
+
+  useEffect(() => {
+    if (availableSeasons.length && !availableSeasons.find((s) => s.id === seasonId)) {
+      setSeasonId(availableSeasons[0].id);
+    }
+  }, [availableSeasons]);
 
   useEffect(() => {
     if (!seasonId) return;
@@ -606,7 +618,7 @@ export default function PlayersPage() {
         style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)' }}>
         <ControlGroup label="Season">
           <Select value={seasonId} onChange={setSeasonId}>
-            {seasons.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            {availableSeasons.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </Select>
         </ControlGroup>
         <ControlGroup label="Conference">

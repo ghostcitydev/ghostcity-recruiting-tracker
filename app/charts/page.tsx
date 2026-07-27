@@ -176,7 +176,7 @@ export default function ChartsPage() {
     (async () => {
       const [histRes, seasonsRes] = await Promise.all([
         safeJson<HistoryRow[]>('/api/history'),
-        safeJson<{ id: string; year: number }[]>('/api/seasons'),
+        safeJson<{ id: string; year: number }[]>('/api/seasons?snapshot=signing_day'),
       ]);
       if (histRes.ok && histRes.data) setHistory(histRes.data);
       const seasons = seasonsRes.ok && seasonsRes.data ? seasonsRes.data : [];

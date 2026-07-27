@@ -100,7 +100,7 @@ export default function Dashboard() {
   const [compareStats, setCompareStats] = useState<TeamStat[]>([]);
 
   useEffect(() => {
-    safeJson<Season[]>('/api/seasons').then((res) => {
+    safeJson<Season[]>('/api/seasons?snapshot=signing_day').then((res) => {
       if (!res.ok) { setFatalError(res.error); setLoading(false); return; }
       const data = res.data ?? [];
       setSeasons(data);

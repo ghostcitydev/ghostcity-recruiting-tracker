@@ -44,7 +44,7 @@ export default function UnsignedPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/seasons')
+    fetch('/api/seasons?snapshot=signing_day')
       .then((r) => r.json())
       .then(async (seasons: Season[]) => {
         setSeasons(seasons);
