@@ -47,3 +47,7 @@ next-env.d.ts
 
 # electron-builder output
 /dist
+
+# External mod distributions are local-only. The embedded code lives in lib/embeddedMods.
+/public/other mods/*
+!/public/other mods/redistribution.js

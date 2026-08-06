@@ -11,7 +11,33 @@ type ImportResult = {
   snapshot: 'preseason' | 'signing_day';
   teamsImported: number;
   teamsSkipped: string[];
+  unsignedWritten?: number;
 };
+
+// ── Mod settings (read from localStorage) ─────────────────
+
+type Pos = 'QB'|'HB'|'FB'|'WR'|'TE'|'LT'|'LG'|'C'|'RG'|'RT'|'EDGE'|'DT'|'LB'|'CB'|'S'|'K'|'P';
+type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: number; classTarget: number; preferredByPos?: Record<Pos,number>; hardMaxByPos?: Record<Pos,number> };
+type TwCheckOverride = { min: number; max: number };
+type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; zeroNil?: boolean };
+type RebalanceSettings = { enabled: boolean };
+
+function readNsd(): NsdSettings {
+  try {
+    const s = JSON.parse(localStorage.getItem('gc_mod_nsd') ?? '{}');
+    return { enabled: s.enabled ?? false, signingLimit: s.signingLimit ?? 35, finalRosterLimit: s.finalRosterLimit ?? 95, classTarget: s.classTarget ?? 25, preferredByPos: s.preferredByPos, hardMaxByPos: s.hardMaxByPos };
+  } catch { return { enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 }; }
+}
+function readTw(): TwSettings {
+  try { return JSON.parse(localStorage.getItem('gc_mod_tw') ?? '{}'); }
+  catch { return { enabled: false }; }
+}
+function readRebalance(): RebalanceSettings {
+  try { return { enabled: Boolean(JSON.parse(localStorage.getItem('gc_mod_rb') ?? 'false')) }; }
+  catch { return { enabled: false }; }
+}
+
+// ── Page ───────────────────────────────────────────────────
 
 export default function ImportPage() {
   const [saves, setSaves] = useState<SaveFile[]>([]);
@@ -20,16 +46,28 @@ export default function ImportPage() {
   const [isDefaultDir, setIsDefaultDir] = useState(true);
   const [selectedPath, setSelectedPath] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState('');
-  const [seasons, setSeasons] = useState<Season[]>([]);
   const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
+  const [seasons, setSeasons] = useState<Season[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [showFolderEdit, setShowFolderEdit] = useState(false);
   const [folderInput, setFolderInput] = useState('');
   const [folderSaving, setFolderSaving] = useState(false);
   const [folderError, setFolderError] = useState('');
+
+  // Mod state
+  const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 });
+  const [tw, setTw] = useState<TwSettings>({ enabled: false });
+  const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
+  const [modsMounted, setModsMounted] = useState(false);
+
+  // Import flow
+  type FlowState = 'idle' | 'running_mod' | 'running_import' | 'done' | 'error';
+  const [flow, setFlow] = useState<FlowState>('idle');
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState('');
+  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance'; data: Record<string, unknown> }[]>([]);
+
   const router = useRouter();
 
   function loadSeasons() {
@@ -56,11 +94,14 @@ export default function ImportPage() {
   useEffect(() => {
     loadSaves();
     loadSeasons();
+    setNsd(readNsd());
+    setTw(readTw());
+    setRebalance(readRebalance());
+    setModsMounted(true);
   }, []);
 
   async function saveFolder() {
-    setFolderSaving(true);
-    setFolderError('');
+    setFolderSaving(true); setFolderError('');
     try {
       const res = await fetch('/api/app-settings', {
         method: 'POST',
@@ -79,52 +120,154 @@ export default function ImportPage() {
   }
 
   async function resetFolder() {
-    setFolderSaving(true);
-    setFolderError('');
+    setFolderSaving(true); setFolderError('');
     try {
-      await fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saveDir: null }),
-      });
+      await fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ saveDir: null }) });
       setShowFolderEdit(false);
       await loadSaves();
-    } finally {
-      setFolderSaving(false);
-    }
+    } finally { setFolderSaving(false); }
+  }
+
+  async function runImport() {
+    const res = await fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: selectedPath, snapshot }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Import failed');
+    return data as ImportResult;
   }
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPath) return;
-    setStatus('loading');
-    setError('');
+    setError(''); setResult(null); setModLogs([]);
+
+    const nsdActive = nsd.enabled && snapshot === 'signing_day';
+    const twActive  = tw.enabled  && snapshot === 'preseason';
+    const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
+
     try {
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedPath, snapshot }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Import failed');
-      setResult(data);
-      setStatus('done');
+      // Transfer Wave: run natively, reimport automatically
+      if (twActive) {
+        setFlow('running_mod');
+        const twRes = await fetch('/api/mods/transfer-wave-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reimport: false,
+            savePath: selectedPath,
+            settings: {
+              thresholdOverrides: tw.thresholdOverrides,
+              severeThresholdOverrides: tw.severeThresholdOverrides,
+              enableTier2: tw.enableTier2,
+              prestigeGapCap: tw.prestigeGapCap,
+              zeroNil: tw.zeroNil,
+            },
+          }),
+        });
+        const twData = await twRes.json();
+        if (!twRes.ok) throw new Error(twData.error ?? 'Transfer Wave failed');
+        setModLogs((logs) => [...logs, { type: 'tw', data: { ...(twData.modResult ?? {}), log: twData.log ?? [] } }]);
+      }
+
+      // Rebalance always follows Transfer Wave and precedes import.
+      if (rebalanceActive) {
+        setFlow('running_mod');
+        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
+        const rebalanceData = await rebalanceRes.json();
+        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
+        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
+      }
+
+      // NSD mod: run automatically
+      if (nsdActive) {
+        setFlow('running_mod');
+        const modRes = await fetch('/api/mods/nsd-assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bypassWeekRequirement: false,
+            reimport: false,
+            savePath: selectedPath,
+            placementSettings: {
+              signingLimit: nsd.signingLimit,
+              finalRosterLimit: nsd.finalRosterLimit,
+              classTarget: nsd.classTarget,
+              ...(nsd.preferredByPos ? { preferredCountByPosition: nsd.preferredByPos } : {}),
+              ...(nsd.hardMaxByPos ? { hardMaximumByPosition: nsd.hardMaxByPos } : {}),
+            },
+          }),
+        });
+        const modData = await modRes.json();
+        if (!modRes.ok) throw new Error(modData.error ?? 'NSD mod failed');
+        setModLogs((logs) => [...logs, { type: 'nsd', data: modData.modResult ?? {} }]);
+      }
+
+      // Import the (now-modified) save
+      setFlow('running_import');
+      const importResult = await runImport();
+      setResult(importResult);
+      setFlow('done');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed');
-      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Failed');
+      setFlow('error');
     }
   }
+
+  function reset() { setFlow('idle'); setResult(null); setError(''); setModLogs([]); }
+
+  // Which mods are active for the selected snapshot — only after localStorage loads
+  const nsdActive = modsMounted && nsd.enabled && snapshot === 'signing_day';
+  const twActive  = modsMounted && tw.enabled  && snapshot === 'preseason';
+  const rebalanceActive = modsMounted && rebalance.enabled && snapshot === 'preseason';
+  const anyModActive = nsdActive || twActive || rebalanceActive;
+
+  const isIdle = flow === 'idle';
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-xl font-bold" style={{ color: 'var(--ocean-100)' }}>Import Dynasty Save</h1>
       <p className="mt-2 text-sm" style={{ color: 'var(--ocean-400)' }}>
-        Select a dynasty save file below. Read-only — the file is never modified.
-        Import twice per season: once at <strong style={{ color: 'var(--ocean-200)' }}>Preseason</strong> and once after <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong>.
-        The tracker detects the season year automatically.
+        Select a dynasty save file below. Import twice per season: once at{' '}
+        <strong style={{ color: 'var(--ocean-200)' }}>Preseason</strong> and once after{' '}
+        <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong>.
       </p>
 
-      <form onSubmit={handleImport} className="mt-6 flex flex-col gap-3">
+      {/* Active mods banner */}
+      {anyModActive && isIdle && (
+        <div
+          className="mt-4 rounded-lg px-4 py-3 space-y-1.5"
+          style={{ background: 'var(--ocean-800)', border: '1px solid var(--ocean-700)' }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Active mods for this import</p>
+          {nsdActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>NSD: Assign Unsigned Players</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — will run before importing, then save will be reimported.</span>
+            </p>
+          )}
+          {twActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>Preseason Transfer Wave</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — the exe will launch so you can apply your transfer wave, then you'll import.</span>
+            </p>
+          )}
+          {rebalanceActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>CFB Rebalance</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Transfer Wave and before import. A backup is created beside the save first.</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      <form onSubmit={handleImport} className="mt-6 flex flex-col gap-4">
+        {/* Save file */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
             Save File
@@ -133,16 +276,11 @@ export default function ImportPage() {
             <select
               value={selectedPath}
               onChange={(e) => setSelectedPath(e.target.value)}
+              disabled={!isIdle}
               className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none"
-              style={{
-                background: 'var(--ocean-900)',
-                borderColor: 'var(--ocean-700)',
-                color: 'var(--ocean-100)',
-              }}
+              style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
             >
-              {saves.map((s) => (
-                <option key={s.path} value={s.path}>{s.name}</option>
-              ))}
+              {saves.map((s) => <option key={s.path} value={s.path}>{s.name}</option>)}
             </select>
           ) : (
             <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-400)' }}>
@@ -154,11 +292,7 @@ export default function ImportPage() {
               Looking in: {saveDir}
               {!isDefaultDir && <span style={{ color: 'var(--ocean-400)' }}> (custom)</span>}
               {' · '}
-              <button
-                type="button"
-                onClick={() => { setFolderInput(saveDir); setFolderError(''); setShowFolderEdit(true); }}
-                className="underline hover:opacity-80"
-              >
+              <button type="button" onClick={() => { setFolderInput(saveDir); setFolderError(''); setShowFolderEdit(true); }} className="underline hover:opacity-80">
                 Change
               </button>
             </p>
@@ -173,40 +307,18 @@ export default function ImportPage() {
                 style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
               />
               <div className="flex items-center gap-3 text-xs">
-                <button
-                  type="button"
-                  onClick={saveFolder}
-                  disabled={folderSaving}
-                  className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-40"
-                  style={{ background: 'var(--ocean-600)' }}
-                >
-                  Save
-                </button>
+                <button type="button" onClick={saveFolder} disabled={folderSaving} className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-40" style={{ background: 'var(--ocean-600)' }}>Save</button>
                 {!isDefaultDir && (
-                  <button
-                    type="button"
-                    onClick={resetFolder}
-                    disabled={folderSaving}
-                    className="underline hover:opacity-80 disabled:opacity-40"
-                    style={{ color: 'var(--ocean-400)' }}
-                  >
-                    Reset to default
-                  </button>
+                  <button type="button" onClick={resetFolder} disabled={folderSaving} className="underline hover:opacity-80 disabled:opacity-40" style={{ color: 'var(--ocean-400)' }}>Reset to default</button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { setShowFolderEdit(false); setFolderError(''); }}
-                  className="underline hover:opacity-80"
-                  style={{ color: 'var(--ocean-400)' }}
-                >
-                  Cancel
-                </button>
+                <button type="button" onClick={() => { setShowFolderEdit(false); setFolderError(''); }} className="underline hover:opacity-80" style={{ color: 'var(--ocean-400)' }}>Cancel</button>
               </div>
               {folderError && <p style={{ color: '#fca5a5' }}>{folderError}</p>}
             </div>
           )}
         </div>
 
+        {/* Snapshot type */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
             Snapshot Type
@@ -216,8 +328,9 @@ export default function ImportPage() {
               <button
                 key={s}
                 type="button"
+                disabled={!isIdle}
                 onClick={() => setSnapshot(s)}
-                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   background: snapshot === s ? 'var(--ocean-600)' : 'var(--ocean-900)',
                   borderColor: snapshot === s ? 'var(--ocean-500)' : 'var(--ocean-700)',
@@ -235,50 +348,116 @@ export default function ImportPage() {
           </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={status === 'loading' || !selectedPath}
-          suppressHydrationWarning
-          className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
-          style={{ background: 'var(--ocean-600)' }}
-        >
-          {status === 'loading' ? 'Importing…' : 'Import Save'}
-        </button>
-      </form>
-
-      {status === 'error' && (
-        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: '#FCA5A5', background: 'rgba(220,38,38,0.08)', color: '#991b1b' }}>
-          {error}
-        </div>
-      )}
-
-      {status === 'done' && result && (
-        <div className="mt-5 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
-          <p>Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {result.snapshot === 'preseason' ? 'Preseason' : 'Signing Day'}</strong> · {result.teamsImported} teams.</p>
-          {result.teamsSkipped.length > 0 && (
-            <p className="mt-1" style={{ color: 'var(--ocean-400)' }}>Skipped: {result.teamsSkipped.join(', ')}</p>
-          )}
+        {/* Submit / flow state */}
+        {flow === 'idle' && (
           <button
-            onClick={() => router.push('/')}
-            className="mt-3 rounded-lg px-4 py-2 text-sm font-medium text-white"
+            type="submit"
+            disabled={!selectedPath}
+            className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ background: 'var(--ocean-600)' }}
           >
-            View Dashboard
+            {rebalanceActive && twActive
+              ? 'Run Transfer Wave + Rebalance + Import'
+              : rebalanceActive
+              ? 'Run CFB Rebalance + Import'
+              : nsdActive && twActive
+              ? 'Run Mods + Import'
+              : nsdActive
+              ? 'Run NSD Assign + Import'
+              : twActive
+              ? 'Run Transfer Wave + Import'
+              : 'Import Save'}
           </button>
-        </div>
-      )}
+        )}
+
+
+        {flow === 'running_mod' && (
+          <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
+            ⏳ {snapshot === 'preseason' ? 'Running Transfer Wave engine…' : 'Running NSD mod…'}
+          </p>
+        )}
+        {flow === 'running_import' && (
+          <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
+            {modLogs.length ? '⏳ Mod complete — importing save…' : '⏳ Importing…'}
+          </p>
+        )}
+
+        {flow === 'error' && (
+          <div className="space-y-3">
+            <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: '#FCA5A5', background: 'rgba(220,38,38,0.08)', color: '#f87171' }}>
+              {error}
+            </div>
+            <button type="button" onClick={reset} className="rounded px-3 py-1.5 text-sm" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
+              Back
+            </button>
+          </div>
+        )}
+
+        {flow === 'done' && result && (
+          <div className="space-y-3">
+            {/* Import summary */}
+            <div className="rounded-lg border px-4 py-3 text-sm space-y-1.5" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
+              <p><span style={{ color: '#4ade80' }}>✓</span> Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {result.snapshot === 'preseason' ? 'Preseason' : 'Signing Day'}</strong> · {result.teamsImported} teams updated in Ghost City.</p>
+              {result.snapshot === 'signing_day' && (
+                <p className="text-xs" style={{ color: result.unsignedWritten > 0 ? 'var(--ocean-400)' : 'var(--ocean-600)' }}>
+                  {result.unsignedWritten > 0
+                    ? `${result.unsignedWritten} unsigned recruit records saved`
+                    : 'No unsigned recruits found in this save (all may have signed or been assigned)'}
+                </p>
+              )}
+              {result.teamsSkipped.length > 0 && (
+                <p className="text-xs" style={{ color: 'var(--ocean-400)' }}>Skipped: {result.teamsSkipped.join(', ')}</p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => router.push('/')} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ background: 'var(--ocean-600)' }}>
+                  View Dashboard
+                </button>
+                <button type="button" onClick={reset} className="rounded-lg px-4 py-2 text-sm font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}>
+                  Import Another
+                </button>
+              </div>
+            </div>
+
+            {/* Mod log */}
+            {modLogs.map((log, index) => <ModLogPanel key={`${log.type}-${index}`} log={log} />)}
+          </div>
+        )}
+      </form>
 
       {/* Season management */}
       {seasons.length > 0 && (
         <div className="mt-10 border-t pt-8" style={{ borderColor: 'var(--ocean-800)' }}>
-          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Imported Seasons</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Imported Seasons</h2>
+            {confirmDeleteAll ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: 'var(--ocean-400)' }}>Delete all seasons?</span>
+                <button
+                  onClick={async () => {
+                    setConfirmDeleteAll(false);
+                    for (const s of seasons) {
+                      await fetch('/api/seasons', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seasonId: s.id }) });
+                    }
+                    loadSeasons();
+                  }}
+                  className="rounded px-2.5 py-1 text-xs font-medium"
+                  style={{ background: '#DC2626', color: '#fff' }}
+                >
+                  Yes, delete all
+                </button>
+                <button onClick={() => setConfirmDeleteAll(false)} className="rounded px-2.5 py-1 text-xs font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setConfirmDeleteAll(true); setConfirmDeleteId(null); }} className="rounded px-3 py-1 text-xs font-medium" style={{ background: '#DC2626', color: '#fff' }}>
+                Delete All
+              </button>
+            )}
+          </div>
           <div className="mt-3 flex flex-col gap-2">
             {seasons.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-lg border px-4 py-2.5"
-                style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}
-              >
+              <div key={s.id} className="flex items-center justify-between rounded-lg border px-4 py-2.5" style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}>
                 <span className="text-sm font-medium" style={{ color: 'var(--ocean-200)' }}>{s.label}</span>
                 {confirmDeleteId === s.id ? (
                   <div className="flex items-center gap-2">
@@ -286,11 +465,7 @@ export default function ImportPage() {
                     <button
                       onClick={async () => {
                         setConfirmDeleteId(null);
-                        await fetch('/api/seasons', {
-                          method: 'DELETE',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ seasonId: s.id }),
-                        });
+                        await fetch('/api/seasons', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seasonId: s.id }) });
                         loadSeasons();
                       }}
                       className="rounded px-2.5 py-1 text-xs font-medium"
@@ -298,20 +473,12 @@ export default function ImportPage() {
                     >
                       Yes, delete
                     </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="rounded px-2.5 py-1 text-xs font-medium"
-                      style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}
-                    >
+                    <button onClick={() => setConfirmDeleteId(null)} className="rounded px-2.5 py-1 text-xs font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}>
                       Cancel
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(s.id)}
-                    className="rounded px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
-                    style={{ background: '#DC2626', color: '#fff' }}
-                  >
+                  <button onClick={() => setConfirmDeleteId(s.id)} className="rounded px-3 py-1 text-xs font-medium" style={{ background: '#DC2626', color: '#fff' }}>
                     Delete
                   </button>
                 )}
@@ -320,6 +487,157 @@ export default function ImportPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Mod log panel ──────────────────────────────────────────
+
+function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance'; data: Record<string, unknown> } }) {
+  const d = log.data;
+
+  if (log.type === 'rebalance') {
+    const groups = Array.isArray(d.groups) ? d.groups as { label: string; moves: number; unresolved: string[] }[] : [];
+    return (
+      <div className="rounded-lg border px-4 py-3 space-y-3 text-xs" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>CFB Rebalance — Mod Log</p>
+        <p style={{ color: 'var(--ocean-200)' }}>Changed <strong>{Number(d.totalMoves ?? 0)}</strong> position slots across <strong>{Number(d.teamsChanged ?? 0)}</strong> of {Number(d.teamsProcessed ?? 0)} teams.</p>
+        <div className="space-y-1" style={{ color: 'var(--ocean-400)' }}>
+          {groups.map((group) => <p key={group.label}>{group.label}: {group.moves} change{group.moves === 1 ? '' : 's'}{group.unresolved?.length ? ` · still short: ${group.unresolved.join(', ')}` : ''}</p>)}
+        </div>
+        <p style={{ color: 'var(--ocean-600)' }}>Backup created: {String(d.backupPath ?? 'not reported')}</p>
+      </div>
+    );
+  }
+
+  if (log.type === 'nsd') {
+    const assigned     = Number(d.transfersAssigned ?? 0);
+    const candidates   = Number(d.zeroOfferTransfers ?? 0);
+    const onRoster     = Number(d.playersMovedToRoster ?? 0);
+    const unassigned   = Number(d.transfersLeftUnassigned ?? 0);
+    const dealbreakers = Number(d.recruitingDealbreakersCleared ?? 0);
+    const warnings     = Array.isArray(d.rosterSyncWarnings) ? d.rosterSyncWarnings as string[] : [];
+
+    return (
+      <div className="rounded-lg border px-4 py-3 space-y-3 text-xs" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>NSD Assign — Mod Log</p>
+
+        {/* Zero-candidates notice */}
+        {candidates === 0 && (
+          <p className="rounded px-3 py-2 text-xs" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)' }}>
+            ℹ No unsigned transfers found — all may already be assigned, or this save is not at the correct week (OffSeason, Week 6).
+          </p>
+        )}
+
+        {/* Key numbers */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Candidates', value: candidates },
+            { label: 'Assigned', value: assigned, accent: assigned > 0 },
+            { label: 'Placed on Roster', value: onRoster, accent: onRoster > 0 },
+            { label: 'Left Unassigned', value: unassigned },
+          ].map(({ label, value, accent }) => (
+            <div key={label} className="rounded p-2 text-center" style={{ background: 'var(--ocean-800)' }}>
+              <div className="text-lg font-bold tabular-nums" style={{ color: accent ? 'var(--ocean-100)' : 'var(--ocean-400)' }}>{value}</div>
+              <div style={{ color: 'var(--ocean-500)' }}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Placement breakdown */}
+        <div className="space-y-1" style={{ color: 'var(--ocean-400)' }}>
+          {Number(d.previousSchoolCount) > 0 && <p>↩ {String(d.previousSchoolCount)} returned to previous school</p>}
+          {Number(d.smartPlacementCount) > 0 && <p>🎯 {String(d.smartPlacementCount)} placed via smart depth fit</p>}
+          {Number(d.favoriteWalkOnCount) > 0 && <p>🚶 {String(d.favoriteWalkOnCount)} placed as walk-ons at favorite school</p>}
+          {dealbreakers > 0 && <p>🧹 {dealbreakers} recruiting dealbreakers cleared</p>}
+          {d.baseNilPlayersReset != null && Number(d.baseNilPlayersReset) > 0 && <p>💰 {String(d.baseNilPlayersReset)} NIL base values reset</p>}
+        </div>
+
+        {/* Warnings */}
+        {warnings.length > 0 && (
+          <div className="rounded p-2 space-y-1" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            {warnings.map((w, i) => (
+              <p key={i} style={{ color: '#fbbf24' }}>⚠ {w}</p>
+            ))}
+          </div>
+        )}
+
+        <p style={{ color: 'var(--ocean-600)' }}>Save file was modified in place and reimported — all pages now reflect the updated roster.</p>
+      </div>
+    );
+  }
+
+  // Transfer Wave log
+  const totalMoves  = Number(d.totalMoves ?? 0);
+  const tier1       = Number(d.tier1Count ?? 0);
+  const tier2       = Number(d.tier2Count ?? 0);
+  const teams       = Number(d.affectedTeamCount ?? 0);
+  const byCheck     = d.byCheck && typeof d.byCheck === 'object' ? d.byCheck as Record<string, number> : {};
+  const ovrBuckets  = d.ovrBuckets && typeof d.ovrBuckets === 'object' ? d.ovrBuckets as Record<string, number> : {};
+
+  return (
+    <div className="rounded-lg border px-4 py-3 space-y-3 text-xs" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Transfer Wave — Mod Log</p>
+
+      {/* Key numbers */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Total Moves', value: totalMoves, accent: true },
+          { label: 'Tier 1', value: tier1 },
+          { label: 'Tier 2', value: tier2 },
+          { label: 'Teams Affected', value: teams },
+        ].map(({ label, value, accent }) => (
+          <div key={label} className="rounded p-2 text-center" style={{ background: 'var(--ocean-800)' }}>
+            <div className="text-lg font-bold tabular-nums" style={{ color: accent ? 'var(--ocean-100)' : 'var(--ocean-400)' }}>{value}</div>
+            <div style={{ color: 'var(--ocean-500)' }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* OVR breakdown */}
+      {Object.keys(ovrBuckets).length > 0 && (
+        <div>
+          <p className="mb-1.5 font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>OVR Distribution</p>
+          <div className="flex gap-3 flex-wrap">
+            {[
+              { key: 'under60', label: '<60' },
+              { key: 'r60to70', label: '60–70' },
+              { key: 'r70to80', label: '70–80' },
+              { key: 'r80plus', label: '80+' },
+            ].map(({ key, label }) => ovrBuckets[key] != null && (
+              <span key={key} className="rounded px-2 py-0.5" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
+                {label}: <strong>{ovrBuckets[key]}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By position */}
+      {Object.keys(byCheck).length > 0 && (
+        <div>
+          <p className="mb-1.5 font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>Moves by Position</p>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(byCheck).map(([pos, count]) => (
+              <span key={pos} className="rounded px-2 py-0.5" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
+                {pos}: <strong style={{ color: 'var(--ocean-100)' }}>{count}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Live log */}
+      {Array.isArray(d.log) && (d.log as string[]).length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-xs" style={{ color: 'var(--ocean-500)' }}>Show run log ({(d.log as string[]).length} lines)</summary>
+          <div className="mt-2 rounded p-2 text-xs font-mono space-y-0.5 overflow-x-auto" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-400)', maxHeight: 200, overflowY: 'auto' }}>
+            {(d.log as string[]).map((line, i) => <div key={i}>{line}</div>)}
+          </div>
+        </details>
+      )}
+
+      <p style={{ color: 'var(--ocean-600)' }}>Save file was modified by Transfer Wave and reimported — Players page now reflects updated rosters.</p>
     </div>
   );
 }

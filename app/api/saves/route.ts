@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     const saves = entries
-      .filter((e) => !e.isDirectory() && e.name.startsWith('DYNASTY'))
+      .filter((e) => !e.isDirectory() && e.name.startsWith('DYNASTY') && !e.name.endsWith('.gc-rlt-pre-rebalance-backup'))
       .map((e) => ({
         name: e.name,
         path: join(dir, e.name),

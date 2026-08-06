@@ -23,8 +23,9 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${lato.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col" style={{ background: 'var(--ocean-950)' }}>
+      <body suppressHydrationWarning className="min-h-full flex flex-col" style={{ background: 'var(--ocean-950)' }}>
         <header
           className="border-b"
           style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)' }}

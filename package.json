@@ -1,6 +1,6 @@
 {
   "name": "ghost-city-rlt",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Ghost City's Recruiting Landscape Tracker for EA Sports CFB 27",
   "author": "ghostcitydev",
   "private": true,
@@ -27,6 +27,10 @@
       {
         "from": "prisma/migrations",
         "to": "migrations"
+      },
+      {
+        "from": "public/other mods",
+        "to": "mods"
       }
     ],
     "win": {

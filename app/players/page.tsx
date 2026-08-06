@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { safeJson } from '@/lib/safeFetch';
+import teamLogos from '@/lib/team-logos.json';
 
 type Season = { id: string; year: number; label: string; snapshot: string };
 
@@ -38,9 +39,10 @@ type PlayersData = {
   playerRatings: PlayerRating[];
 };
 
-type TeamStat = { id: string; teamId: string; prestige: number | null; team: { id: string; name: string; conference: string; logoUrl: string | null } };
+type TeamStat = { id: string; teamId: string; prestige: number | null; isNationalChampion: boolean; isConferenceChampion: boolean; team: { id: string; name: string; conference: string; logoUrl: string | null } };
 type PipelineRow = { teamId: string; pipeline: string; total: number };
 type SignedRecruitRow = { teamId: string; firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string };
+type TransferRow = { firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; previousTeam: string | null; classYear: string | null; teamName: string };
 type RosterPlayerRow = { teamId: string; firstName: string; lastName: string; position: string; posGroup: string; overall: number | null; starRating: string | null; schoolYear: string | null };
 type ProspectRow = { pipeline: string; posGroup: string; fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
 type TeamInfluenceRow = { teamId: string; pipeline: string; level: string; value: number; team: { name: string; conference: string; logoUrl: string | null } };
@@ -179,6 +181,295 @@ const RATING_BUCKETS: { key: keyof PlayerRating; label: string }[] = [
   { key: 'rSub70', label: '<70' },
 ];
 
+const XFER_STAR_RANK: Record<string, number> = { FIVE_STAR: 0, FOUR_STAR: 1, THREE_STAR: 2, TWO_STAR: 3, ONE_STAR: 4 };
+const XFER_STAR_LABEL: Record<string, string> = { FIVE_STAR: '★★★★★', FOUR_STAR: '★★★★', THREE_STAR: '★★★', TWO_STAR: '★★', ONE_STAR: '★' };
+const XFER_STAR_COLOR: Record<string, string> = { FIVE_STAR: '#003f5c', FOUR_STAR: '#006b71', THREE_STAR: '#009446', TWO_STAR: '#65a31c', ONE_STAR: '#b1aa00' };
+
+function parseClassYear(cls: string | null): string {
+  if (!cls) return '—';
+  const part = cls.replace(/^(HighSchool|JuniorCollege|Transfer)_?/, '').replace(/_/g, ' ').trim();
+  return part || '—';
+}
+
+type TransferSortKey = 'name' | 'pos' | 'stars' | 'from' | 'to' | 'class' | 'ovr';
+
+type TwLogEntry = {
+  id?: string;
+  date?: string;
+  savePath?: string;
+  log?: string[];
+  [key: string]: unknown;
+};
+
+type TwMove = { tier: 'T1' | 'T2'; name: string; position: string; overall: number; from: string; to: string; detail: string };
+type TwSortKey = 'name' | 'position' | 'overall' | 'from' | 'to' | 'tier';
+
+function parseTwMoves(lines: string[]): TwMove[] {
+  const pattern = /^\s*\[(T[12])\]\s+(.+?)\s+\(([^,]+),\s*OVR\s*(\d+)\)\s*:\s*(.+?)\s+->\s+(.+?)(?:\s+\[(.+)\])?$/;
+  return lines.flatMap((line) => {
+    const match = line.match(pattern);
+    if (!match) return [];
+    const [, tier, name, position, overall, from, to, detail = 'Roster-need assignment'] = match;
+    return [{ tier: tier as TwMove['tier'], name, position, overall: Number(overall), from, to, detail }];
+  });
+}
+
+function TwMovesTable({ moves }: { moves: TwMove[] }) {
+  const logos = teamLogos as Record<string, string>;
+  const [sort, setSort] = useState<{ key: TwSortKey; dir: 'asc' | 'desc' }>({ key: 'overall', dir: 'desc' });
+  const columns: { key?: TwSortKey; label: string }[] = [
+    { key: 'name', label: 'Player' }, { key: 'position', label: 'Pos' }, { key: 'overall', label: 'OVR' },
+    { key: 'from', label: 'From' }, { key: 'to', label: 'To' }, { key: 'tier', label: 'Tier' }, { label: 'Move details' },
+  ];
+  const sortedMoves = useMemo(() => [...moves].sort((a, b) => {
+    const aValue = a[sort.key];
+    const bValue = b[sort.key];
+    const comparison = typeof aValue === 'number' && typeof bValue === 'number'
+      ? aValue - bValue
+      : String(aValue).localeCompare(String(bValue));
+    return comparison === 0 ? a.name.localeCompare(b.name) : comparison * (sort.dir === 'asc' ? 1 : -1);
+  }), [moves, sort]);
+  const toggleSort = (key: TwSortKey) => setSort((current) => current.key === key ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+  return (
+    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
+            {columns.map(({ key, label }) => (
+              <th key={label} onClick={() => key && toggleSort(key)}
+                className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap ${key ? 'cursor-pointer select-none' : ''}`}
+                style={{ color: key === sort.key ? 'var(--ocean-200)' : 'var(--ocean-400)' }}>
+                {label}{key === sort.key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedMoves.map((move, index) => {
+            const fromLogo = logos[move.from];
+            const toLogo = logos[move.to];
+            const tierColor = move.tier === 'T1' ? '#4ade80' : '#60a5fa';
+            return (
+              <tr key={`${move.name}-${index}`} style={{ background: index % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-800)' }}>
+                <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: 'var(--ocean-100)' }}>{move.name}</td>
+                <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--ocean-300)' }}>{move.position}</td>
+                <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>{move.overall}</td>
+                <td className="px-3 py-2"><span className="flex items-center gap-1.5 whitespace-nowrap text-xs" style={{ color: 'var(--ocean-300)' }}>{fromLogo && <img src={fromLogo} alt="" className="h-4 w-4 object-contain" />}{move.from}</span></td>
+                <td className="px-3 py-2"><span className="flex items-center gap-1.5 whitespace-nowrap text-xs" style={{ color: 'var(--ocean-300)' }}>{toLogo && <img src={toLogo} alt="" className="h-4 w-4 object-contain" />}{move.to}</span></td>
+                <td className="px-3 py-2"><span className="inline-block rounded px-1.5 py-0.5 text-xs font-semibold" style={{ color: tierColor, border: `1px solid ${tierColor}66`, background: `${tierColor}18` }}>{move.tier}</span></td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--ocean-500)' }}>{move.detail}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TwLogView() {
+  const [entry, setEntry] = useState<TwLogEntry | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/mods/tw-log')
+      .then((r) => r.json())
+      .then((d) => { setEntry(d.entry ?? null); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--ocean-500)' }}>Loading Transfer Wave log…</div>;
+
+  if (!entry) return (
+    <div className="rounded-lg border p-8 text-center" style={{ borderColor: 'var(--ocean-700)', color: 'var(--ocean-500)' }}>
+      No Transfer Wave log found — run the Preseason Transfer Wave from the Toolbox first.
+    </div>
+  );
+
+  const lines: string[] = Array.isArray(entry.log) ? entry.log : [];
+  const moves = parseTwMoves(lines);
+  const runDate = entry.date ? new Date(entry.date).toLocaleString() : null;
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-3 flex-wrap">
+        <h2 className="text-base font-bold" style={{ color: 'var(--ocean-100)' }}>Transfer Wave Log</h2>
+        {runDate && <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>Last run: {runDate}</span>}
+        <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>{moves.length} transfers</span>
+      </div>
+      {moves.length === 0 ? (
+        <div className="rounded-lg border p-6 text-sm" style={{ borderColor: 'var(--ocean-700)', color: 'var(--ocean-500)' }}>
+          The Transfer Wave ran but produced no log output.
+        </div>
+      ) : (
+        <>
+          <TwMovesTable moves={moves} />
+          <details className="mt-3 rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold" style={{ color: 'var(--ocean-400)' }}>View raw Transfer Wave diagnostics ({lines.length} lines)</summary>
+        <div className="border-t overflow-auto" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-950, #060d12)', maxHeight: '40vh' }}>
+          <div className="p-4 font-mono text-xs space-y-0.5">
+            {lines.map((line, i) => {
+              const isMove = /moved|transfer/i.test(line);
+              const isWarn = /warn|skip|error/i.test(line);
+              return (
+                <div key={i} style={{
+                  color: isMove ? 'var(--ocean-200)' : isWarn ? '#fbbf24' : 'var(--ocean-500)',
+                  lineHeight: '1.6',
+                }}>
+                  {line}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+          </details>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TransfersView({ transfers, snapshot, starFilter, setStarFilter, sort, setSort }: {
+  transfers: TransferRow[];
+  snapshot: string;
+  starFilter: string;
+  setStarFilter: (v: string) => void;
+  sort: { key: TransferSortKey; dir: 'asc' | 'desc' };
+  setSort: (s: { key: TransferSortKey; dir: 'asc' | 'desc' }) => void;
+}) {
+  const logos = teamLogos as Record<string, string>;
+
+  // Preseason: show Transfer Wave log instead of signed-recruit table
+  if (snapshot === 'preseason') {
+    return <TwLogView />;
+  }
+
+  const filtered = transfers
+    .filter((r) => starFilter === 'all' || r.starRating === ({ '5': 'FIVE_STAR', '4': 'FOUR_STAR', '3': 'THREE_STAR', '2': 'TWO_STAR', '1': 'ONE_STAR' } as Record<string, string>)[starFilter])
+    .sort((a, b) => {
+      const d = sort.dir === 'asc' ? 1 : -1;
+      let cmp = 0;
+      if (sort.key === 'stars') cmp = (XFER_STAR_RANK[a.starRating] ?? 9) - (XFER_STAR_RANK[b.starRating] ?? 9);
+      else if (sort.key === 'name') cmp = (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName);
+      else if (sort.key === 'pos') cmp = a.position.localeCompare(b.position);
+      else if (sort.key === 'from') {
+        // nulls always last regardless of direction
+        if (!a.previousTeam && !b.previousTeam) cmp = 0;
+        else if (!a.previousTeam) return 1;
+        else if (!b.previousTeam) return -1;
+        else cmp = a.previousTeam.localeCompare(b.previousTeam);
+      }
+      else if (sort.key === 'to') cmp = a.teamName.localeCompare(b.teamName);
+      else if (sort.key === 'class') {
+        const ca = parseClassYear(a.classYear); const cb = parseClassYear(b.classYear);
+        if (ca === '—' && cb === '—') cmp = 0;
+        else if (ca === '—') return 1;
+        else if (cb === '—') return -1;
+        else cmp = ca.localeCompare(cb);
+      }
+      else if (sort.key === 'ovr') cmp = (b.overall ?? -1) - (a.overall ?? -1);
+      if (cmp !== 0) return cmp * d;
+      // tiebreak: stars → to → name
+      const sc = (XFER_STAR_RANK[a.starRating] ?? 9) - (XFER_STAR_RANK[b.starRating] ?? 9);
+      if (sc !== 0) return sc;
+      const tc = a.teamName.localeCompare(b.teamName);
+      if (tc !== 0) return tc;
+      return (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName);
+    });
+
+  const toggle = (key: TransferSortKey) => {
+    if (sort.key === key) setSort({ key, dir: sort.dir === 'asc' ? 'desc' : 'asc' });
+    else setSort({ key, dir: 'asc' });
+  };
+  const icon = (key: TransferSortKey) => sort.key === key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const cols: [TransferSortKey, string, string][] = [
+    ['name', 'Name', 'text-left'],
+    ['pos', 'Pos', 'text-left'],
+    ['stars', 'Stars', 'text-left'],
+    ['from', 'From', 'text-left'],
+    ['to', 'To', 'text-left'],
+    ['class', 'Class', 'text-left'],
+    ['ovr', 'OVR', 'text-right'],
+  ];
+
+  if (transfers.length === 0) return (
+    <div className="rounded-lg border p-8 text-center" style={{ borderColor: 'var(--ocean-700)', color: 'var(--ocean-500)' }}>
+      No transfer data — re-import a signing day save to populate.
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <select value={starFilter} onChange={(e) => setStarFilter(e.target.value)}
+          className="rounded border px-2 py-1 text-xs outline-none"
+          style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-200)' }}>
+          <option value="all">All Stars</option>
+          <option value="5">★★★★★ only</option>
+          <option value="4">★★★★ only</option>
+          <option value="3">★★★ only</option>
+          <option value="2">★★ only</option>
+          <option value="1">★ only</option>
+        </select>
+        <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>{filtered.length} of {transfers.length} transfers</span>
+      </div>
+      <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
+              {cols.map(([key, label, align]) => (
+                <th key={key} onClick={() => toggle(key)}
+                  className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none whitespace-nowrap ${align}`}
+                  style={{ color: sort.key === key ? 'var(--ocean-200)' : 'var(--ocean-400)' }}>
+                  {label}{icon(key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-sm" style={{ color: 'var(--ocean-500)' }}>No transfers match the filter.</td></tr>
+            ) : filtered.map((r, i) => {
+              const color = XFER_STAR_COLOR[r.starRating] ?? '#666';
+              const fromLogo = r.previousTeam ? logos[r.previousTeam] : null;
+              const toLogo = logos[r.teamName];
+              return (
+                <tr key={i} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-800)' }}>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: 'var(--ocean-100)' }}>{r.firstName} {r.lastName}</td>
+                  <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--ocean-300)' }}>{r.position}</td>
+                  <td className="px-3 py-2">
+                    <span className="inline-block rounded px-1.5 py-0.5 text-xs tabular-nums"
+                      style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>
+                      {XFER_STAR_LABEL[r.starRating] ?? r.starRating}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.previousTeam ? (
+                      <span className="flex items-center gap-1.5">
+                        {fromLogo && <img src={fromLogo} alt="" className="h-4 w-4 object-contain flex-shrink-0" />}
+                        <span className="text-xs whitespace-nowrap" style={{ color: 'var(--ocean-300)' }}>{r.previousTeam}</span>
+                      </span>
+                    ) : <span className="text-xs" style={{ color: 'var(--ocean-600)' }}>—</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="flex items-center gap-1.5">
+                      {toLogo && <img src={toLogo} alt="" className="h-4 w-4 object-contain flex-shrink-0" />}
+                      <span className="text-xs whitespace-nowrap" style={{ color: 'var(--ocean-300)' }}>{r.teamName}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--ocean-400)' }}>{parseClassYear(r.classYear)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>{r.overall ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function PlayersPage() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [seasonId, setSeasonId] = useState('');
@@ -194,7 +485,10 @@ export default function PlayersPage() {
   const [tooltip, setTooltip] = useState<{ teamId: string; posGroup: string; x: number; y: number } | null>(null);
   const [balTooltip, setBalTooltip] = useState<{ teamName: string; posMap: Map<PosGroup, number>; x: number; y: number } | null>(null);
   const [starFilter, setStarFilter] = useState<StarFilter>('all');
-  const [view, setView] = useState<'recruiting' | 'ratings' | 'depth' | 'access'>('recruiting');
+  const [view, setView] = useState<'recruiting' | 'transfers' | 'ratings' | 'depth' | 'access'>('recruiting');
+  const [transfers, setTransfers] = useState<TransferRow[]>([]);
+  const [transferStarFilter, setTransferStarFilter] = useState('all');
+  const [transferSort, setTransferSort] = useState<{ key: 'name' | 'pos' | 'stars' | 'from' | 'to' | 'class' | 'ovr'; dir: 'asc' | 'desc' }>({ key: 'stars', dir: 'asc' });
   const [ratingsPos, setRatingsPos] = useState<PosGroup | 'ALL'>('ALL');
 
   const [recruitSort, setRecruitSort] = useState<{ key: RecruitSortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
@@ -215,8 +509,10 @@ export default function PlayersPage() {
 
   const availableSeasons = useMemo(() => {
     if (view === 'recruiting') return seasons.filter((s) => s.snapshot === 'signing_day');
+    if (view === 'transfers') return seasons; // all: signing_day shows recruits, preseason shows TW log
     if (view === 'ratings') return seasons.filter((s) => s.snapshot === 'preseason');
-    return seasons;
+    if (view === 'access') return seasons.filter((s) => s.snapshot === 'signing_day');
+    return seasons; // depth
   }, [seasons, view]);
 
   useEffect(() => {
@@ -233,6 +529,7 @@ export default function PlayersPage() {
     setRosterPlayers([]);
     setProspectPool([]);
     setTeamInfluence([]);
+    setTransfers([]);
     Promise.all([
       safeJson<PlayersData>(`/api/players?seasonId=${seasonId}`),
       safeJson<TeamStat[]>(`/api/stats?seasonId=${seasonId}`),
@@ -241,7 +538,8 @@ export default function PlayersPage() {
       safeJson<RosterPlayerRow[]>(`/api/roster-players?seasonId=${seasonId}`),
       safeJson<ProspectRow[]>(`/api/prospect-pool?seasonId=${seasonId}`),
       safeJson<TeamInfluenceRow[]>(`/api/pipelines?seasonId=${seasonId}`),
-    ]).then(([playerRes, statsRes, pipelineRes, recruitsRes, rosterRes, prospectRes, influenceRes]) => {
+      safeJson<TransferRow[]>(`/api/transfers?seasonId=${seasonId}`),
+    ]).then(([playerRes, statsRes, pipelineRes, recruitsRes, rosterRes, prospectRes, influenceRes, transfersRes]) => {
       if (playerRes.ok && playerRes.data) setData(playerRes.data);
       if (statsRes.ok && statsRes.data) setStats(statsRes.data);
       if (pipelineRes.ok && pipelineRes.data) setPipelineRows(pipelineRes.data);
@@ -249,6 +547,7 @@ export default function PlayersPage() {
       if (rosterRes.ok && rosterRes.data) setRosterPlayers(rosterRes.data);
       if (prospectRes.ok && prospectRes.data) setProspectPool(prospectRes.data);
       if (influenceRes.ok && influenceRes.data) setTeamInfluence(influenceRes.data);
+      if (transfersRes.ok && transfersRes.data) setTransfers(transfersRes.data);
     });
   }, [seasonId]);
 
@@ -295,6 +594,21 @@ export default function PlayersPage() {
   }, [allTeamMap, confFilter, pipelineFilter, teamPipelineMap]);
 
   const pivot = useMemo(() => {
+    // The aggregate position table has separate type and star totals, but no
+    // type-and-star intersection. Use individual signed recruits when both
+    // filters are active so combinations such as 5-star transfers are exact.
+    if (recruitTypeFilter !== 'All' && starFilter !== 'all') {
+      const wantedStar = ({ '5': 'FIVE_STAR', '4': 'FOUR_STAR', '3': 'THREE_STAR', '2': 'TWO_STAR', '1': 'ONE_STAR' } as Record<string, string>)[starFilter];
+      const map = new Map<string, Map<PosGroup, number>>();
+      for (const recruit of signedRecruits) {
+        if (!filteredTeamIds.has(recruit.teamId) || recruit.recruitType !== recruitTypeFilter || recruit.starRating !== wantedStar) continue;
+        if (!POS_GROUPS.includes(recruit.posGroup as PosGroup)) continue;
+        if (!map.has(recruit.teamId)) map.set(recruit.teamId, new Map());
+        const pos = recruit.posGroup as PosGroup;
+        map.get(recruit.teamId)!.set(pos, (map.get(recruit.teamId)!.get(pos) ?? 0) + 1);
+      }
+      return map;
+    }
     if (!data) return new Map<string, Map<PosGroup, number>>();
     const map = new Map<string, Map<PosGroup, number>>();
     for (const r of data.posRecruits) {
@@ -316,7 +630,7 @@ export default function PlayersPage() {
       }
     }
     return map;
-  }, [data, filteredTeamIds, starFilter, recruitTypeFilter]);
+  }, [data, filteredTeamIds, starFilter, recruitTypeFilter, signedRecruits]);
 
   // All unique teams in filtered set (with team object for logo)
   const baseTeams = useMemo(() => {
@@ -330,8 +644,8 @@ export default function PlayersPage() {
 
   const teamRows = useMemo(() => {
     let teams = Array.from(baseTeams.values());
-    // Exclude teams with all-zero counts when star filter is active
-    if (starFilter !== 'all') {
+    // Exclude teams with all-zero counts whenever either recruiting filter is active.
+    if (starFilter !== 'all' || recruitTypeFilter !== 'All') {
       teams = teams.filter((t) => POS_GROUPS.some((p) => (pivot.get(t.id)?.get(p) ?? 0) > 0));
     }
     const { key, dir } = recruitSort;
@@ -346,7 +660,7 @@ export default function PlayersPage() {
       }
       return mul * ((pivot.get(a.id)?.get(key as PosGroup) ?? 0) - (pivot.get(b.id)?.get(key as PosGroup) ?? 0));
     });
-  }, [baseTeams, pivot, starFilter, recruitSort]);
+  }, [baseTeams, pivot, starFilter, recruitTypeFilter, recruitSort]);
 
   const totals = useMemo(() => {
     const t: Record<PosGroup, number> = {} as Record<PosGroup, number>;
@@ -545,9 +859,8 @@ export default function PlayersPage() {
       if (confFilter !== 'All') return s.team.conference === confFilter;
       return true;
     });
-    if (starFilter !== 'all') {
-      teamList = teamList.filter((t) => POS_GROUPS.some((p) => (accessPivot.get(t.teamId)?.get(p) ?? 0) > 0));
-    }
+    // Always hide teams with no accessible prospects (no pipeline influence or below prestige ceiling)
+    teamList = teamList.filter((t) => POS_GROUPS.some((p) => (accessPivot.get(t.teamId)?.get(p) ?? 0) > 0));
     const { key, dir } = accessSort;
     const mul = dir === 'asc' ? 1 : -1;
     return [...teamList].sort((a, b) => {
@@ -602,6 +915,7 @@ export default function PlayersPage() {
     );
   }
 
+
   if (loading) return <div className="p-8" style={{ color: 'var(--ocean-500)' }}>Loading…</div>;
   if (!seasons.length) return (
     <div className="mx-auto max-w-2xl px-6 py-20 text-center" style={{ color: 'var(--ocean-500)' }}>
@@ -626,16 +940,18 @@ export default function PlayersPage() {
             {conferences.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
         </ControlGroup>
-        <ControlGroup label="Stars">
-          <Select value={starFilter} onChange={(v) => setStarFilter(v as StarFilter)}>
-            <option value="all">All</option>
-            <option value="5">5★ only</option>
-            <option value="4">4★ only</option>
-            <option value="3">3★ only</option>
-            <option value="2">2★ only</option>
-            <option value="1">1★ only</option>
-          </Select>
-        </ControlGroup>
+        {(view === 'recruiting' || view === 'access') && (
+          <ControlGroup label="Stars">
+            <Select value={starFilter} onChange={(v) => setStarFilter(v as StarFilter)}>
+              <option value="all">All</option>
+              <option value="5">5★ only</option>
+              <option value="4">4★ only</option>
+              <option value="3">3★ only</option>
+              <option value="2">2★ only</option>
+              <option value="1">1★ only</option>
+            </Select>
+          </ControlGroup>
+        )}
         {view === 'recruiting' && pipelineNames.length > 1 && (
           <ControlGroup label="Pipeline">
             <Select value={pipelineFilter} onChange={setPipelineFilter}>
@@ -654,7 +970,7 @@ export default function PlayersPage() {
         )}
         {/* View toggle */}
         <div className="ml-auto flex rounded-md border overflow-hidden" style={{ borderColor: 'var(--ocean-700)' }}>
-          {(['recruiting', 'ratings', 'depth', 'access'] as const).map((v, i, arr) => (
+          {(['recruiting', 'transfers', 'ratings', 'depth', 'access'] as const).map((v, i, arr) => (
             <button key={v} onClick={() => { setView(v); if (v !== 'recruiting') { setPipelineFilter('All'); setRecruitTypeFilter('All'); } }}
               className="px-3 py-1.5 text-xs font-medium transition-colors"
               style={{
@@ -662,7 +978,7 @@ export default function PlayersPage() {
                 color: view === v ? '#fff' : 'var(--ocean-400)',
                 borderRight: i < arr.length - 1 ? '1px solid var(--ocean-700)' : undefined,
               }}>
-              {v === 'recruiting' ? 'Recruiting' : v === 'ratings' ? 'Roster Ratings' : v === 'depth' ? 'Positional Depth' : 'Access to Recruits'}
+              {v === 'transfers' ? 'Transfers' : v === 'recruiting' ? 'Recruiting' : v === 'ratings' ? 'Roster Ratings' : v === 'depth' ? 'Positional Depth' : 'Access to Recruits'}
             </button>
           ))}
         </div>
@@ -741,6 +1057,15 @@ export default function PlayersPage() {
             </table>
           </div>
         </>
+      ) : view === 'transfers' ? (
+        <TransfersView
+          transfers={transfers}
+          snapshot={seasons.find((s) => s.id === seasonId)?.snapshot ?? 'signing_day'}
+          starFilter={transferStarFilter}
+          setStarFilter={setTransferStarFilter}
+          sort={transferSort}
+          setSort={setTransferSort}
+        />
       ) : view === 'depth' ? (
         /* Positional Depth view */
         <>

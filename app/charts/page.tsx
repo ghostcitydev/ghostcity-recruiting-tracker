@@ -535,22 +535,34 @@ function ChartPanel({
           compositionCharts.length === 0 ? (
             <div className="grid h-full place-items-center text-sm" style={{ color: 'var(--ocean-400)' }}>Select teams to see composition</div>
           ) : (
-            <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
-              {compositionCharts.map(({ teamName, data }) => (
-                <div key={teamName}>
-                  <div className="mb-1 text-xs" style={{ color: 'var(--ocean-300)' }}>{teamName}</div>
-                  <div style={{ height: compact ? 100 : 140 }}>
-                    <Bar data={data} options={{
-                      responsive: true, maintainAspectRatio: false,
-                      scales: {
-                        x: { stacked: true, ...AXIS_STYLE },
-                        y: { stacked: true, ...AXIS_STYLE, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 } },
-                      },
-                      plugins: { legend: LEGEND_STYLE },
-                    }} />
+            <div className="flex h-full flex-col">
+              <div className="flex-1 overflow-y-auto pr-1">
+                {compositionCharts.map(({ teamName, data }) => (
+                  <div key={teamName} className="mb-2">
+                    <div className="mb-1 text-xs" style={{ color: 'var(--ocean-300)' }}>{teamName}</div>
+                    <div style={{ height: compact ? 80 : 110 }}>
+                      <Bar data={data} options={{
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                          x: { stacked: true, ...AXIS_STYLE },
+                          y: { stacked: true, ...AXIS_STYLE, ticks: { ...AXIS_STYLE.ticks, stepSize: 1 } },
+                        },
+                        plugins: { legend: { display: false } },
+                      }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              {/* Single shared legend */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2" style={{ borderColor: 'var(--ocean-700)' }}>
+                {(['5★', '4★', '3★', '2★', '1★'] as const).map((label, i) => (
+                  <span key={label} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                    style={{ background: `${starColours[i]}22`, color: starColours[i], border: `1px solid ${starColours[i]}55` }}>
+                    <span className="inline-block h-2 w-2 rounded-sm flex-shrink-0" style={{ background: starColours[i] }} />
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
           )
         )}

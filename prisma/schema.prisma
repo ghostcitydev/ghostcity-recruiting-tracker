@@ -47,6 +47,7 @@ model Season {
   positionRecruits TeamPositionRecruit[]
   playerRatings    TeamPlayerRating[]
   signedRecruits          SignedRecruit[]
+  unsignedRecruits        UnsignedRecruit[]
   rosterPlayers           RosterPlayer[]
   pipelinePosRecruits     TeamPipelinePositionRecruit[]
   prospectPool            PipelineProspect[]
@@ -174,6 +175,9 @@ model TeamSeasonStat {
   gradeProP        String?
   avgGrade         Float?
 
+  isNationalChampion   Boolean @default(false)
+  isConferenceChampion Boolean @default(false)
+
   coachName      String?
   coachArchetype String?
   coachLevel     Int?
@@ -234,18 +238,20 @@ model TeamPositionRecruit {
 }
 
 model SignedRecruit {
-  id          String @id @default(cuid())
-  team        Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  teamId      String
-  season      Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  seasonId    String
-  firstName   String
-  lastName    String
-  position    String
-  posGroup    String
-  starRating  String
-  overall     Int?
-  recruitType String
+  id           String  @id @default(cuid())
+  team         Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId       String
+  season       Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId     String
+  firstName    String
+  lastName     String
+  position     String
+  posGroup     String
+  starRating   String
+  overall      Int?
+  recruitType  String
+  previousTeam String?
+  classYear    String?
 }
 
 model RosterPlayer {
@@ -316,4 +322,18 @@ model TeamPlayerRating {
   total    Int @default(0)
 
   @@unique([teamId, seasonId, posGroup])
+}
+
+model UnsignedRecruit {
+  id           String  @id @default(cuid())
+  season       Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId     String
+  firstName    String
+  lastName     String
+  position     String
+  posGroup     String
+  starRating   String
+  overall      Int?
+  recruitType  String
+  previousTeam String?
 }

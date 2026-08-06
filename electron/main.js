@@ -111,6 +111,7 @@ async function startServer() {
     // Production: use Next.js standalone server (lives outside the asar in resources/)
     process.env.PORT = String(PORT);
     process.env.HOSTNAME = '127.0.0.1';
+    process.env.ELECTRON_RESOURCES_PATH = process.resourcesPath;
     process.chdir(STANDALONE_DIR);
     require(path.join(STANDALONE_DIR, 'server.js'));
     await waitForPort(PORT);

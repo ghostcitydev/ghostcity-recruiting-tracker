@@ -225,6 +225,23 @@ export default function Dashboard() {
     return filtered;
   }, [stats, conferenceFilter, recruitTypeFilter, sortKey, sortDir]);
 
+  // Auto-compute champions from current season ranks
+  const nationalChampionId = useMemo(() => {
+    const ranked = stats.filter(s => s.teamRank != null).sort((a, b) => (a.teamRank ?? 9999) - (b.teamRank ?? 9999));
+    return ranked[0]?.team.id ?? null;
+  }, [stats]);
+
+  const conferenceChampionIds = useMemo(() => {
+    const byConf = new Map<string, TeamStat>();
+    for (const s of stats) {
+      if (s.teamRank == null) continue;
+      if (s.team.conference === 'Independent') continue; // No CC for Independent
+      const cur = byConf.get(s.team.conference);
+      if (!cur || (s.teamRank ?? 9999) < (cur.teamRank ?? 9999)) byConf.set(s.team.conference, s);
+    }
+    return new Set([...byConf.values()].map(s => s.team.id));
+  }, [stats]);
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('desc'); }
@@ -553,7 +570,31 @@ export default function Dashboard() {
                 {/* # rank */}
                 <td className="px-1 py-1.5 text-center tabular-nums text-xs" style={{ color: 'var(--ocean-500)', minWidth: 28 }}>{i + 1}</td>
                 {/* Identity */}
-                <td className="px-3 py-1.5 font-bold" style={{ color: 'var(--ocean-100)' }}>{r.team.name}</td>
+                <td className="px-3 py-1.5 font-bold" style={{ color: 'var(--ocean-100)' }}>
+                  <span className="flex items-center gap-1.5">
+                    {r.team.name}
+                    {nationalChampionId === r.team.id && (
+                      <span title="National Champion" style={{
+                        fontSize: '0.72rem', fontWeight: 700, lineHeight: 1,
+                        padding: '1px 7px', borderRadius: 4,
+                        background: 'rgba(245,158,11,0.14)',
+                        color: '#f59e0b',
+                        border: '1px solid rgba(245,158,11,0.3)',
+                        whiteSpace: 'nowrap',
+                      }}>NC 🏆</span>
+                    )}
+                    {conferenceChampionIds.has(r.team.id) && (
+                      <span title="Conference Champion" style={{
+                        fontSize: '0.72rem', fontWeight: 700, lineHeight: 1,
+                        padding: '1px 7px', borderRadius: 4,
+                        background: 'rgba(156,163,175,0.14)',
+                        color: '#9ca3af',
+                        border: '1px solid rgba(156,163,175,0.3)',
+                        whiteSpace: 'nowrap',
+                      }}>CC ⭐</span>
+                    )}
+                  </span>
+                </td>
                 <td className="px-3 py-1.5 text-xs" style={{ color: 'var(--ocean-400)' }}>{r.team.conference}</td>
                 {/* Ratings */}
                 <td className="px-3 py-1.5 tabular-nums font-semibold" style={{ color: ovrColor(r.overall), borderLeft: BL }}>{r.overall ?? '—'}</td>

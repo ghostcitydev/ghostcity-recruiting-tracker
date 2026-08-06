@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import teamLogos from '@/lib/team-logos.json';
 
 type Season = { id: string; year: number; label: string };
+type UnsignedPlayer = { firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string; previousTeam: string | null };
 type SeasonSettings = {
   unsignedTotal: number | null;
   unsignedFiveStar: number | null;
@@ -38,25 +40,65 @@ const STAR_COLORS = {
   oneStar: '#b1aa00',
 };
 
+const STAR_ORDER = ['FIVE_STAR', 'FOUR_STAR', 'THREE_STAR', 'TWO_STAR', 'ONE_STAR'];
+const STAR_RANK: Record<string, number> = { FIVE_STAR: 0, FOUR_STAR: 1, THREE_STAR: 2, TWO_STAR: 3, ONE_STAR: 4 };
+
+type SortCol = 'stars' | 'name' | 'pos' | 'type' | 'team' | 'ovr';
+type SortDir = 'asc' | 'desc';
+const STAR_LABEL: Record<string, string> = { FIVE_STAR: '★★★★★', FOUR_STAR: '★★★★', THREE_STAR: '★★★', TWO_STAR: '★★', ONE_STAR: '★' };
+const STAR_COLOR_MAP: Record<string, string> = {
+  FIVE_STAR: '#003f5c', FOUR_STAR: '#006b71', THREE_STAR: '#009446', TWO_STAR: '#65a31c', ONE_STAR: '#b1aa00',
+};
+
+/** XP-slider-style star rating pill */
+function StarBadge({ starRating }: { starRating: string }) {
+  const color = STAR_COLOR_MAP[starRating] ?? '#666';
+  const label = STAR_LABEL[starRating] ?? starRating;
+  return (
+    <span className="inline-block rounded px-1.5 py-0.5 text-xs tabular-nums"
+      style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>
+      {label}
+    </span>
+  );
+}
+
 export default function UnsignedPage() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [data, setData] = useState<Map<string, SeasonSettings>>(new Map());
+  const [players, setPlayers] = useState<Map<string, UnsignedPlayer[]>>(new Map());
+  const [selectedSeasonId, setSelectedSeasonId] = useState('');
+  const [starFilter, setStarFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [sortCol, setSortCol] = useState<SortCol>('stars');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/seasons?snapshot=signing_day')
-      .then((r) => r.json())
-      .then(async (seasons: Season[]) => {
-        setSeasons(seasons);
+    (async () => {
+      try {
+        const seasonsRes = await fetch('/api/seasons?snapshot=signing_day');
+        if (!seasonsRes.ok) { setLoading(false); return; }
+        const fetchedSeasons: Season[] = await seasonsRes.json();
+        setSeasons(fetchedSeasons);
+        if (fetchedSeasons.length) setSelectedSeasonId(fetchedSeasons[0].id);
         const map = new Map<string, SeasonSettings>();
-        for (const s of seasons) {
-          const res = await fetch(`/api/settings?seasonId=${s.id}`);
-          const settings = await res.json();
-          if (settings) map.set(s.id, settings);
+        const pmap = new Map<string, UnsignedPlayer[]>();
+        for (const s of fetchedSeasons) {
+          const [settingsRes, playersRes] = await Promise.all([
+            fetch(`/api/settings?seasonId=${s.id}`).then((r) => r.ok ? r.json() : null).catch(() => null),
+            fetch(`/api/unsigned-recruits?seasonId=${s.id}`).then((r) => r.ok ? r.json() : []).catch(() => []),
+          ]);
+          if (settingsRes) map.set(s.id, settingsRes);
+          if (Array.isArray(playersRes)) pmap.set(s.id, playersRes);
         }
         setData(map);
+        setPlayers(pmap);
+      } catch {
+        // silently ignore — page renders empty state
+      } finally {
         setLoading(false);
-      });
+      }
+    })();
   }, []);
 
   const rows: UnsignedSeason[] = useMemo(() => {
@@ -214,6 +256,128 @@ export default function UnsignedPage() {
           );
         })}
       </div>
+
+      {/* Individual player list */}
+      {seasons.length > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Recruits</h2>
+            <select value={selectedSeasonId} onChange={(e) => setSelectedSeasonId(e.target.value)}
+              className="rounded border px-2 py-1 text-xs outline-none"
+              style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-200)' }}>
+              {seasons.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <select value={starFilter} onChange={(e) => setStarFilter(e.target.value)}
+              className="rounded border px-2 py-1 text-xs outline-none"
+              style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-200)' }}>
+              <option value="all">All Stars</option>
+              <option value="FIVE_STAR">★★★★★ only</option>
+              <option value="FOUR_STAR">★★★★ only</option>
+              <option value="THREE_STAR">★★★ only</option>
+              <option value="TWO_STAR">★★ only</option>
+              <option value="ONE_STAR">★ only</option>
+            </select>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded border px-2 py-1 text-xs outline-none"
+              style={{ background: 'var(--ocean-900)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-200)' }}>
+              <option value="All">All Types</option>
+              <option value="HS">HS / JUCO</option>
+              <option value="Transfer">Transfer</option>
+            </select>
+          </div>
+          {(() => {
+            const all = players.get(selectedSeasonId) ?? [];
+            const filtered = all
+              .filter((p) =>
+                (starFilter === 'all' || p.starRating === starFilter) &&
+                (typeFilter === 'All' || p.recruitType === typeFilter)
+              )
+              .sort((a, b) => {
+                const dir = sortDir === 'asc' ? 1 : -1;
+                let cmp = 0;
+                if (sortCol === 'stars') {
+                  cmp = (STAR_RANK[a.starRating] ?? 9) - (STAR_RANK[b.starRating] ?? 9);
+                } else if (sortCol === 'name') {
+                  cmp = (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName);
+                } else if (sortCol === 'pos') {
+                  cmp = a.position.localeCompare(b.position);
+                } else if (sortCol === 'type') {
+                  cmp = a.recruitType.localeCompare(b.recruitType);
+                } else if (sortCol === 'team') {
+                  cmp = (a.previousTeam ?? '').localeCompare(b.previousTeam ?? '');
+                } else if (sortCol === 'ovr') {
+                  cmp = (b.overall ?? -1) - (a.overall ?? -1);
+                }
+                if (cmp !== 0) return cmp * dir;
+                // Tiebreakers: stars → team → name
+                const starCmp = (STAR_RANK[a.starRating] ?? 9) - (STAR_RANK[b.starRating] ?? 9);
+                if (starCmp !== 0) return starCmp;
+                const teamCmp = (a.previousTeam ?? '').localeCompare(b.previousTeam ?? '');
+                if (teamCmp !== 0) return teamCmp;
+                return (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName);
+              });
+
+            const toggleSort = (col: SortCol) => {
+              if (sortCol === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+              else { setSortCol(col); setSortDir('asc'); }
+            };
+            const sortIcon = (col: SortCol) => sortCol === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+            if (all.length === 0) return (
+              <p className="text-sm" style={{ color: 'var(--ocean-500)' }}>
+                No individual data — re-import this season to populate.
+              </p>
+            );
+            return (
+              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--ocean-700)' }}>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
+                      {([['name','Name'],['pos','Pos'],['stars','Stars'],['type','Type'],['team','From'],['ovr','OVR']] as [SortCol,string][]).map(([col, label]) => (
+                        <th key={col}
+                          onClick={() => toggleSort(col)}
+                          className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none whitespace-nowrap ${col === 'ovr' ? 'text-right' : 'text-left'}`}
+                          style={{ color: sortCol === col ? 'var(--ocean-200)' : 'var(--ocean-400)' }}>
+                          {label}{sortIcon(col)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr><td colSpan={6} className="px-3 py-6 text-center text-sm" style={{ color: 'var(--ocean-500)' }}>No players match the filters.</td></tr>
+                    ) : filtered.map((p, i) => {
+                      const logoUrl = p.previousTeam ? (teamLogos as Record<string, string>)[p.previousTeam] : null;
+                      return (
+                        <tr key={i} style={{ background: i % 2 === 0 ? 'var(--ocean-900)' : 'var(--ocean-800)', borderBottom: '1px solid var(--ocean-800)' }}>
+                          <td className="px-3 py-2 font-medium" style={{ color: 'var(--ocean-100)' }}>{p.firstName} {p.lastName}</td>
+                          <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--ocean-300)' }}>{p.position}</td>
+                          <td className="px-3 py-2"><StarBadge starRating={p.starRating} /></td>
+                          <td className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-500)' }}>{p.recruitType}</td>
+                          <td className="px-3 py-2">
+                            {p.previousTeam ? (
+                              <span className="flex items-center gap-1.5">
+                                {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 object-contain flex-shrink-0" />}
+                                <span className="text-xs" style={{ color: 'var(--ocean-300)' }}>{p.previousTeam}</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--ocean-600)' }}>—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--ocean-200)' }}>{p.overall ?? '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="px-3 py-2 text-xs" style={{ color: 'var(--ocean-500)', borderTop: '1px solid var(--ocean-800)' }}>
+                  {filtered.length} of {all.length} players
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

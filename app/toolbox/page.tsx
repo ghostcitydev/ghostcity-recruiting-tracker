@@ -1,936 +1,678 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-// ─── Types ────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────
 
-type NilResetResult = { resetCount: number; skippedCount: number };
-type TeamPrestige = { name: string; prestige: number; rank: number };
-type TeamGrade = { name: string; rank: number; avgGrade: string | null; avgStatic: string | null; avgDerived: string | null };
-type PrestigeResult = { changedCount: number; totalTeams: number };
-type GradeResult = { mode: string; teamsUpdated: number; fieldsUpdated: number };
-type HistoryResult = { teamsZeroed: number; fieldsZeroed: number; coachesZeroed: number; coachFieldsZeroed: number; proTeamsReset: number; proFieldsReset: number };
+const LS_NSD = 'gc_mod_nsd';
+const LS_TW  = 'gc_mod_tw';
+const LS_RB  = 'gc_mod_rb';
 
-const GRADE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'Aplus', label: 'A+' }, { value: 'A', label: 'A' }, { value: 'Aminus', label: 'A-' },
-  { value: 'Bplus', label: 'B+' }, { value: 'B', label: 'B' }, { value: 'Bminus', label: 'B-' },
-  { value: 'Cplus', label: 'C+' }, { value: 'C', label: 'C' }, { value: 'Cminus', label: 'C-' },
-  { value: 'Dplus', label: 'D+' }, { value: 'D', label: 'D' }, { value: 'Dminus', label: 'D-' },
-  { value: 'F', label: 'F' },
-];
-const GRADE_ORDER_UI = ['F','Dminus','D','Dplus','Cminus','C','Cplus','Bminus','B','Bplus','Aminus','A','Aplus'];
-const GRADE_LABEL = (v: string | null) => v ? (GRADE_OPTIONS.find(o => o.value === v)?.label ?? v) : '—';
-function gradeRangePreview(mid: string, halfDev: number): string {
-  const midTier = GRADE_ORDER_UI.indexOf(mid);
-  if (midTier < 0) return '';
-  const lo = Math.max(0, midTier - halfDev);
-  const hi = Math.min(GRADE_ORDER_UI.length - 1, midTier + halfDev);
-  const count = hi - lo + 1;
-  return `${GRADE_LABEL(GRADE_ORDER_UI[lo])} – ${GRADE_LABEL(GRADE_ORDER_UI[hi])} (${count} grades)`;
+// NSD position keys (PocketScout)
+const NSD_POSITIONS = ['QB','HB','FB','WR','TE','LT','LG','C','RG','RT','EDGE','DT','LB','CB','S','K','P'] as const;
+type NsdPos = typeof NSD_POSITIONS[number];
+
+const NSD_PREFERRED_DEFAULTS: Record<NsdPos, number> = {
+  QB:4, HB:5, FB:2, WR:8, TE:5, LT:4, LG:4, C:4, RG:4, RT:4, EDGE:7, DT:6, LB:8, CB:8, S:6, K:1, P:1,
+};
+const NSD_HARD_MAX_DEFAULTS: Record<NsdPos, number> = {
+  QB:5, HB:7, FB:3, WR:11, TE:7, LT:6, LG:6, C:5, RG:6, RT:6, EDGE:9, DT:8, LB:10, CB:11, S:8, K:2, P:2,
+};
+
+// Transfer Wave check groups (must match redistribution.js CHECKS exactly)
+const TW_CHECKS = ['QB','HB','FB','WR','TE','OT','Guards','C','DE','DT','LOLB','MLB','ROLB','CB','FS','SS','K','P'] as const;
+type TwCheck = typeof TW_CHECKS[number];
+
+const TW_CHECK_LABELS: Record<TwCheck, string> = {
+  QB:'QB', HB:'HB', FB:'FB', WR:'WR', TE:'TE',
+  OT:'OT (LT+RT)', Guards:'Guards (LG+RG)', C:'C',
+  DE:'DE (LE+RE)', DT:'DT',
+  LOLB:'LOLB', MLB:'MLB', ROLB:'ROLB',
+  CB:'CB', FS:'FS', SS:'SS', K:'K', P:'P',
+};
+
+// Defaults from redistribution.js CHECKS
+const TW_MIN_DEFAULTS: Record<TwCheck, number> = {
+  QB:2, HB:4, FB:1, WR:7, TE:3, OT:5, Guards:5, C:1, DE:5, DT:3, LOLB:3, MLB:3, ROLB:3, CB:5, FS:2, SS:2, K:1, P:1,
+};
+const TW_MAX_DEFAULTS: Record<TwCheck, number> = {
+  QB:3, HB:6, FB:2, WR:8, TE:5, OT:6, Guards:6, C:2, DE:6, DT:4, LOLB:3, MLB:4, ROLB:3, CB:6, FS:3, SS:3, K:2, P:2,
+};
+// Defaults from redistribution.js DEFAULT_SEVERE_THRESHOLDS
+const TW_SEVERE_DEFAULTS: Record<TwCheck, number> = {
+  QB:2, HB:2, FB:0, WR:2, TE:2, OT:2, Guards:2, C:2, DE:2, DT:2, LOLB:2, MLB:2, ROLB:2, CB:2, FS:2, SS:2, K:0, P:0,
+};
+
+// ── Types ───────────────────────────────────────────────────
+
+type NsdSettings = {
+  enabled: boolean;
+  signingLimit: number;
+  finalRosterLimit: number;
+  classTarget: number;
+  preferredByPos: Record<NsdPos, number>;
+  hardMaxByPos: Record<NsdPos, number>;
+  showAdvanced: boolean;
+};
+
+type TwCheckOverride = { min: number; max: number };
+type TwSettings = {
+  enabled: boolean;
+  thresholdOverrides: Record<TwCheck, TwCheckOverride>;
+  severeThresholdOverrides: Record<TwCheck, number>;
+  enableTier2: boolean;
+  prestigeGapCap: number;
+  zeroNil: boolean;
+  showPositions: boolean;
+  showSevere: boolean;
+};
+
+const NSD_DEFAULTS: NsdSettings = {
+  enabled: false,
+  signingLimit: 35,
+  finalRosterLimit: 95,
+  classTarget: 25,
+  preferredByPos: { ...NSD_PREFERRED_DEFAULTS },
+  hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS },
+  showAdvanced: false,
+};
+
+function makeTwDefaults(): TwSettings {
+  const thresholdOverrides = {} as Record<TwCheck, TwCheckOverride>;
+  const severeThresholdOverrides = {} as Record<TwCheck, number>;
+  for (const k of TW_CHECKS) {
+    thresholdOverrides[k] = { min: TW_MIN_DEFAULTS[k], max: TW_MAX_DEFAULTS[k] };
+    severeThresholdOverrides[k] = TW_SEVERE_DEFAULTS[k];
+  }
+  return { enabled: false, thresholdOverrides, severeThresholdOverrides, enableTier2: true, prestigeGapCap: 3, zeroNil: true, showPositions: false, showSevere: false };
 }
 
-// ─── Page ──────────────────────────────────────────────────
+// ── localStorage helpers ────────────────────────────────────
+
+function loadNsd(): NsdSettings {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_NSD) ?? '{}');
+    return {
+      ...NSD_DEFAULTS,
+      ...s,
+      preferredByPos: { ...NSD_PREFERRED_DEFAULTS, ...(s.preferredByPos ?? {}) },
+      hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS, ...(s.hardMaxByPos ?? {}) },
+    };
+  } catch { return { ...NSD_DEFAULTS, preferredByPos: { ...NSD_PREFERRED_DEFAULTS }, hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS } }; }
+}
+
+function loadTw(): TwSettings {
+  try {
+    const defaults = makeTwDefaults();
+    const raw = localStorage.getItem(LS_TW);
+    if (!raw) return defaults;
+    const s = JSON.parse(raw);
+    // If stored data is in old format (has thresholdByPos), discard and use defaults
+    if (s.thresholdByPos) { localStorage.removeItem(LS_TW); return defaults; }
+    const thresholdOverrides = { ...defaults.thresholdOverrides };
+    const severeThresholdOverrides = { ...defaults.severeThresholdOverrides };
+    if (s.thresholdOverrides) {
+      for (const k of TW_CHECKS) {
+        if (s.thresholdOverrides[k]) thresholdOverrides[k] = { min: s.thresholdOverrides[k].min ?? TW_MIN_DEFAULTS[k], max: s.thresholdOverrides[k].max ?? TW_MAX_DEFAULTS[k] };
+      }
+    }
+    if (s.severeThresholdOverrides) {
+      for (const k of TW_CHECKS) {
+        if (s.severeThresholdOverrides[k] != null) severeThresholdOverrides[k] = s.severeThresholdOverrides[k];
+      }
+    }
+    return { ...defaults, ...s, thresholdOverrides, severeThresholdOverrides };
+  } catch { return makeTwDefaults(); }
+}
+
+function saveNsd(s: NsdSettings) { localStorage.setItem(LS_NSD, JSON.stringify(s)); }
+function saveTw(s: TwSettings)   { localStorage.setItem(LS_TW,  JSON.stringify(s)); }
+
+// ── Page ───────────────────────────────────────────────────
 
 export default function ToolboxPage() {
   return (
-    <div className="mx-auto max-w-[1600px] px-6 py-8 space-y-6">
-      <NilResetCard />
-      <RecruitDealBreakersCard />
-      <ProgramSetupCard />
-      <RebalanceRostersCard />
-    </div>
-  );
-}
-
-type RebalanceResult = {
-  playersEdited: number;
-  relevantWrites: number;
-  floorWrites: number;
-  floorValue: number;
-  unknownPositions: string[];
-};
-
-function RebalanceRostersCard() {
-  const [mode, setMode] = useState<'fixed' | 'tighten'>('fixed');
-  const [fixedValue, setFixedValue] = useState(75);
-  const [midpoint, setMidpoint] = useState(75);
-  const [maxDeviation, setMaxDeviation] = useState(8);
-  const [floor, setFloor] = useState(40);
-
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<RebalanceResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function run() {
-    setState('running'); setError(null);
-    const payload = mode === 'fixed'
-      ? { mode, value: fixedValue, floor }
-      : { mode, midpoint, maxDeviation, floor };
-    try {
-      const res = await fetch('/api/toolbox/rebalance-rosters', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
-  }
-
-  const summary = mode === 'fixed'
-    ? `Position-relevant attributes → ${fixedValue}. Irrelevant attributes → ${floor}. OverallRating left alone (game re-derives via archetype formula).`
-    : `Position-relevant attributes clamped within ±${maxDeviation} of ${midpoint}. Irrelevant attributes → ${floor}. OverallRating left alone.`;
-
-  return (
-    <Card>
-      <SectionHeader
-        title="Rebalance Rosters"
-        description={
-          <>
-            Adjusts attribute ratings for every rostered player (skips free agents and unsigned recruits). Use in year zero to blunt the snowball effect after resetting history — elite rosters get pulled down, weak rosters get boosted up.
-            <br /><br />
-            <span style={{ color: 'var(--ocean-300)' }}>How it works:</span> per player, attributes are split into <em>position-relevant</em> (Throw* for QB, Kick* for K, etc. — plus universals like Speed/Awareness for everyone) and <em>irrelevant</em>. Relevant attributes are set to your target; irrelevant attributes are floored (default 40). <Field>OverallRating</Field> is written as a proxy (mean of relevant attributes); the game refines it via its archetype formula on next sim tick.
-            <br /><br />
-            <span style={{ color: '#003f5c' }}>Timing matters.</span> The game recomputes team OVR once, between <em>Encourage Transfers</em> and <em>Preseason</em>. <strong>Run this tool before Encourage Transfers</strong> so that recompute uses your rebalanced player OVRs (which it combines with prestige scaling). Direct writes to team OVR fields get clobbered by that recompute — this tool intentionally doesn&apos;t attempt them.
-          </>
-        }
-      />
-
-      <div className="flex gap-2 flex-wrap">
-        <ModeChip label="Fixed" active={mode === 'fixed'} onClick={() => setMode('fixed')} />
-        <ModeChip label="Tighten toward mean" active={mode === 'tighten'} onClick={() => setMode('tighten')} />
-      </div>
-
-      {mode === 'fixed' && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Relevant target (0–99):</label>
-          <input type="number" min={0} max={99} value={fixedValue}
-            onChange={e => setFixedValue(Math.max(0, Math.min(99, parseInt(e.target.value) || 0)))}
-            className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-        </div>
-      )}
-
-      {mode === 'tighten' && (
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Midpoint:</label>
-            <input type="number" min={0} max={99} value={midpoint}
-              onChange={e => setMidpoint(Math.max(0, Math.min(99, parseInt(e.target.value) || 0)))}
-              className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Max deviation ±:</label>
-            <input type="number" min={0} max={40} value={maxDeviation}
-              onChange={e => setMaxDeviation(Math.max(0, Math.min(40, parseInt(e.target.value) || 0)))}
-              className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-          </div>
-          <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-            Relevant range: [{Math.max(0, midpoint - maxDeviation)}, {Math.min(99, midpoint + maxDeviation)}]
-          </p>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Irrelevant floor (0–99):</label>
-        <input type="number" min={0} max={99} value={floor}
-          onChange={e => setFloor(Math.max(0, Math.min(99, parseInt(e.target.value) || 0)))}
-          className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-        <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-          e.g. Kick Power on a QB → {floor}
-        </span>
-      </div>
-
-      <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>{summary}</p>
-
-      {state === 'idle' && <PrimaryButton onClick={() => setState('confirm')}>Rebalance Rosters</PrimaryButton>}
-      {state === 'confirm' && (
-        <ConfirmRow warning={`${summary} This modifies your save file directly and touches thousands of players.`}
-          confirmLabel="Confirm — Rebalance" onConfirm={run} onCancel={() => setState('idle')} />
-      )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow color="#4ade80"
-          message={`Done — ${result.playersEdited.toLocaleString()} players edited · ${result.relevantWrites.toLocaleString()} relevant writes · ${result.floorWrites.toLocaleString()} floored (→ ${result.floorValue})${result.unknownPositions.length ? ` · unknown positions: ${result.unknownPositions.join(', ')}` : ''}.`}
-          onReset={() => { setState('idle'); setResult(null); }} />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </Card>
-  );
-}
-
-// ─── Recruit Deal-Breakers ────────────────────────────────
-
-const DEAL_BREAKER_FACTORS = [
-  { value: 'PlayingTime',           label: 'Playing Time' },
-  { value: 'SchemeId',              label: 'Playing Style' },
-  { value: 'DistanceFromHome',      label: 'Proximity to Home' },
-  { value: 'AcademicReputation',    label: 'Academic Reputation' },
-  { value: 'CampusLifestyle',       label: 'Campus Lifestyle' },
-  { value: 'CoachStability',        label: 'Coach Stability' },
-  { value: 'ChampionshipPotential', label: 'Championship Potential' },
-  { value: 'ConferencePower',       label: 'Conference Prestige' },
-  { value: 'ProgramTradition',      label: 'Program Tradition' },
-  { value: 'StadiumAtmosphere',     label: 'Stadium Atmosphere' },
-  { value: 'NationalExposure',      label: 'National Exposure' },
-];
-
-const DB_GRADE_OPTIONS = [
-  { value: 'Aplus', label: 'A+' }, { value: 'A', label: 'A' }, { value: 'Aminus', label: 'A-' },
-  { value: 'Bplus', label: 'B+' }, { value: 'B', label: 'B' }, { value: 'Bminus', label: 'B-' },
-  { value: 'Cplus', label: 'C+' }, { value: 'C', label: 'C' }, { value: 'Cminus', label: 'C-' },
-  { value: 'Dplus', label: 'D+' }, { value: 'D', label: 'D' }, { value: 'Dminus', label: 'D-' },
-  { value: 'F', label: 'F' },
-];
-
-type DBResult = { success: boolean; editCount: number; fieldWriteCount: number; warning?: string };
-
-function RecruitDealBreakersCard() {
-  const [selectedFactors, setSelectedFactors] = useState<Set<string>>(new Set());
-  const [gradeValue, setGradeValue] = useState('Cplus');
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<DBResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function toggleFactor(v: string) {
-    setSelectedFactors((prev) => {
-      const next = new Set(prev);
-      next.has(v) ? next.delete(v) : next.add(v);
-      return next;
-    });
-  }
-
-  async function run() {
-    setState('running'); setError(null);
-    try {
-      const res = await fetch('/api/toolbox/recruit-dealbreakers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ factors: [...selectedFactors], gradeValue }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
-  }
-
-  const gradeLabel = DB_GRADE_OPTIONS.find((o) => o.value === gradeValue)?.label ?? gradeValue;
-  const factorLabels = DEAL_BREAKER_FACTORS.filter((f) => selectedFactors.has(f.value)).map((f) => f.label);
-
-  return (
-    <Card>
-      <SectionHeader
-        title="Set Recruit Grade Requirements"
-        description={
-          <>
-            For every unsigned recruit that has a selected factor as a need, set the minimum grade threshold to a uniform value.
-            Run in preseason before recruiting begins. Modifies your save file directly.
-          </>
-        }
-      />
-
+    <div className="mx-auto max-w-[860px] px-6 py-8 space-y-4">
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
-          Factors to target
+        <h1 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--ocean-100)' }}>Mods</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--ocean-400)' }}>
+          Enable mods and configure their settings here. Active mods run automatically during import on the{' '}
+          <strong style={{ color: 'var(--ocean-300)' }}>Import</strong> page — no separate run step needed.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {DEAL_BREAKER_FACTORS.map((f) => {
-            const active = selectedFactors.has(f.value);
-            return (
-              <button
-                key={f.value}
-                onClick={() => toggleFactor(f.value)}
-                className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
-                style={{
-                  background: active ? 'var(--ocean-600)' : 'var(--ocean-800)',
-                  color: active ? '#fff' : 'var(--ocean-400)',
-                  border: `1px solid ${active ? 'var(--ocean-500)' : 'var(--ocean-700)'}`,
-                }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
-
-      <div className="flex items-center gap-3">
-        <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Minimum grade required:</label>
-        <select
-          value={gradeValue}
-          onChange={(e) => setGradeValue(e.target.value)}
-          className="rounded-md border px-2.5 py-1.5 text-sm outline-none"
-          style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
-        >
-          {DB_GRADE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-          Recruits with these factors set must see at least {gradeLabel} from a school.
-        </span>
-      </div>
-
-      {state === 'idle' && (
-        <PrimaryButton
-          onClick={() => setState('confirm')}
-          disabled={selectedFactors.size === 0}
-        >
-          Apply Grade Requirements
-        </PrimaryButton>
-      )}
-      {state === 'confirm' && (
-        <ConfirmRow
-          warning={`Set minimum grade to ${gradeLabel} for: ${factorLabels.join(', ')}. This modifies your save file directly and affects all unsigned recruits with these factors.`}
-          confirmLabel="Confirm — Apply"
-          onConfirm={run}
-          onCancel={() => setState('idle')}
-        />
-      )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow
-          color={result.editCount > 0 ? '#4ade80' : '#facc15'}
-          message={
-            result.warning
-              ? result.warning
-              : `Done — ${result.editCount.toLocaleString()} recruits updated · ${result.fieldWriteCount.toLocaleString()} grade fields set to ${gradeLabel}.`
-          }
-          onReset={() => { setState('idle'); setResult(null); }}
-        />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </Card>
+      <NsdModCard />
+      <TwModCard />
+      <RbModCard />
+    </div>
   );
 }
 
-// ─── NIL Reset ────────────────────────────────────────────
+// ── NSD: Assign Unsigned Players ──────────────────────────
 
-function NilResetCard() {
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<NilResetResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function NsdModCard() {
+  const [s, setS] = useState<NsdSettings>({ ...NSD_DEFAULTS, preferredByPos: { ...NSD_PREFERRED_DEFAULTS }, hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS } });
+  const [mounted, setMounted] = useState(false);
 
-  async function run() {
-    setState('running');
-    setError(null);
-    try {
-      const res = await fetch('/api/toolbox/nil-reset', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
+  useEffect(() => { setS(loadNsd()); setMounted(true); }, []);
+
+  if (!mounted) return <ModCardSkeleton />;
+
+  function update(patch: Partial<NsdSettings>) {
+    const next = { ...s, ...patch };
+    setS(next);
+    saveNsd(next);
+  }
+
+  function updatePreferred(pos: NsdPos, val: number) {
+    const next = { ...s, preferredByPos: { ...s.preferredByPos, [pos]: val } };
+    setS(next); saveNsd(next);
+  }
+
+  function updateHardMax(pos: NsdPos, val: number) {
+    const next = { ...s, hardMaxByPos: { ...s.hardMaxByPos, [pos]: val } };
+    setS(next); saveNsd(next);
   }
 
   return (
-    <Card>
-      <SectionHeader
-        title="Zero NIL Demands"
-        description={<>Sets <Field>BaseNILValue</Field> to 0 for all unsigned recruits. Run before recruiting season begins.</>}
-      />
-      {state === 'idle' && <PrimaryButton onClick={() => setState('confirm')}>Zero NIL Demands</PrimaryButton>}
-      {state === 'confirm' && (
-        <ConfirmRow
-          warning="This will modify your save file directly. Proceed only if you're in pre-season."
-          confirmLabel="Confirm — Zero All NIL Demands"
-          onConfirm={run}
-          onCancel={() => setState('idle')}
-        />
-      )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow
-          color="#4ade80"
-          message={`Done — ${result.resetCount.toLocaleString()} recruits zeroed, ${result.skippedCount.toLocaleString()} already signed skipped.`}
-          onReset={() => { setState('idle'); setResult(null); }}
-        />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </Card>
-  );
-}
-
-// ─── Program Setup (combined) ─────────────────────────────
-
-type Tab = 'grades' | 'prestige' | 'history';
-
-function ProgramSetupCard() {
-  const [tab, setTab] = useState<Tab>('grades');
-  return (
-    <Card>
-      <SectionHeader
-        title="Program Setup"
-        description={
-          <>
-            Edit team fundamentals. <Field>School Grades</Field> is the primary lever — it composes into <Field>TeamPrestige</Field>, so changes stick across sim ticks. Use History to wipe legacy inputs first if you want a clean slate.
-          </>
-        }
-      />
-      <div className="flex gap-1" style={{ borderBottom: '1px solid var(--ocean-800)' }}>
-        <TabButton active={tab === 'grades'} onClick={() => setTab('grades')}>School Grades</TabButton>
-        <TabButton active={tab === 'prestige'} onClick={() => setTab('prestige')}>Prestige (direct)</TabButton>
-        <TabButton active={tab === 'history'} onClick={() => setTab('history')}>History</TabButton>
-      </div>
-      {tab === 'grades' && <GradesPanel />}
-      {tab === 'prestige' && <PrestigePanel />}
-      {tab === 'history' && <HistoryPanel />}
-    </Card>
-  );
-}
-
-// ─── Grades Panel ─────────────────────────────────────────
-
-type StaticMode = 'fixed' | 'tighten' | 'custom' | 'preserve' | 'defaults';
-type DerivedMode = 'fixed' | 'tighten' | 'preserve' | 'defaults';
-
-function GradesPanel() {
-  const [teams, setTeams] = useState<TeamGrade[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Static group (Academic, Campus)
-  const [staticMode, setStaticMode] = useState<StaticMode>('fixed');
-  const [staticFixed, setStaticFixed] = useState('Cplus');
-  const [staticMid, setStaticMid] = useState('Cplus');
-  const [staticDev, setStaticDev] = useState(2); // ±tiers from midpoint (e.g. 2 = 5-grade band)
-  const [staticCustom, setStaticCustom] = useState<Record<string, string>>({});
-
-  // Derived group (8 fields sim recomputes)
-  const [derivedMode, setDerivedMode] = useState<DerivedMode>('tighten');
-  const [derivedFixed, setDerivedFixed] = useState('Cplus');
-  const [derivedMid, setDerivedMid] = useState('Cplus');
-  const [derivedDev, setDerivedDev] = useState(2); // ±tiers from midpoint
-
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<GradeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState('');
-
-  async function loadTeams() {
-    setLoading(true); setLoadError(null);
-    try {
-      const res = await fetch('/api/toolbox/school-grades');
-      const data = await res.json();
-      if (!res.ok) setLoadError(data.error ?? 'Failed to load');
-      else {
-        setTeams(data.teams);
-        const init: Record<string, string> = {};
-        for (const t of data.teams as TeamGrade[]) init[t.name] = t.avgStatic ?? 'Cplus';
-        setStaticCustom(init);
-      }
-    } catch (e: any) { setLoadError(e?.message ?? 'Network error'); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { loadTeams(); }, []);
-
-  const filteredTeams = useMemo(() => {
-    if (!teams) return [];
-    const f = filter.trim().toLowerCase();
-    return f ? teams.filter(t => t.name.toLowerCase().includes(f)) : teams;
-  }, [teams, filter]);
-
-  function buildStaticOp() {
-    if (staticMode === 'preserve') return null;
-    if (staticMode === 'fixed') return { op: 'fixed', grade: staticFixed };
-    if (staticMode === 'tighten') return { op: 'tighten', midGrade: staticMid, maxTierDeviation: staticDev };
-    if (staticMode === 'defaults') return { op: 'defaults' };
-    return { op: 'custom', values: staticCustom };
-  }
-  function buildDerivedOp() {
-    if (derivedMode === 'preserve') return null;
-    if (derivedMode === 'fixed') return { op: 'fixed', grade: derivedFixed };
-    if (derivedMode === 'defaults') return { op: 'defaults' };
-    return { op: 'tighten', midGrade: derivedMid, maxTierDeviation: derivedDev };
-  }
-
-  async function run() {
-    setState('running'); setError(null);
-    const payload = { static: buildStaticOp(), derived: buildDerivedOp() };
-    try {
-      const res = await fetch('/api/toolbox/school-grades', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); await loadTeams(); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
-  }
-
-  const staticSummary = staticMode === 'preserve' ? 'leave unchanged'
-    : staticMode === 'fixed' ? `set to ${GRADE_LABEL(staticFixed)}`
-    : staticMode === 'tighten' ? `clamp to ${gradeRangePreview(staticMid, staticDev)} around ${GRADE_LABEL(staticMid)}`
-    : staticMode === 'defaults' ? 'reset each school to year-zero game defaults'
-    : `apply ${Object.keys(staticCustom).length} per-school values`;
-  const derivedSummary = derivedMode === 'preserve' ? 'leave unchanged (sim will recompute anyway)'
-    : derivedMode === 'fixed' ? `set to ${GRADE_LABEL(derivedFixed)} (sim may re-derive on next tick)`
-    : derivedMode === 'defaults' ? 'reset each school to year-zero game defaults (sim may re-derive on next tick)'
-    : `clamp to ${gradeRangePreview(derivedMid, derivedDev)} around ${GRADE_LABEL(derivedMid)}`;
-
-  return (
-    <PanelBody>
-      <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
-        Writes <Field>MySchoolTrackingTable</Field> grades. Split into two groups because only the static ones truly stick.
-        <br />
-        <span style={{ color: '#003f5c' }}>Run in pre-season only</span> — same as <Field>Rebalance Rosters</Field>.
-      </p>
-
-      {/* Static group */}
-      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'var(--ocean-800)' }}>
-        <div>
-          <div className="text-sm font-semibold" style={{ color: 'var(--ocean-100)' }}>Static grades</div>
-          <div className="text-xs" style={{ color: 'var(--ocean-500)' }}>Academic Prestige · Campus Lifestyle — sim never touches these</div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <ModeChip label="Fixed" active={staticMode === 'fixed'} onClick={() => setStaticMode('fixed')} />
-          <ModeChip label="Tighten" active={staticMode === 'tighten'} onClick={() => setStaticMode('tighten')} />
-          <ModeChip label="Custom per school" active={staticMode === 'custom'} onClick={() => setStaticMode('custom')} />
-          <ModeChip label="Preserve" active={staticMode === 'preserve'} onClick={() => setStaticMode('preserve')} />
-          <ModeChip label="↺ Reset to defaults" active={staticMode === 'defaults'} onClick={() => setStaticMode('defaults')} />
-        </div>
-        {staticMode === 'fixed' && (
-          <div className="flex items-center gap-3">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Grade:</label>
-            <GradeSelect value={staticFixed} onChange={setStaticFixed} />
-          </div>
-        )}
-        {staticMode === 'tighten' && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Midpoint:</label>
-              <GradeSelect value={staticMid} onChange={setStaticMid} />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>±tiers from midpoint:</label>
-              <input type="number" min={0} max={12} value={staticDev}
-                onChange={e => setStaticDev(Math.max(0, Math.min(12, parseInt(e.target.value) || 0)))}
-                className="w-16 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-            </div>
-            <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-              Range: {gradeRangePreview(staticMid, staticDev)}
-            </span>
-          </div>
-        )}
-        {staticMode === 'custom' && (
-          <CustomTeamTable
-            filter={filter} setFilter={setFilter} loading={loading} loadError={loadError}
-            rows={filteredTeams.map(t => ({ name: t.name, rank: t.rank, current: GRADE_LABEL(t.avgStatic) }))}
-            renderInput={(name) => (
-              <GradeSelect
-                value={staticCustom[name] ?? 'Cplus'}
-                onChange={v => setStaticCustom(prev => ({ ...prev, [name]: v }))}
-              />
-            )}
-            currentHeader="Avg static grade"
+    <ModCard
+      enabled={s.enabled}
+      onToggle={(v) => update({ enabled: v })}
+      title="NSD: Assign Unsigned Players"
+      author="PocketScout Utilities"
+      snapshot="signing_day"
+      description="On National Signing Day, assigns unsigned recruits to FBS schools that need depth by position. Runs before the Signing Day import — the modified save is reimported automatically."
+      warning="Run once per NSD — running twice can create duplicate players. Game must be closed before running."
+    >
+      <Section label="Global Limits">
+        <div className="grid grid-cols-3 gap-3">
+          <NumberField
+            label="Max signings / team"
+            description="Default 35"
+            value={s.signingLimit}
+            min={1} max={35}
+            onChange={(v) => update({ signingLimit: v })}
           />
-        )}
-      </div>
-
-      {/* Derived group */}
-      <div className="rounded-md p-3 space-y-3" style={{ border: '1px solid var(--ocean-800)', background: 'var(--ocean-800)' }}>
-        <div>
-          <div className="text-sm font-semibold" style={{ color: 'var(--ocean-100)' }}>Derived grades</div>
-          <div className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-            Athletic Facilities · Brand · Championship Contender · Coach Prestige · Coach Stability · Conference · Program Tradition · Stadium Atmosphere
-            — sim recomputes each tick from historical/current inputs
-          </div>
+          <NumberField
+            label="Final roster limit"
+            description="Default 95"
+            value={s.finalRosterLimit}
+            min={1} max={99}
+            onChange={(v) => update({ finalRosterLimit: v })}
+          />
+          <NumberField
+            label="Target class size"
+            description="Default 25"
+            value={s.classTarget}
+            min={1} max={s.signingLimit}
+            onChange={(v) => update({ classTarget: v })}
+          />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <ModeChip label="Fixed" active={derivedMode === 'fixed'} onClick={() => setDerivedMode('fixed')} />
-          <ModeChip label="Tighten (based on existing)" active={derivedMode === 'tighten'} onClick={() => setDerivedMode('tighten')} />
-          <ModeChip label="Preserve as-is" active={derivedMode === 'preserve'} onClick={() => setDerivedMode('preserve')} />
-          <ModeChip label="↺ Reset to defaults" active={derivedMode === 'defaults'} onClick={() => setDerivedMode('defaults')} />
-        </div>
-        {derivedMode === 'fixed' && (
-          <div className="flex items-center gap-3">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Grade:</label>
-            <GradeSelect value={derivedFixed} onChange={setDerivedFixed} />
-          </div>
-        )}
-        {derivedMode === 'tighten' && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Midpoint:</label>
-              <GradeSelect value={derivedMid} onChange={setDerivedMid} />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>±tiers from midpoint:</label>
-              <input type="number" min={0} max={12} value={derivedDev}
-                onChange={e => setDerivedDev(Math.max(0, Math.min(12, parseInt(e.target.value) || 0)))}
-                className="w-16 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-            </div>
-            <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-              Range: {gradeRangePreview(derivedMid, derivedDev)}
-            </span>
-          </div>
-        )}
-      </div>
+      </Section>
 
-      <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-        Static: {staticSummary}. Derived: {derivedSummary}.
-      </p>
+      {/* Per-position advanced */}
+      <button
+        type="button"
+        onClick={() => update({ showAdvanced: !s.showAdvanced })}
+        className="text-xs flex items-center gap-1"
+        style={{ color: 'var(--ocean-400)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+      >
+        <span style={{ fontSize: '0.6rem' }}>{s.showAdvanced ? '▼' : '▶'}</span>
+        Per-position limits {s.showAdvanced ? '(hide)' : '(show)'}
+      </button>
 
-      {state === 'idle' && <PrimaryButton onClick={() => setState('confirm')}>Apply Grades</PrimaryButton>}
-      {state === 'confirm' && (
-        <ConfirmRow warning={`Static: ${staticSummary}. Derived: ${derivedSummary}. This modifies your save file directly.`}
-          confirmLabel="Confirm — Apply Grades" onConfirm={run} onCancel={() => setState('idle')} />
+      {s.showAdvanced && (
+        <Section label="Per-Position Limits">
+          <div className="overflow-x-auto">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Pos</th>
+                  <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Preferred</th>
+                  <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Hard Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {NSD_POSITIONS.map((pos) => (
+                  <tr key={pos} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                    <td style={{ padding: '3px 8px', color: 'var(--ocean-300)', fontWeight: 600 }}>{pos}</td>
+                    <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                      <InlineNumber
+                        value={s.preferredByPos[pos]}
+                        min={0} max={20}
+                        onChange={(v) => updatePreferred(pos, v)}
+                        defaultVal={NSD_PREFERRED_DEFAULTS[pos]}
+                      />
+                    </td>
+                    <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                      <InlineNumber
+                        value={s.hardMaxByPos[pos]}
+                        min={0} max={30}
+                        onChange={(v) => updateHardMax(pos, v)}
+                        defaultVal={NSD_HARD_MAX_DEFAULTS[pos]}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = { ...s, preferredByPos: { ...NSD_PREFERRED_DEFAULTS }, hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS } };
+              setS(next); saveNsd(next);
+            }}
+            className="text-xs mt-2"
+            style={{ color: 'var(--ocean-500)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
+            ↺ Reset to defaults
+          </button>
+        </Section>
       )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow color="#4ade80"
-          message={`Done — ${result.teamsUpdated.toLocaleString()} teams updated, ${result.fieldsUpdated.toLocaleString()} grade fields written.`}
-          onReset={() => { setState('idle'); setResult(null); }} />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </PanelBody>
+    </ModCard>
   );
 }
 
-// ─── Prestige Panel (relocated) ───────────────────────────
+// ── Preseason Transfer Wave ────────────────────────────────
 
-function PrestigePanel() {
-  const [teams, setTeams] = useState<TeamPrestige[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+function TwModCard() {
+  const [s, setS] = useState<TwSettings>(makeTwDefaults());
+  const [mounted, setMounted] = useState(false);
 
-  const [mode, setMode] = useState<'fixed' | 'tighten' | 'custom'>('fixed');
-  const [fixedValue, setFixedValue] = useState(5);
-  const [midpoint, setMidpoint] = useState(5);
-  const [maxDeviation, setMaxDeviation] = useState(2);
-  const [customValues, setCustomValues] = useState<Record<string, number>>({});
+  useEffect(() => { setS(loadTw()); setMounted(true); }, []);
 
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<PrestigeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState('');
+  if (!mounted) return <ModCardSkeleton />;
 
-  async function loadTeams() {
-    setLoading(true); setLoadError(null);
-    try {
-      const res = await fetch('/api/toolbox/prestige');
-      const data = await res.json();
-      if (!res.ok) setLoadError(data.error ?? 'Failed to load');
-      else {
-        setTeams(data.teams);
-        const init: Record<string, number> = {};
-        for (const t of data.teams as TeamPrestige[]) init[t.name] = t.prestige;
-        setCustomValues(init);
-      }
-    } catch (e: any) { setLoadError(e?.message ?? 'Network error'); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { loadTeams(); }, []);
-
-  const filteredTeams = useMemo(() => {
-    if (!teams) return [];
-    const f = filter.trim().toLowerCase();
-    return f ? teams.filter(t => t.name.toLowerCase().includes(f)) : teams;
-  }, [teams, filter]);
-
-  async function run() {
-    setState('running'); setError(null);
-    const payload = mode === 'fixed' ? { mode, value: fixedValue }
-      : mode === 'tighten' ? { mode, midpoint, maxDeviation }
-      : { mode, values: customValues };
-    try {
-      const res = await fetch('/api/toolbox/prestige', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); await loadTeams(); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
+  function update(patch: Partial<TwSettings>) {
+    const next = { ...s, ...patch };
+    setS(next);
+    saveTw(next);
   }
 
-  const summary = mode === 'fixed' ? `Set every FBS team's prestige to ${fixedValue}.`
-    : mode === 'tighten' ? `Clamp every prestige within ±${maxDeviation} of ${midpoint}.`
-    : `Apply ${Object.keys(customValues).length} custom prestige values.`;
+  function updateThreshold(key: TwCheck, field: 'min' | 'max', val: number) {
+    const next = { ...s, thresholdOverrides: { ...s.thresholdOverrides, [key]: { ...s.thresholdOverrides[key], [field]: val } } };
+    setS(next); saveTw(next);
+  }
+
+  function updateSevere(key: TwCheck, val: number) {
+    const next = { ...s, severeThresholdOverrides: { ...s.severeThresholdOverrides, [key]: val } };
+    setS(next); saveTw(next);
+  }
+
+  function resetDefaults() {
+    const next = makeTwDefaults();
+    next.enabled = s.enabled;
+    setS(next); saveTw(next);
+  }
 
   return (
-    <PanelBody>
-      <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
-        Direct edit of <Field>TeamPrestige</Field> (0–10) and recomputed <Field>PrestigeRank</Field>. Prestige gets recomputed from school grades each sim tick, so this typically doesn't stick — use School Grades for lasting changes.
-      </p>
-
-      <div className="flex gap-2 flex-wrap">
-        <ModeChip label="Fixed" active={mode === 'fixed'} onClick={() => setMode('fixed')} />
-        <ModeChip label="Tighten" active={mode === 'tighten'} onClick={() => setMode('tighten')} />
-        <ModeChip label="Custom per school" active={mode === 'custom'} onClick={() => setMode('custom')} />
-      </div>
-
-      {mode === 'fixed' && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Prestige (0–10):</label>
-          <input type="number" min={0} max={10} value={fixedValue}
-            onChange={e => setFixedValue(Math.max(0, Math.min(10, parseInt(e.target.value) || 0)))}
-            className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
+    <ModCard
+      enabled={s.enabled}
+      onToggle={(v) => update({ enabled: v })}
+      title="Preseason Transfer Wave"
+      author="Balla's Transfer Wave V1.1.0 (native)"
+      snapshot="preseason"
+      description="Generates a realistic transfer portal wave in preseason. Runs the redistribution engine natively — no external app needed. Modifies the save file directly, then reimports automatically."
+      warning="Game must be closed or at the main menu — not inside a dynasty — before running."
+    >
+      {/* Global behavior */}
+      <Section label="Wave Behavior">
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Prestige gap cap"
+            description="Max prestige gap for Tier 2 placements. Default 3."
+            value={s.prestigeGapCap}
+            min={0} max={20}
+            onChange={(v) => update({ prestigeGapCap: v })}
+          />
+          <div />
         </div>
+        <div className="flex flex-wrap gap-4 mt-2">
+          <Setting
+            id="tw-tier2"
+            label="Enable Tier 2 transfers"
+            description="Move severe-surplus players to teams at/under max when needy slots are filled."
+            checked={s.enableTier2}
+            onChange={(v) => update({ enableTier2: v })}
+          />
+          <Setting
+            id="tw-nil"
+            label="Zero out NIL after wave"
+            description="Resets BaseNILValue and CurrentNILCompensation to 0 on every moved player."
+            checked={s.zeroNil}
+            onChange={(v) => update({ zeroNil: v })}
+          />
+        </div>
+      </Section>
+
+      {/* Position min/max */}
+      <button
+        type="button"
+        onClick={() => update({ showPositions: !s.showPositions })}
+        className="text-xs flex items-center gap-1"
+        style={{ color: 'var(--ocean-400)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+      >
+        <span style={{ fontSize: '0.6rem' }}>{s.showPositions ? '▼' : '▶'}</span>
+        Position min/max thresholds {s.showPositions ? '(hide)' : '(show)'}
+      </button>
+
+      {s.showPositions && (
+        <Section label="Position Thresholds">
+          <p className="text-xs mb-2" style={{ color: 'var(--ocean-500)' }}>
+            Teams below min get Tier 1 fills. Teams above max are donors. Scheme adjustments (run/pass heavy, 3-4 defense) apply on top automatically.
+          </p>
+          <div className="overflow-x-auto">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Group</th>
+                  <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Min</th>
+                  <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TW_CHECKS.map((key) => (
+                  <tr key={key} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                    <td style={{ padding: '3px 8px', color: 'var(--ocean-300)', fontWeight: 600 }}>{TW_CHECK_LABELS[key]}</td>
+                    <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                      <InlineNumber value={s.thresholdOverrides[key].min} min={0} max={20} onChange={(v) => updateThreshold(key, 'min', v)} defaultVal={TW_MIN_DEFAULTS[key]} />
+                    </td>
+                    <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                      <InlineNumber value={s.thresholdOverrides[key].max} min={0} max={20} onChange={(v) => updateThreshold(key, 'max', v)} defaultVal={TW_MAX_DEFAULTS[key]} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
       )}
 
-      {mode === 'tighten' && (
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Midpoint:</label>
-            <input type="number" min={0} max={10} value={midpoint}
-              onChange={e => setMidpoint(Math.max(0, Math.min(10, parseInt(e.target.value) || 0)))}
-              className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm" style={{ color: 'var(--ocean-300)' }}>Max deviation ±:</label>
-            <input type="number" min={0} max={10} value={maxDeviation}
-              onChange={e => setMaxDeviation(Math.max(0, Math.min(10, parseInt(e.target.value) || 0)))}
-              className="w-20 rounded-md px-2 py-1 text-sm" style={inputStyle} />
-          </div>
-        </div>
-      )}
+      {/* Severe thresholds */}
+      {s.enableTier2 && (
+        <>
+          <button
+            type="button"
+            onClick={() => update({ showSevere: !s.showSevere })}
+            className="text-xs flex items-center gap-1"
+            style={{ color: 'var(--ocean-400)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
+            <span style={{ fontSize: '0.6rem' }}>{s.showSevere ? '▼' : '▶'}</span>
+            Tier 2 severe thresholds {s.showSevere ? '(hide)' : '(show)'}
+          </button>
 
-      {mode === 'custom' && (
-        <CustomTeamTable
-          filter={filter} setFilter={setFilter} loading={loading} loadError={loadError}
-          rows={filteredTeams.map(t => ({ name: t.name, rank: t.rank, current: String(t.prestige) }))}
-          renderInput={(name) => (
-            <input type="number" min={0} max={10}
-              value={customValues[name] ?? 0}
-              onChange={e => {
-                const v = Math.max(0, Math.min(10, parseInt(e.target.value) || 0));
-                setCustomValues(prev => ({ ...prev, [name]: v }));
-              }}
-              className="w-16 rounded px-2 py-0.5 text-sm" style={inputStyle} />
+          {s.showSevere && (
+            <Section label="Severe Thresholds (Tier 2)">
+              <p className="text-xs mb-2" style={{ color: 'var(--ocean-500)' }}>
+                How far above max a team must be before Tier 2 treats them as a forced-release donor.
+              </p>
+              <div className="overflow-x-auto">
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Group</th>
+                      <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--ocean-500)', fontWeight: 600, borderBottom: '1px solid var(--ocean-800)' }}>Threshold</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TW_CHECKS.map((key) => (
+                      <tr key={key} style={{ borderBottom: '1px solid var(--ocean-800)' }}>
+                        <td style={{ padding: '3px 8px', color: 'var(--ocean-300)', fontWeight: 600 }}>{TW_CHECK_LABELS[key]}</td>
+                        <td style={{ padding: '3px 8px', textAlign: 'center' }}>
+                          <InlineNumber value={s.severeThresholdOverrides[key]} min={0} max={10} onChange={(v) => updateSevere(key, v)} defaultVal={TW_SEVERE_DEFAULTS[key]} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
           )}
-          currentHeader="Prestige"
-        />
+        </>
       )}
 
-      <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>{summary}</p>
-
-      {state === 'idle' && <PrimaryButton onClick={() => setState('confirm')}>Apply Prestige</PrimaryButton>}
-      {state === 'confirm' && (
-        <ConfirmRow warning={`${summary} This modifies your save file directly.`}
-          confirmLabel="Confirm — Apply Prestige" onConfirm={run} onCancel={() => setState('idle')} />
-      )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow color="#4ade80"
-          message={`Done — ${result.changedCount.toLocaleString()} of ${result.totalTeams.toLocaleString()} teams updated.`}
-          onReset={() => { setState('idle'); setResult(null); }} />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </PanelBody>
+      <button type="button" onClick={resetDefaults} className="text-xs" style={{ color: 'var(--ocean-500)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+        ↺ Reset all to defaults
+      </button>
+    </ModCard>
   );
 }
 
-// ─── History Panel ────────────────────────────────────────
+// ── CFB Rebalance Setup ────────────────────────────────────
 
-function HistoryPanel() {
-  const [state, setState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<HistoryResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function RbModCard() {
+  const [enabled, setEnabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'launching' | 'launched' | 'error'>('idle');
+  const [errorMsg] = useState('');
 
-  async function run() {
-    setState('running'); setError(null);
-    try {
-      const res = await fetch('/api/toolbox/history-reset', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Request failed'); setState('error'); }
-      else { setResult(data); setState('done'); }
-    } catch (e: any) { setError(e?.message ?? 'Network error'); setState('error'); }
+  useEffect(() => {
+    try { setEnabled(JSON.parse(localStorage.getItem(LS_RB) ?? 'false')); } catch { /* ignore */ }
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return <ModCardSkeleton />;
+
+  function toggle(v: boolean) {
+    setEnabled(v);
+    localStorage.setItem(LS_RB, JSON.stringify(v));
+  }
+
+  function launch() {
+    // Rebalance is now invoked by the Import workflow, after Transfer Wave.
+    setStatus('launched');
   }
 
   return (
-    <PanelBody>
-      <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
-        Zero every field in <Field>TeamHistoricalData</Field> and <Field>CareerCoachStats</Field> for every FBS team — wins, losses, championships, bowls, recruiting classes, accolades, drafted-player counts, coach career records. Also resets all 10 <Field>ProPotentialGrade</Field> position grades to C+ so every school starts on equal footing. Removes the historical anchor so future prestige/rank/coach-prestige/pro-potential calcs start from a clean slate.
+    <ModCard
+      enabled={enabled}
+      onToggle={toggle}
+      title="CFB Rebalance Setup"
+      author="CFB Rebalance Setup 1.0.0"
+      snapshot="preseason"
+      description="Rebalances duplicate position slots (LT↔RT, LG↔RG, WLB↔SLB, etc.) in the save file. Run this after the Transfer Wave completes, before re-importing."
+      warning="Game must be closed before running. Run AFTER the Transfer Wave."
+    >
+      <p className="text-xs" style={{ color: 'var(--ocean-400)' }}>
+        Enable it here, then use Import to run it after Transfer Wave and before the save is re-imported.
       </p>
-      <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>
-        Best combined with a School Grades reset — flatten history first, then set your target grade.
-      </p>
-
-      {state === 'idle' && <PrimaryButton onClick={() => setState('confirm')}>Nuke History</PrimaryButton>}
-      {state === 'confirm' && (
-        <ConfirmRow
-          warning="Zero ALL historical fields for every FBS team. This modifies your save file directly."
-          confirmLabel="Confirm — Nuke All History"
-          onConfirm={run} onCancel={() => setState('idle')} />
-      )}
-      {state === 'running' && <RunningText />}
-      {state === 'done' && result && (
-        <ResultRow color="#4ade80"
-          message={`Done — teams: ${result.teamsZeroed.toLocaleString()} rows / ${result.fieldsZeroed.toLocaleString()} fields · coaches: ${result.coachesZeroed.toLocaleString()} rows / ${result.coachFieldsZeroed.toLocaleString()} fields · pro potential: ${result.proTeamsReset.toLocaleString()} teams / ${result.proFieldsReset.toLocaleString()} fields.`}
-          onReset={() => { setState('idle'); setResult(null); }} />
-      )}
-      {state === 'error' && <ErrorRow error={error} onBack={() => { setState('idle'); setError(null); }} />}
-    </PanelBody>
+      <div className="hidden">
+        <button
+          type="button"
+          onClick={launch}
+          disabled={status === 'launching'}
+          className="rounded px-4 py-1.5 text-sm font-semibold transition-opacity"
+          style={{
+            background: 'var(--ocean-600)', color: '#fff',
+            opacity: status === 'launching' ? 0.5 : 1,
+            cursor: status === 'launching' ? 'not-allowed' : 'pointer',
+            border: 'none',
+          }}
+        >
+          {status === 'launching' ? 'Launching…' : 'Launch CFB Rebalance'}
+        </button>
+        {status === 'launched' && (
+          <span className="text-xs" style={{ color: '#4ade80' }}>✓ Launched — close it when done, then re-import.</span>
+        )}
+        {status === 'error' && (
+          <span className="text-xs" style={{ color: '#f87171' }}>Error: {errorMsg}</span>
+        )}
+      </div>
+    </ModCard>
   );
 }
 
-// ─── Shared components ────────────────────────────────────
+// ── Shared components ──────────────────────────────────────
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--ocean-800)', border: '1px solid var(--ocean-700)', color: 'var(--ocean-200)',
-};
-
-function Card({ children }: { children: React.ReactNode }) {
+function ModCardSkeleton() {
   return (
-    <div className="rounded-xl p-6 space-y-4" style={{
-      background: 'var(--ocean-900)',
-      border: '1px solid var(--ocean-700)',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-    }}>
-      {children}
-    </div>
+    <div
+      className="rounded-xl p-5"
+      style={{ background: 'var(--ocean-900)', border: '1px solid var(--ocean-700)', height: 88 }}
+    />
   );
 }
 
-function SectionHeader({ title, description }: { title: string; description: React.ReactNode }) {
+function ModCard({
+  enabled, onToggle, title, author, snapshot, description, warning, children,
+}: {
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  title: string;
+  author: string;
+  snapshot: 'signing_day' | 'preseason';
+  description: string;
+  warning?: string;
+  children?: React.ReactNode;
+}) {
+  const snapshotLabel = snapshot === 'signing_day' ? 'Signing Day' : 'Preseason';
+  const snapshotColor = snapshot === 'signing_day' ? '#60a5fa' : '#4ade80';
+
   return (
-    <div>
-      <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--ocean-100)' }}>{title}</h2>
-      <p className="mt-1 text-sm" style={{ color: 'var(--ocean-400)' }}>{description}</p>
-    </div>
-  );
-}
-
-function Field({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: '#003f5c', fontFamily: 'inherit', fontWeight: 600 }}>{children}</span>;
-}
-
-function PanelBody({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-4 pt-3">{children}</div>;
-}
-
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="px-4 py-2 text-sm font-medium"
+    <div
+      className="rounded-xl p-5 space-y-3"
       style={{
-        color: active ? 'var(--ocean-100)' : 'var(--ocean-400)',
-        borderBottom: active ? '2px solid #003f5c' : '2px solid transparent',
-        marginBottom: '-1px',
+        background: 'var(--ocean-900)',
+        border: `1px solid var(--ocean-700)`,
+        transition: 'border-color 0.15s',
       }}
     >
-      {children}
-    </button>
-  );
-}
+      {/* Header */}
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          style={{ width: 16, height: 16, marginTop: 3, accentColor: 'var(--ocean-500)', cursor: 'pointer', flexShrink: 0 }}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ fontSize: '0.975rem', fontWeight: 700, color: 'var(--ocean-100)' }}>{title}</span>
+            <span
+              className="rounded px-1.5 py-0.5 text-xs font-semibold"
+              style={{ background: `${snapshotColor}20`, color: snapshotColor, border: `1px solid ${snapshotColor}40` }}
+            >
+              {snapshotLabel}
+            </span>
+            {enabled && (
+              <span className="rounded px-1.5 py-0.5 text-xs font-semibold"
+                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)' }}>
+                ON
+              </span>
+            )}
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--ocean-600)' }}>by {author}</p>
+        </div>
+      </label>
 
-function ModeChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-md px-3 py-1.5 text-sm font-medium"
-      style={{ background: active ? 'var(--ocean-600)' : 'var(--ocean-800)', color: active ? '#fff' : 'var(--ocean-400)', border: '1px solid var(--ocean-700)' }}
-    >
-      {label}
-    </button>
-  );
-}
+      {/* Description */}
+      <p className="text-sm leading-relaxed pl-7" style={{ color: 'var(--ocean-400)' }}>{description}</p>
 
-function PrimaryButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className="rounded-md px-4 py-2 text-sm font-medium"
-      style={{ background: 'var(--ocean-600)', color: '#fff' }}>
-      {children}
-    </button>
-  );
-}
-
-function ConfirmRow({ warning, confirmLabel, onConfirm, onCancel }: {
-  warning: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium" style={{ color: '#003f5c' }}>{warning}</p>
-      <div className="flex gap-3">
-        <button onClick={onConfirm} className="rounded-md px-4 py-2 text-sm font-medium" style={{ background: '#dc2626', color: '#fff' }}>
-          {confirmLabel}
-        </button>
-        <button onClick={onCancel} className="rounded-md px-4 py-2 text-sm font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
-          Cancel
-        </button>
-      </div>
+      {/* Settings + warning (only when enabled) */}
+      {enabled && children && (
+        <div className="pl-7 pt-3 space-y-4 border-t" style={{ borderColor: 'var(--ocean-800)' }}>
+          {warning && (
+            <p className="text-xs" style={{ color: '#fbbf24' }}>⚠ {warning}</p>
+          )}
+          {children}
+        </div>
+      )}
     </div>
   );
 }
 
-function RunningText() {
-  return <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>Processing save file…</p>;
-}
-
-function ResultRow({ color, message, onReset }: { color: string; message: string; onReset: () => void }) {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium" style={{ color }}>{message}</p>
-      <button onClick={onReset} className="rounded-md px-3 py-1.5 text-sm" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
-        Reset
-      </button>
+      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-600)' }}>{label}</p>
+      {children}
     </div>
   );
 }
 
-function ErrorRow({ error, onBack }: { error: string | null; onBack: () => void }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium" style={{ color: '#f87171' }}>Error: {error}</p>
-      <button onClick={onBack} className="rounded-md px-3 py-1.5 text-sm" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>
-        Back
-      </button>
-    </div>
-  );
-}
-
-function GradeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="rounded-md px-2 py-0.5 text-sm" style={inputStyle}>
-      {GRADE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-}
-
-function CustomTeamTable({
-  filter, setFilter, loading, loadError, rows, renderInput, currentHeader,
+function Setting({
+  id, label, description, checked, onChange,
 }: {
-  filter: string; setFilter: (v: string) => void;
-  loading: boolean; loadError: string | null;
-  rows: { name: string; rank: number; current: string }[];
-  renderInput: (name: string) => React.ReactNode;
-  currentHeader: string;
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <input type="text" placeholder="Filter teams…"
-          value={filter} onChange={e => setFilter(e.target.value)}
-          className="w-64 rounded-md px-3 py-1.5 text-sm" style={inputStyle} />
-        {loading && <span className="text-xs" style={{ color: 'var(--ocean-500)' }}>Loading…</span>}
-        {loadError && <span className="text-xs" style={{ color: '#f87171' }}>{loadError}</span>}
+    <label htmlFor={id} className="flex items-start gap-2.5 cursor-pointer">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ width: 14, height: 14, marginTop: 2, accentColor: 'var(--ocean-500)', cursor: 'pointer', flexShrink: 0 }}
+      />
+      <div>
+        <div className="text-xs font-medium" style={{ color: 'var(--ocean-200)' }}>{label}</div>
+        <div className="text-xs mt-0.5" style={{ color: 'var(--ocean-500)' }}>{description}</div>
       </div>
-      <div className="max-h-96 overflow-y-auto rounded-md" style={{ border: '1px solid var(--ocean-800)' }}>
-        <table className="w-full text-sm">
-          <thead className="sticky top-0" style={{ background: 'var(--ocean-950)' }}>
-            <tr>
-              <th className="px-3 py-2 text-left" style={{ color: 'var(--ocean-400)' }}>Rank</th>
-              <th className="px-3 py-2 text-left" style={{ color: 'var(--ocean-400)' }}>Team</th>
-              <th className="px-3 py-2 text-left" style={{ color: 'var(--ocean-400)' }}>{currentHeader}</th>
-              <th className="px-3 py-2 text-left" style={{ color: 'var(--ocean-400)' }}>New</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.name} style={{ borderTop: '1px solid var(--ocean-800)' }}>
-                <td className="px-3 py-1.5" style={{ color: 'var(--ocean-500)' }}>{r.rank}</td>
-                <td className="px-3 py-1.5" style={{ color: 'var(--ocean-100)' }}>{r.name}</td>
-                <td className="px-3 py-1.5" style={{ color: 'var(--ocean-400)' }}>{r.current}</td>
-                <td className="px-3 py-1.5">{renderInput(r.name)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    </label>
+  );
+}
+
+function NumberField({
+  label, description, value, min, max, onChange,
+}: {
+  label: string;
+  description: string;
+  value: number | undefined;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  const safeValue = value ?? min;
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--ocean-300)' }}>{label}</label>
+      <input
+        type="number"
+        value={safeValue}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const n = parseInt(e.target.value, 10);
+          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+        }}
+        className="w-full rounded border px-2 py-1.5 text-sm outline-none tabular-nums"
+        style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
+      />
+      <p className="text-xs mt-0.5" style={{ color: 'var(--ocean-600)' }}>{description}</p>
     </div>
+  );
+}
+
+function InlineNumber({
+  value, min, max, onChange, defaultVal,
+}: {
+  value: number | undefined; min: number; max: number;
+  onChange: (v: number) => void;
+  defaultVal: number;
+}) {
+  const safeValue = value ?? defaultVal;
+  const isChanged = safeValue !== defaultVal;
+  return (
+    <input
+      type="number"
+      value={safeValue}
+      min={min}
+      max={max}
+      onChange={(e) => {
+        const n = parseInt(e.target.value, 10);
+        if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+      }}
+      className="rounded border text-center tabular-nums outline-none"
+      style={{
+        width: 48, padding: '2px 4px', fontSize: '0.72rem',
+        background: 'var(--ocean-800)',
+        borderColor: isChanged ? 'var(--ocean-600)' : 'var(--ocean-700)',
+        color: isChanged ? 'var(--ocean-100)' : 'var(--ocean-300)',
+      }}
+    />
   );
 }

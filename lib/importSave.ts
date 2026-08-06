@@ -102,7 +102,7 @@ type PosRecruitStar = { total: number; fiveStars: number; fourStars: number; thr
 type PipelineRecruitStar = { fiveStars: number; fourStars: number; threeStars: number; twoStars: number; oneStars: number; total: number };
 type PipelinePosStar = PipelineRecruitStar; // same shape, pipeline+posGroup keyed
 
-type IndividualRecruit = { firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string };
+type IndividualRecruit = { firstName: string; lastName: string; position: string; posGroup: string; starRating: string; overall: number | null; recruitType: string; previousTeam: string | null };
 
 type RecruitAnalysis = {
   byTeam: Map<string, RecruitBreakdown>;
@@ -111,6 +111,7 @@ type RecruitAnalysis = {
   // pipeline+posGroup → star counts per team (key = `${pipeline}|${posGroup}`)
   pipelinePosRecruitsByTeam: Map<string, Map<string, PipelinePosStar>>;
   signedRecruitsByTeam: Map<string, IndividualRecruit[]>;
+  unsignedIndividuals: IndividualRecruit[];
   unsigned: RecruitBreakdown;
   unsignedHSStars: RecruitBreakdown;
   unsignedXferStars: RecruitBreakdown;
@@ -128,14 +129,14 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline', 'Position', 'FirstName', 'LastName', 'OverallRating']);
 
   // Build player-row → Recruit record map for Class lookups
-  const playerToRecruit = new Map<number, { isTransfer: boolean }>();
+  const playerToRecruit = new Map<number, { isTransfer: boolean; cls: string }>();
   for (const rec of recruitTable.records) {
     if (rec.isEmpty) continue;
     const ref = parseRef(rec.Player);
     if (!ref) continue;
     const cls: string = rec.Class ?? '';
     // JUCO counts as HS bucket (matches game's "High School / JUCO" grouping)
-    playerToRecruit.set(ref.row, { isTransfer: !cls.startsWith('HighSchool') && !cls.startsWith('JuniorCollege') });
+    playerToRecruit.set(ref.row, { isTransfer: !cls.startsWith('HighSchool') && !cls.startsWith('JuniorCollege'), cls });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -185,6 +186,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         const posGroup = POS_GROUP_MAP[rawPos];
         const recruitInfo = playerToRecruit.get(ref.row);
         const isTransfer = recruitInfo?.isTransfer ?? false;
+        const recruitCls = recruitInfo?.cls ?? '';
 
         if (posGroup) {
           if (!posMap.has(posGroup)) {
@@ -202,6 +204,11 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
 
         // Collect individual recruit record
         if (!signedRecruitsByTeam.has(teamName)) signedRecruitsByTeam.set(teamName, []);
+        const prevIdx = prec.PrevTeamIndex as number;
+        const prevTeamRec = (isTransfer && prevIdx != null && prevIdx !== 255 && prevIdx >= 0)
+          ? teamTable.records[prevIdx] : null;
+        const previousTeam = (prevTeamRec && !prevTeamRec.isEmpty && prevTeamRec.DisplayName)
+          ? (prevTeamRec.DisplayName as string) : null;
         signedRecruitsByTeam.get(teamName)!.push({
           firstName: (prec.FirstName as string) ?? '',
           lastName: (prec.LastName as string) ?? '',
@@ -210,6 +217,8 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
           starRating,
           overall: typeof prec.OverallRating === 'number' ? prec.OverallRating : null,
           recruitType: isTransfer ? 'Transfer' : 'HS',
+          previousTeam,
+          classYear: recruitCls || null,
         });
         if (isTransfer) {
           breakdown.transfer++;
@@ -276,11 +285,13 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   const unsigned = emptyBreakdown();
   const unsignedHSStars = emptyBreakdown();
   const unsignedXferStars = emptyBreakdown();
+  const unsignedIndividuals: IndividualRecruit[] = [];
   // Prospect pool = ALL HS recruits this cycle (signed or not), keyed by pipeline|posGroup
   const prospectPool = new Map<string, PipelinePosStar>();
   for (const rec of recruitTable.records) {
     if (rec.isEmpty) continue;
-    const isSigned = rec.RecruitStage === 'Signed';
+    // On Signing Day, committed/hard-committed players have effectively signed (e.g. mod force-commits)
+    const isSigned = rec.RecruitStage === 'Signed' || rec.RecruitStage === 'Committed' || rec.RecruitStage === 'HardCommitted';
     const ref = parseRef(rec.Player);
     if (!ref) continue;
     const prec = playerTable.records[ref.row];
@@ -300,6 +311,24 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         if (isTransfer) (unsignedXferStars[starField] as number)++;
         else (unsignedHSStars[starField] as number)++;
       }
+      const rawPos = prec.Position as string;
+      const prevTeamIdx = prec.PrevTeamIndex as number;
+      const prevTeamRec = (isTransfer && prevTeamIdx != null && prevTeamIdx !== 255 && prevTeamIdx >= 0)
+        ? teamTable.records[prevTeamIdx]
+        : null;
+      const previousTeam = (prevTeamRec && !prevTeamRec.isEmpty && prevTeamRec.DisplayName)
+        ? (prevTeamRec.DisplayName as string)
+        : null;
+      unsignedIndividuals.push({
+        firstName: (prec.FirstName as string) ?? '',
+        lastName: (prec.LastName as string) ?? '',
+        position: rawPos,
+        posGroup: POS_GROUP_MAP[rawPos] ?? rawPos,
+        starRating: starRatingU,
+        overall: typeof prec.OverallRating === 'number' ? prec.OverallRating : null,
+        recruitType: isTransfer ? 'Transfer' : 'HS',
+        previousTeam,
+      });
     }
 
     // Build prospect pool: ALL HS/JUCO this cycle (signed + unsigned), keyed by pipeline|posGroup
@@ -321,7 +350,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     }
   }
 
-  return { byTeam, posRecruitsByTeam, pipelineRecruitsByTeam, pipelinePosRecruitsByTeam, signedRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx, prospectPool };
+  return { byTeam, posRecruitsByTeam, pipelineRecruitsByTeam, pipelinePosRecruitsByTeam, signedRecruitsByTeam, unsignedIndividuals, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx, prospectPool };
 }
 
 const GRADE_VALUES: Record<string, number> = {
@@ -389,6 +418,7 @@ export type ImportResult = {
   snapshot: SnapshotType;
   teamsImported: number;
   teamsSkipped: string[];
+  unsignedWritten: number;
 };
 
 
@@ -487,7 +517,7 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
   } catch { /* pipeline table absent — skip */ }
 
   const confMap = await resolveConferences(franchise, teamTable);
-  const { byTeam: recruitData, posRecruitsByTeam, pipelineRecruitsByTeam, pipelinePosRecruitsByTeam, signedRecruitsByTeam, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx, prospectPool } = await analyzeRecruits(franchise, teamTable);
+  const { byTeam: recruitData, posRecruitsByTeam, pipelineRecruitsByTeam, pipelinePosRecruitsByTeam, signedRecruitsByTeam, unsignedIndividuals, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx, prospectPool } = await analyzeRecruits(franchise, teamTable);
 
   // Extract roster player OVR ratings per team for the distribution table, plus individual player records
   type RatingBuckets = { r95_99: number; r90_94: number; r85_89: number; r80_84: number; r75_79: number; r70_74: number; rSub70: number; total: number };
@@ -764,5 +794,25 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
     });
   }
 
-  return { seasonYear: year, snapshot, teamsImported, teamsSkipped };
+  // Write unsigned recruit individuals — delete and recreate for clean re-import
+  // Use raw SQL to avoid Prisma client cache issues with newer models
+  console.log(`[importSave] unsignedIndividuals collected: ${unsignedIndividuals.length}, unsigned.total: ${unsigned.total}`);
+  await prisma.$executeRawUnsafe(`DELETE FROM "UnsignedRecruit" WHERE "seasonId" = ?`, season.id);
+  let unsignedWritten = 0;
+  if (unsignedIndividuals.length > 0) {
+    try {
+      for (const r of unsignedIndividuals) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "UnsignedRecruit" ("id","seasonId","firstName","lastName","position","posGroup","starRating","overall","recruitType","previousTeam") VALUES (lower(hex(randomblob(16))),?,?,?,?,?,?,?,?,?)`,
+          season.id, r.firstName, r.lastName, r.position, r.posGroup, r.starRating, r.overall ?? null, r.recruitType, r.previousTeam ?? null
+        );
+      }
+      unsignedWritten = unsignedIndividuals.length;
+      console.log(`[importSave] unsignedRecruit raw INSERT wrote ${unsignedWritten} rows`);
+    } catch (err) {
+      console.error('[importSave] unsignedRecruit raw INSERT failed:', err);
+    }
+  }
+
+  return { seasonYear: year, snapshot, teamsImported, teamsSkipped, unsignedWritten };
 }

@@ -64,10 +64,19 @@ jobs:
           body: |
             ## What's New
 
-            ### Players — Season Filter per Tab
-            - **Roster Ratings** now shows preseason snapshots only (ratings are captured before signing day)
-            - **Recruiting** now shows signing day snapshots only (commit data only exists at signing day)
-            - **Positional Depth** and **Access to Recruits** show all snapshots
-            - Season dropdown auto-switches to the most recent valid season when you change tabs
+            ### Embedded dynasty tools
+            - **Preseason Transfer Wave**, **NSD Assign**, and **CFB Rebalance** now run directly inside Ghost City RLT
+            - Transfer Wave output is now a sortable player table, with raw diagnostics available on demand
+            - Rebalance runs after Transfer Wave, creates a safe backup in `RLT Backups`, then the save is re-imported
+
+            ### Players and recruiting
+            - Recruiting filters now combine correctly, including star rating plus recruit type (for example, 5-star transfers)
+            - Added dedicated Transfers and Unsigned pages, plus new Access to Recruits and positional views
+            - Added National Champion and Conference Champion badges
+            - Improved recruit-composition chart sizing and player table controls
+
+            ### Toolbox and reliability
+            - Added the Toolbox for dynasty utilities and mod settings
+            - Improved import flow, mod logs, and hydration stability
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
