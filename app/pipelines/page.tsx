@@ -128,7 +128,7 @@ export default function PipelinesPage() {
   const [teamSortAsc, setTeamSortAsc] = useState(false);
 
   useEffect(() => {
-    fetch('/api/seasons?snapshot=signing_day').then(r => r.json()).then((s: Season[]) => {
+    fetch('/api/seasons').then(r => r.json()).then((s: Season[]) => {
       setSeasons(s);
       if (s.length) setSelectedSeasonId(s[0].id);
     });
@@ -148,6 +148,11 @@ export default function PipelinesPage() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [selectedSeasonId]);
+
+  const selectedSnapshot = seasons.find((s) => s.id === selectedSeasonId)?.snapshot;
+  useEffect(() => {
+    if (selectedSnapshot === 'preseason' && dataMode === 'recruits') setDataMode('influence');
+  }, [selectedSnapshot, dataMode]);
 
   const teamNames = useMemo(() => {
     const names = [...new Set(rows.map(r => r.team.name))].sort();
@@ -366,7 +371,7 @@ export default function PipelinesPage() {
 
         {/* Data mode toggle */}
         <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--ocean-700)' }}>
-          {([['influence', 'Pipeline Influence'], ['recruits', 'HS Recruits']] as [DataMode, string][]).map(([m, label]) => (
+          {([['influence', 'Pipeline Influence'], ['recruits', 'HS Recruits']] as [DataMode, string][]).filter(([m]) => selectedSnapshot !== 'preseason' || m === 'influence').map(([m, label]) => (
             <button key={m} onClick={() => setDataMode(m)} style={toggleBtnStyle(dataMode === m)}>
               {label}
             </button>

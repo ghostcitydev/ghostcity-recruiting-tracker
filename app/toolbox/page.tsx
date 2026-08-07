@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 const LS_NSD = 'gc_mod_nsd';
 const LS_TW  = 'gc_mod_tw';
 const LS_RB  = 'gc_mod_rb';
+const LS_PIPELINE = 'gc_mod_pipeline';
 
 // NSD position keys (PocketScout)
 const NSD_POSITIONS = ['QB','HB','FB','WR','TE','LT','LG','C','RG','RT','EDGE','DT','LB','CB','S','K','P'] as const;
@@ -66,6 +67,14 @@ type TwSettings = {
   showPositions: boolean;
   showSevere: boolean;
 };
+type PipelineSettings = {
+  enabled: boolean; preset: 'rosterDriven'|'blueChipFocused'|'coachLegacy'|'grounded'|'custom';
+  wRoster: number; wStar: number; wCoach: number; wGeo: number; decay: number; geoRadius: number; maxPipelines: number;
+  coachRampMode: 'ramp'|'full'; coachRampSeasons: number; coachInclude: { HeadCoach: boolean; OffensiveCoordinator: boolean; DefensiveCoordinator: boolean };
+  academyMode: boolean; academyTargetCount: number; academyUniform: boolean; academyUniformTier: string; academyExempt: boolean;
+  showAdvanced: boolean;
+};
+const PIPELINE_DEFAULTS: PipelineSettings = { enabled:false, preset:'rosterDriven', wRoster:.35,wStar:.35,wCoach:.2,wGeo:.1,decay:.75,geoRadius:300,maxPipelines:10,coachRampMode:'ramp',coachRampSeasons:3,coachInclude:{HeadCoach:true,OffensiveCoordinator:true,DefensiveCoordinator:true},academyMode:false,academyTargetCount:42,academyUniform:true,academyUniformTier:'Respected',academyExempt:true,showAdvanced:false };
 
 const NSD_DEFAULTS: NsdSettings = {
   enabled: false,
@@ -127,6 +136,8 @@ function loadTw(): TwSettings {
 
 function saveNsd(s: NsdSettings) { localStorage.setItem(LS_NSD, JSON.stringify(s)); }
 function saveTw(s: TwSettings)   { localStorage.setItem(LS_TW,  JSON.stringify(s)); }
+function loadPipeline(): PipelineSettings { try { const s=JSON.parse(localStorage.getItem(LS_PIPELINE) ?? '{}'); return { ...PIPELINE_DEFAULTS, ...s, coachInclude:{...PIPELINE_DEFAULTS.coachInclude,...(s.coachInclude??{})} }; } catch { return PIPELINE_DEFAULTS; } }
+function savePipeline(s: PipelineSettings) { localStorage.setItem(LS_PIPELINE, JSON.stringify(s)); }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -143,6 +154,7 @@ export default function ToolboxPage() {
       <NsdModCard />
       <TwModCard />
       <RbModCard />
+      <PipelineModCard />
     </div>
   );
 }
@@ -675,4 +687,33 @@ function InlineNumber({
       }}
     />
   );
+}
+
+function PipelineModCard() {
+  const [s, setS] = useState<PipelineSettings>(PIPELINE_DEFAULTS);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setS(loadPipeline()); setMounted(true); }, []);
+  if (!mounted) return <ModCardSkeleton />;
+  const update = (patch: Partial<PipelineSettings>) => { const next={...s,...patch}; setS(next); savePipeline(next); };
+  const preset = (name: PipelineSettings['preset']) => {
+    const values = name === 'rosterDriven' ? [.35,.35,.2,.1] : name === 'blueChipFocused' ? [.2,.55,.15,.1] : name === 'coachLegacy' ? [.2,.25,.45,.1] : [.3,.25,.1,.35];
+    update({ preset:name, wRoster:values[0], wStar:values[1], wCoach:values[2], wGeo:values[3] });
+  };
+  const weight = (key: 'wRoster'|'wStar'|'wCoach'|'wGeo', value: number) => update({ [key]: value, preset:'custom' } as Partial<PipelineSettings>);
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Dynamic Recruiting Pipelines" author="Dynamic Recruiting Pipeline Tool v1.1.0" snapshot="preseason" description="Recomputes recruiting pipelines from roster makeup, star quality, coaches, geography, and prior pipelines. Runs after Transfer Wave and CFB Rebalance, then imports the updated pipeline data." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh Pipeline Backup is created before changes.">
+    <Section label="Preset & Core Settings">
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="block text-xs font-medium mb-1" style={{color:'var(--ocean-300)'}}>Preset</label><select value={s.preset} onChange={e => preset(e.target.value as PipelineSettings['preset'])} className="w-full rounded border px-2 py-1.5 text-sm" style={{background:'var(--ocean-800)',borderColor:'var(--ocean-700)',color:'var(--ocean-100)'}}><option value="rosterDriven">Roster-driven</option><option value="blueChipFocused">Blue-chip focused</option><option value="coachLegacy">Coach-legacy</option><option value="grounded">Grounded</option><option value="custom">Custom</option></select></div>
+        <NumberField label="Max pipelines" description="Regular-team ceiling (1–10)" value={s.maxPipelines} min={1} max={10} onChange={v=>update({maxPipelines:v})} />
+      </div>
+      <div className="grid grid-cols-4 gap-2 mt-3">{([['wRoster','Roster'],['wStar','Star'],['wCoach','Coach'],['wGeo','Geography']] as const).map(([key,label])=><div key={key}><label className="block text-xs mb-1" style={{color:'var(--ocean-400)'}}>{label}</label><input type="number" step="0.05" min="0" max="1" value={s[key]} onChange={e=>weight(key,Number(e.target.value))} className="w-full rounded border px-2 py-1 text-sm" style={{background:'var(--ocean-800)',borderColor:'var(--ocean-700)',color:'var(--ocean-100)'}} /></div>)}</div>
+      <p className="text-xs mt-2" style={{color:'var(--ocean-500)'}}>Weights total {(s.wRoster+s.wStar+s.wCoach+s.wGeo).toFixed(2)} (recommended: 1.00).</p>
+    </Section>
+    <button type="button" onClick={()=>update({showAdvanced:!s.showAdvanced})} className="text-xs underline" style={{color:'var(--ocean-400)'}}>{s.showAdvanced ? 'Hide advanced settings' : 'Show advanced settings'}</button>
+    {s.showAdvanced && <Section label="Advanced">
+      <div className="grid grid-cols-3 gap-3"><NumberField label="Decay" description="Prior score retained (%)" value={Math.round(s.decay*100)} min={0} max={100} onChange={v=>update({decay:v/100})}/><NumberField label="Geography radius" description="Miles" value={s.geoRadius} min={50} max={1500} onChange={v=>update({geoRadius:v})}/><NumberField label="Coach ramp seasons" description="For gradual influence" value={s.coachRampSeasons} min={0} max={10} onChange={v=>update({coachRampSeasons:v})}/></div>
+      <div className="mt-3 grid grid-cols-2 gap-3"><Setting id="pipe-ramp" label="Ramp coach influence" description="New coaches build influence gradually" checked={s.coachRampMode==='ramp'} onChange={v=>update({coachRampMode:v?'ramp':'full'})}/>{(['HeadCoach','OffensiveCoordinator','DefensiveCoordinator'] as const).map(k=><Setting key={k} id={`pipe-${k}`} label={k.replace(/([A-Z])/g,' $1').trim()} description="Include this staff role" checked={s.coachInclude[k]} onChange={v=>update({coachInclude:{...s.coachInclude,[k]:v}})}/>)}</div>
+      <div className="mt-4 border-t pt-3" style={{borderColor:'var(--ocean-700)'}}><Setting id="pipe-academy" label="Academy mode" description="Optional wide national footprint for Army, Navy, and Air Force" checked={s.academyMode} onChange={v=>update({academyMode:v})}/>{s.academyMode && <div className="grid grid-cols-3 gap-3 mt-3"><NumberField label="Academy slots" description="Target footprint" value={s.academyTargetCount} min={1} max={42} onChange={v=>update({academyTargetCount:v})}/><div><label className="block text-xs mb-1" style={{color:'var(--ocean-400)'}}>Uniform tier</label><select value={s.academyUniformTier} onChange={e=>update({academyUniformTier:e.target.value})} className="w-full rounded border px-2 py-1.5 text-sm" style={{background:'var(--ocean-800)',borderColor:'var(--ocean-700)',color:'var(--ocean-100)'}}>{['NicheInterest','Respected','Popular','HouseholdName','CulturalPillar'].map(x=><option key={x}>{x}</option>)}</select></div><div className="space-y-2"><Setting id="pipe-uniform" label="Uniform tier" description="Use selected tier" checked={s.academyUniform} onChange={v=>update({academyUniform:v})}/><Setting id="pipe-exempt" label="Set once" description="Leave setup unchanged later" checked={s.academyExempt} onChange={v=>update({academyExempt:v})}/></div></div>}</div>
+    </Section>}
+  </ModCard>;
 }

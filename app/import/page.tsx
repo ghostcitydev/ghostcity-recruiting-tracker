@@ -21,6 +21,7 @@ type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: n
 type TwCheckOverride = { min: number; max: number };
 type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; zeroNil?: boolean };
 type RebalanceSettings = { enabled: boolean };
+type PipelineSettings = { enabled: boolean; [key: string]: unknown };
 
 function readNsd(): NsdSettings {
   try {
@@ -34,6 +35,10 @@ function readTw(): TwSettings {
 }
 function readRebalance(): RebalanceSettings {
   try { return { enabled: Boolean(JSON.parse(localStorage.getItem('gc_mod_rb') ?? 'false')) }; }
+  catch { return { enabled: false }; }
+}
+function readPipeline(): PipelineSettings {
+  try { return JSON.parse(localStorage.getItem('gc_mod_pipeline') ?? '{}'); }
   catch { return { enabled: false }; }
 }
 
@@ -59,6 +64,7 @@ export default function ImportPage() {
   const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 });
   const [tw, setTw] = useState<TwSettings>({ enabled: false });
   const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
+  const [pipeline, setPipeline] = useState<PipelineSettings>({ enabled: false });
   const [modsMounted, setModsMounted] = useState(false);
 
   // Import flow
@@ -66,7 +72,7 @@ export default function ImportPage() {
   const [flow, setFlow] = useState<FlowState>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
-  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance'; data: Record<string, unknown> }[]>([]);
+  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline'; data: Record<string, unknown> }[]>([]);
 
   const router = useRouter();
 
@@ -97,6 +103,7 @@ export default function ImportPage() {
     setNsd(readNsd());
     setTw(readTw());
     setRebalance(readRebalance());
+    setPipeline(readPipeline());
     setModsMounted(true);
   }, []);
 
@@ -147,6 +154,7 @@ export default function ImportPage() {
     const nsdActive = nsd.enabled && snapshot === 'signing_day';
     const twActive  = tw.enabled  && snapshot === 'preseason';
     const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
+    const pipelineActive = pipeline.enabled && snapshot === 'preseason';
 
     try {
       // Transfer Wave: run natively, reimport automatically
@@ -179,6 +187,16 @@ export default function ImportPage() {
         const rebalanceData = await rebalanceRes.json();
         if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
         setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
+      }
+
+      // Pipeline recalculation is the final preseason modification so the
+      // following import reads the finished Transfer Wave + Rebalance state.
+      if (pipelineActive) {
+        setFlow('running_mod');
+        const pipelineRes = await fetch('/api/mods/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: pipeline }) });
+        const pipelineData = await pipelineRes.json();
+        if (!pipelineRes.ok) throw new Error(pipelineData.error ?? 'Pipeline Tool failed');
+        setModLogs((logs) => [...logs, { type: 'pipeline', data: pipelineData.result ?? {} }]);
       }
 
       // NSD mod: run automatically
@@ -222,7 +240,8 @@ export default function ImportPage() {
   const nsdActive = modsMounted && nsd.enabled && snapshot === 'signing_day';
   const twActive  = modsMounted && tw.enabled  && snapshot === 'preseason';
   const rebalanceActive = modsMounted && rebalance.enabled && snapshot === 'preseason';
-  const anyModActive = nsdActive || twActive || rebalanceActive;
+  const pipelineActive = modsMounted && pipeline.enabled && snapshot === 'preseason';
+  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive;
 
   const isIdle = flow === 'idle';
 
@@ -261,6 +280,13 @@ export default function ImportPage() {
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>CFB Rebalance</strong>
               <span style={{ color: 'var(--ocean-400)' }}> — runs after Transfer Wave and before import. A backup is created beside the save first.</span>
+            </p>
+          )}
+          {pipelineActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>Dynamic Recruiting Pipelines</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Rebalance, then the import refreshes Pipelines.</span>
             </p>
           )}
         </div>
@@ -356,7 +382,13 @@ export default function ImportPage() {
             className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ background: 'var(--ocean-600)' }}
           >
-            {rebalanceActive && twActive
+            {pipelineActive && twActive && rebalanceActive
+              ? 'Run Transfer Wave + Rebalance + Pipelines + Import'
+              : pipelineActive && rebalanceActive
+              ? 'Run Rebalance + Pipelines + Import'
+              : pipelineActive
+              ? 'Run Pipeline Tool + Import'
+              : rebalanceActive && twActive
               ? 'Run Transfer Wave + Rebalance + Import'
               : rebalanceActive
               ? 'Run CFB Rebalance + Import'
@@ -493,8 +525,15 @@ export default function ImportPage() {
 
 // ── Mod log panel ──────────────────────────────────────────
 
-function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance'; data: Record<string, unknown> } }) {
+function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline'; data: Record<string, unknown> } }) {
   const d = log.data;
+
+  if (log.type === 'pipeline') return (
+    <div className="rounded-lg border px-4 py-3 text-xs space-y-1" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+      <p className="font-semibold" style={{ color: 'var(--ocean-100)' }}>DYNAMIC RECRUITING PIPELINES</p>
+      <p style={{ color: 'var(--ocean-300)' }}>{Number(d.teamsUpdated ?? 0)} teams recomputed{Number(d.academyTeams ?? 0) ? ` · ${Number(d.academyTeams)} academy team(s)` : ''}</p>
+    </div>
+  );
 
   if (log.type === 'rebalance') {
     const groups = Array.isArray(d.groups) ? d.groups as { label: string; moves: number; unresolved: string[] }[] : [];
