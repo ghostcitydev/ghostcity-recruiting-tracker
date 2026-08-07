@@ -267,16 +267,16 @@ function TwMovesTable({ moves }: { moves: TwMove[] }) {
   );
 }
 
-function TwLogView() {
+function TwLogView({ seasonId }: { seasonId: string }) {
   const [entry, setEntry] = useState<TwLogEntry | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/mods/tw-log')
+    fetch(`/api/mods/tw-log?seasonId=${encodeURIComponent(seasonId)}`)
       .then((r) => r.json())
       .then((d) => { setEntry(d.entry ?? null); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [seasonId]);
 
   if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--ocean-500)' }}>Loading Transfer Wave log…</div>;
 
@@ -329,9 +329,10 @@ function TwLogView() {
   );
 }
 
-function TransfersView({ transfers, snapshot, starFilter, setStarFilter, sort, setSort }: {
+function TransfersView({ transfers, snapshot, seasonId, starFilter, setStarFilter, sort, setSort }: {
   transfers: TransferRow[];
   snapshot: string;
+  seasonId: string;
   starFilter: string;
   setStarFilter: (v: string) => void;
   sort: { key: TransferSortKey; dir: 'asc' | 'desc' };
@@ -341,7 +342,7 @@ function TransfersView({ transfers, snapshot, starFilter, setStarFilter, sort, s
 
   // Preseason: show Transfer Wave log instead of signed-recruit table
   if (snapshot === 'preseason') {
-    return <TwLogView />;
+    return <TwLogView seasonId={seasonId} />;
   }
 
   const filtered = transfers
@@ -1061,6 +1062,7 @@ export default function PlayersPage() {
         <TransfersView
           transfers={transfers}
           snapshot={seasons.find((s) => s.id === seasonId)?.snapshot ?? 'signing_day'}
+          seasonId={seasonId}
           starFilter={transferStarFilter}
           setStarFilter={setTransferStarFilter}
           sort={transferSort}

@@ -156,6 +156,11 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
   const pipelineRecruitsByTeam = new Map<string, Map<string, PipelineRecruitStar>>();
   const pipelinePosRecruitsByTeam = new Map<string, Map<string, PipelinePosStar>>();
   const signedRecruitsByTeam = new Map<string, IndividualRecruit[]>();
+  const teamByIndex = new Map<number, any>(); // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (const teamRec of teamTable.records) {
+    const teamIndex = Number(teamRec.TeamIndex);
+    if (!teamRec.isEmpty && Number.isInteger(teamIndex)) teamByIndex.set(teamIndex, teamRec);
+  }
   for (const teamRec of teamTable.records) {
     if (teamRec.isEmpty || !teamRec.DisplayName) continue;
     const teamName: string = teamRec.DisplayName;
@@ -206,7 +211,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         if (!signedRecruitsByTeam.has(teamName)) signedRecruitsByTeam.set(teamName, []);
         const prevIdx = prec.PrevTeamIndex as number;
         const prevTeamRec = (isTransfer && prevIdx != null && prevIdx !== 255 && prevIdx >= 0)
-          ? teamTable.records[prevIdx] : null;
+          ? teamByIndex.get(prevIdx) : null;
         const previousTeam = (prevTeamRec && !prevTeamRec.isEmpty && prevTeamRec.DisplayName)
           ? (prevTeamRec.DisplayName as string) : null;
         signedRecruitsByTeam.get(teamName)!.push({
@@ -314,7 +319,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
       const rawPos = prec.Position as string;
       const prevTeamIdx = prec.PrevTeamIndex as number;
       const prevTeamRec = (isTransfer && prevTeamIdx != null && prevTeamIdx !== 255 && prevTeamIdx >= 0)
-        ? teamTable.records[prevTeamIdx]
+        ? teamByIndex.get(prevTeamIdx)
         : null;
       const previousTeam = (prevTeamRec && !prevTeamRec.isEmpty && prevTeamRec.DisplayName)
         ? (prevTeamRec.DisplayName as string)

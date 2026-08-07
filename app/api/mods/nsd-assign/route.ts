@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { importSaveFile } from '@/lib/importSave';
 
 function getEmbeddedPocketScoutRoot() {
+  if (process.env.ELECTRON_RESOURCES_PATH) {
+    return path.join(process.cwd(), 'embeddedMods', 'pocketScout');
+  }
   return path.join(process.cwd(), 'lib', 'embeddedMods', 'pocketScout');
 }
 

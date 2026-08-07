@@ -79,5 +79,7 @@ jobs:
             ### Toolbox and reliability
             - Added the Toolbox for dynasty utilities and mod settings
             - Improved import flow, mod logs, and hydration stability
+            - Fixed NSD re-import handling for `HardCommitted` players, Signing Day transfer data, and previous-team display
+            - Rebalance refreshes its `RLT Backups` safety copy on each intentional run
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

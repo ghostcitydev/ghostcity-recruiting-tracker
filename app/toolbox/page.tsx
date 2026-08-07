@@ -181,7 +181,7 @@ function NsdModCard() {
       author="PocketScout Utilities"
       snapshot="signing_day"
       description="On National Signing Day, assigns unsigned recruits to FBS schools that need depth by position. Runs before the Signing Day import — the modified save is reimported automatically."
-      warning="Run once per NSD — running twice can create duplicate players. Game must be closed before running."
+      warning="Run once per NSD — running twice can create duplicate players. Exit the dynasty to the main menu before running; the game can remain open."
     >
       <Section label="Global Limits">
         <div className="grid grid-cols-3 gap-3">
@@ -468,10 +468,10 @@ function RbModCard() {
       enabled={enabled}
       onToggle={toggle}
       title="CFB Rebalance Setup"
-      author="CFB Rebalance Setup 1.0.0"
+      author="Dogsh*t"
       snapshot="preseason"
       description="Rebalances duplicate position slots (LT↔RT, LG↔RG, WLB↔SLB, etc.) in the save file. Run this after the Transfer Wave completes, before re-importing."
-      warning="Game must be closed before running. Run AFTER the Transfer Wave."
+      warning="Exit the dynasty to the main menu before running; the game can remain open. Run AFTER the Transfer Wave."
     >
       <p className="text-xs" style={{ color: 'var(--ocean-400)' }}>
         Enable it here, then use Import to run it after Transfer Wave and before the save is re-imported.

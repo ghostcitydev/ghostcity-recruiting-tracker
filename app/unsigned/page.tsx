@@ -333,7 +333,7 @@ export default function UnsignedPage() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr style={{ background: 'var(--ocean-800)', borderBottom: '2px solid var(--ocean-700)' }}>
-                      {([['name','Name'],['pos','Pos'],['stars','Stars'],['type','Type'],['team','From'],['ovr','OVR']] as [SortCol,string][]).map(([col, label]) => (
+                      {([['name','Name'],['pos','Pos'],['stars','Stars'],['type','Type'],['team','Previous Team'],['ovr','OVR']] as [SortCol,string][]).map(([col, label]) => (
                         <th key={col}
                           onClick={() => toggleSort(col)}
                           className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none whitespace-nowrap ${col === 'ovr' ? 'text-right' : 'text-left'}`}

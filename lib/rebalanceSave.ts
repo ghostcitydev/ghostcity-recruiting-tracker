@@ -1,6 +1,5 @@
 import Franchise from 'madden-franchise';
-import { copyFile, access, mkdir } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { copyFile, mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 
 type PositionGroup = { key: string; label: string; positions: string[]; weights: Record<string, number> };
@@ -58,13 +57,9 @@ export async function rebalanceSaveFile(savePath: string): Promise<RebalanceResu
   const backupDir = join(dirname(savePath), 'RLT Backups');
   const backupPath = join(backupDir, `${basename(savePath)}.gc-rlt-pre-rebalance-backup`);
   await mkdir(backupDir, { recursive: true });
-  try {
-    await access(backupPath, constants.F_OK);
-    throw new Error(`Backup already exists: ${backupPath}. Rename or remove it only after confirming the prior rebalance worked.`);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Backup already exists:')) throw error;
-  }
-  await copyFile(savePath, backupPath, constants.COPYFILE_EXCL);
+  // Keep one current safety copy per save. A later intentional run refreshes it
+  // with the save state immediately before that run.
+  await copyFile(savePath, backupPath);
 
   const franchise = await Franchise.create(savePath);
   if (franchise.gameType !== 'college') throw new Error(`This does not look like a College Football dynasty save (detected game type: ${franchise.gameType}).`);

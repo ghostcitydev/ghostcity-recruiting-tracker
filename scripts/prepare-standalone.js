@@ -11,4 +11,5 @@ const STANDALONE = path.join(ROOT, '.next', 'standalone');
 console.log('[prepare-standalone] Copying static assets...');
 fs.cpSync(path.join(ROOT, '.next', 'static'), path.join(STANDALONE, '.next', 'static'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'public'), path.join(STANDALONE, 'public'), { recursive: true });
+fs.cpSync(path.join(ROOT, 'lib', 'embeddedMods'), path.join(STANDALONE, 'embeddedMods'), { recursive: true });
 console.log('[prepare-standalone] Done.');
