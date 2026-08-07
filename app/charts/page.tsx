@@ -330,7 +330,12 @@ function ChartPanel({
   compact: boolean;
 }) {
   const isStarAccess = panel.mode === 'star-access-national';
-  const chartHeight = compact ? (isStarAccess ? 510 : 260) : 580;
+  // In the single-panel layout, let composition grow with the selected teams
+  // instead of forcing an inner scrollbar that hides the lower charts.
+  const compositionHeight = Math.max(250, selectedTeams.length * 135 + 40);
+  const chartHeight = panel.mode === 'composition' && !compact
+    ? compositionHeight
+    : compact ? (isStarAccess ? 510 : 260) : 580;
   const [starPrestigeFilter, setStarPrestigeFilter] = useState('All');
 
   const lineChartData = useMemo(() => {
@@ -536,7 +541,7 @@ function ChartPanel({
             <div className="grid h-full place-items-center text-sm" style={{ color: 'var(--ocean-400)' }}>Select teams to see composition</div>
           ) : (
             <div className="flex h-full flex-col">
-              <div className="flex-1 overflow-y-auto pr-1">
+              <div className={compact ? 'flex-1 overflow-y-auto pr-1' : 'flex-1'}>
                 {compositionCharts.map(({ teamName, data }) => (
                   <div key={teamName} className="mb-2">
                     <div className="mb-1 text-xs" style={{ color: 'var(--ocean-300)' }}>{teamName}</div>
