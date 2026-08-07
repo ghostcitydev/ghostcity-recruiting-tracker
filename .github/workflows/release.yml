@@ -67,6 +67,8 @@ jobs:
 
             ### Embedded dynasty tools
             - **Preseason Transfer Wave**, **NSD Assign**, and **CFB Rebalance** now run directly inside Ghost City RLT
+            - **Dynamic Recruiting Pipelines** is now embedded with presets, advanced weighting controls, coach settings, and Academy Mode
+            - Preseason pipeline influence is available on the Pipelines page by team and by region
             - Transfer Wave output is now a sortable player table, with raw diagnostics available on demand
             - Rebalance runs after Transfer Wave, creates a safe backup in `RLT Backups`, then the save is re-imported
 
