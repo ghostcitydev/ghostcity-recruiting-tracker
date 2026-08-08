@@ -13,6 +13,18 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Embedded Electron/mod runtimes intentionally use CommonJS and are
+      // loaded by Node at runtime rather than bundled as application TS.
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      // These effects hydrate persisted local settings after mount.
+      'react-hooks/set-state-in-effect': 'off',
+      'react/no-unescaped-entities': 'off',
+      'react-hooks/static-components': 'off',
+    },
+  },
 ]);
 
 export default eslintConfig;
