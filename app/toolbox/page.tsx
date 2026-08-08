@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // ── Constants ───────────────────────────────────────────────
 
@@ -8,6 +8,7 @@ const LS_NSD = 'gc_mod_nsd';
 const LS_TW  = 'gc_mod_tw';
 const LS_RB  = 'gc_mod_rb';
 const LS_PIPELINE = 'gc_mod_pipeline';
+const LS_FANG = 'gc_mod_fang';
 
 // NSD position keys (PocketScout)
 const NSD_POSITIONS = ['QB','HB','FB','WR','TE','LT','LG','C','RG','RT','EDGE','DT','LB','CB','S','K','P'] as const;
@@ -63,6 +64,7 @@ type TwSettings = {
   severeThresholdOverrides: Record<TwCheck, number>;
   enableTier2: boolean;
   prestigeGapCap: number;
+  allowTopTwoException: boolean;
   zeroNil: boolean;
   showPositions: boolean;
   showSevere: boolean;
@@ -74,6 +76,7 @@ type PipelineSettings = {
   academyMode: boolean; academyTargetCount: number; academyUniform: boolean; academyUniformTier: string; academyExempt: boolean;
   showAdvanced: boolean;
 };
+type FangSettings = { enabled: boolean; fileName: string; config: Record<string, unknown> | null };
 const PIPELINE_DEFAULTS: PipelineSettings = { enabled:false, preset:'rosterDriven', wRoster:.35,wStar:.35,wCoach:.2,wGeo:.1,decay:.75,geoRadius:300,maxPipelines:10,coachRampMode:'ramp',coachRampSeasons:3,coachInclude:{HeadCoach:true,OffensiveCoordinator:true,DefensiveCoordinator:true},academyMode:false,academyTargetCount:42,academyUniform:true,academyUniformTier:'Respected',academyExempt:true,showAdvanced:false };
 
 const NSD_DEFAULTS: NsdSettings = {
@@ -93,7 +96,7 @@ function makeTwDefaults(): TwSettings {
     thresholdOverrides[k] = { min: TW_MIN_DEFAULTS[k], max: TW_MAX_DEFAULTS[k] };
     severeThresholdOverrides[k] = TW_SEVERE_DEFAULTS[k];
   }
-  return { enabled: false, thresholdOverrides, severeThresholdOverrides, enableTier2: true, prestigeGapCap: 3, zeroNil: true, showPositions: false, showSevere: false };
+  return { enabled: false, thresholdOverrides, severeThresholdOverrides, enableTier2: true, prestigeGapCap: 3, allowTopTwoException: true, zeroNil: true, showPositions: false, showSevere: false };
 }
 
 // ── localStorage helpers ────────────────────────────────────
@@ -138,6 +141,8 @@ function saveNsd(s: NsdSettings) { localStorage.setItem(LS_NSD, JSON.stringify(s
 function saveTw(s: TwSettings)   { localStorage.setItem(LS_TW,  JSON.stringify(s)); }
 function loadPipeline(): PipelineSettings { try { const s=JSON.parse(localStorage.getItem(LS_PIPELINE) ?? '{}'); return { ...PIPELINE_DEFAULTS, ...s, coachInclude:{...PIPELINE_DEFAULTS.coachInclude,...(s.coachInclude??{})} }; } catch { return PIPELINE_DEFAULTS; } }
 function savePipeline(s: PipelineSettings) { localStorage.setItem(LS_PIPELINE, JSON.stringify(s)); }
+function loadFang(): FangSettings { try { const s = JSON.parse(localStorage.getItem(LS_FANG) ?? '{}'); return { enabled: Boolean(s.enabled), fileName: String(s.fileName ?? ''), config: s.config && typeof s.config === 'object' ? s.config : null }; } catch { return { enabled: false, fileName: '', config: null }; } }
+function saveFang(s: FangSettings) { localStorage.setItem(LS_FANG, JSON.stringify(s)); }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -152,11 +157,42 @@ export default function ToolboxPage() {
         </p>
       </div>
       <NsdModCard />
+      <FangModCard />
       <TwModCard />
       <RbModCard />
       <PipelineModCard />
     </div>
   );
+}
+
+function FangModCard() {
+  const [s, setS] = useState<FangSettings>({ enabled: false, fileName: '', config: null });
+  const [mounted, setMounted] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setS(loadFang()); setMounted(true); }, []);
+  if (!mounted) return <ModCardSkeleton />;
+  const update = (patch: Partial<FangSettings>) => { const next = { ...s, ...patch }; setS(next); saveFang(next); };
+  const chooseFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const config = JSON.parse(String(reader.result));
+        if (config?.schema !== 'recruit-overhaul-27-settings-config') throw new Error('That is not an RO27 settings export.');
+        setFileError(''); update({ config, fileName: file.name });
+      } catch (error) { setFileError(error instanceof Error ? error.message : 'Could not read JSON settings.'); }
+    };
+    reader.readAsText(file);
+  };
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Fang's Recruiting Generator" author="Fang / RO27 Official V3.4" snapshot="preseason" description="Regenerates preseason recruits using Fang's selected settings profile. It runs first, then Transfer Wave, Rebalance, Pipelines, and the Ghost City import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created before changes.">
+    <Section label="Settings JSON">
+      <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={(event) => chooseFile(event.target.files?.[0])} className="hidden" />
+      <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--ocean-700)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-600)', cursor: 'pointer' }}>Browse…</button>
+      <p className="mt-2 text-xs" style={{ color: s.config ? '#4ade80' : 'var(--ocean-500)' }}>{s.config ? `✓ ${s.fileName} loaded` : 'Choose a Fang/RO27 settings export. The supplied Default.ro27-settings.json works here.'}</p>
+      {fileError && <p className="mt-1 text-xs" style={{ color: '#f87171' }}>{fileError}</p>}
+    </Section>
+  </ModCard>;
 }
 
 // ── NSD: Assign Unsigned Players ──────────────────────────
@@ -325,19 +361,25 @@ function TwModCard() {
       author="Balla's Transfer Wave V1.1.0 (native)"
       snapshot="preseason"
       description="Generates a realistic transfer portal wave in preseason. Runs the redistribution engine natively — no external app needed. Modifies the save file directly, then reimports automatically."
-      warning="Game must be closed or at the main menu — not inside a dynasty — before running."
+      warning="Game must be closed or at the main menu — not inside a dynasty — before running. Recommended for Year 2–3 and beyond, after the dynasty has had time to develop naturally."
     >
       {/* Global behavior */}
       <Section label="Wave Behavior">
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             label="Prestige gap cap"
-            description="Max prestige gap for Tier 2 placements. Default 3."
+            description="Max prestige gap for Tier 2 placements before an enabled top-two exception. Default 3."
             value={s.prestigeGapCap}
             min={0} max={20}
             onChange={(v) => update({ prestigeGapCap: v })}
           />
-          <div />
+          <Setting
+            id="tw-top-two"
+            label="Allow top-two destination exception"
+            description="Allows a placement above the prestige cap only when the player would rank among the destination's top two at that position."
+            checked={s.allowTopTwoException}
+            onChange={(v) => update({ allowTopTwoException: v })}
+          />
         </div>
         <div className="flex flex-wrap gap-4 mt-2">
           <Setting
@@ -584,7 +626,7 @@ function ModCard({
       {enabled && children && (
         <div className="pl-7 pt-3 space-y-4 border-t" style={{ borderColor: 'var(--ocean-800)' }}>
           {warning && (
-            <p className="text-xs" style={{ color: '#fbbf24' }}>⚠ {warning}</p>
+            <p className="rounded-md border px-3 py-2 text-xs leading-relaxed" style={{ color: '#171717', background: '#fef3c7', borderColor: '#b8860b' }}>⚠ {warning}</p>
           )}
           {children}
         </div>

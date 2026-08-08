@@ -1,0 +1,16 @@
+# Ghost City RLT 1.0.6
+
+## Highlights
+
+- Added Fang's Recruiting Generator as an embedded preseason mod.
+- Fang runs first, before Transfer Wave, CFB Rebalance, Dynamic Recruiting Pipelines, and the Ghost City import.
+- Added a Browse button for Fang settings JSON files.
+- Added Fang processing results and backup location to the import log.
+- Updated embedded PocketScout utilities for the current EA title update.
+- Fixed packaged builds missing `madden-franchise` lookup data.
+- Added configurable top-two destination handling for Transfer Wave prestige caps.
+- Continued browser-first dashboard work while retaining the Electron app for local save-file and mod workflows.
+
+## Upgrade notes
+
+For preseason imports, select the Fang settings JSON in Toolbox before importing. The desktop app remains the recommended workflow for mods that read and write saves directly from the EA saves folder.

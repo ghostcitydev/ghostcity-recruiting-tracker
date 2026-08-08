@@ -1,6 +1,6 @@
 {
   "name": "ghost-city-rlt",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Ghost City's Recruiting Landscape Tracker for EA Sports CFB 27",
   "author": "ghostcitydev",
   "private": true,
@@ -19,29 +19,13 @@
     "copyright": "Copyright © 2026",
     "npmRebuild": false,
     "afterPack": "./scripts/after-pack.js",
-    "files": [
-      "electron/**/*",
-      "package.json"
-    ],
+    "files": ["electron/**/*", "package.json"],
     "extraResources": [
-      {
-        "from": "prisma/migrations",
-        "to": "migrations"
-      },
-      {
-        "from": "public/other mods",
-        "to": "mods"
-      }
+      { "from": "prisma/migrations", "to": "migrations" },
+      { "from": "public/other mods", "to": "mods" }
     ],
     "win": {
-      "target": [
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
+      "target": [{ "target": "portable", "arch": ["x64"] }],
       "icon": "public/icon.ico",
       "artifactName": "${productName} Setup ${version}.${ext}"
     },
@@ -52,9 +36,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Ghost City RLT"
     },
-    "portable": {
-      "artifactName": "${productName} Portable ${version}.exe"
-    }
+    "portable": { "artifactName": "${productName} Portable ${version}.exe" }
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",

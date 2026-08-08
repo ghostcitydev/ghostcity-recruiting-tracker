@@ -335,7 +335,10 @@ function ChartPanel({
   const compositionHeight = Math.max(250, selectedTeams.length * 135 + 40);
   const chartHeight = panel.mode === 'composition' && !compact
     ? compositionHeight
-    : compact ? (isStarAccess ? 510 : 260) : 580;
+    : compact ? (isStarAccess || panel.mode === 'composition' ? 510 : 260) : 580;
+  const compositionItemHeight = compact
+    ? Math.max(80, Math.floor((chartHeight - 55) / Math.max(1, selectedTeams.length)) - 22)
+    : 110;
   const [starPrestigeFilter, setStarPrestigeFilter] = useState('All');
 
   const lineChartData = useMemo(() => {
@@ -545,7 +548,7 @@ function ChartPanel({
                 {compositionCharts.map(({ teamName, data }) => (
                   <div key={teamName} className="mb-2">
                     <div className="mb-1 text-xs" style={{ color: 'var(--ocean-300)' }}>{teamName}</div>
-                    <div style={{ height: compact ? 80 : 110 }}>
+                    <div style={{ height: compositionItemHeight }}>
                       <Bar data={data} options={{
                         responsive: true, maintainAspectRatio: false,
                         scales: {

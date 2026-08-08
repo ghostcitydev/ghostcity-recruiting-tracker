@@ -487,6 +487,7 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
   const effectiveSevereThresholds = buildEffectiveSevereThresholds(settings.severeThresholdOverrides);
   const enableTier2 = settings.enableTier2 ?? true;
   const prestigeGapCap = settings.prestigeGapCap ?? 3;
+  const allowTopTwoException = settings.allowTopTwoException ?? true;
   const tier2RecipientCapPerPosition = settings.tier2RecipientCapPerPosition ?? 1;
   const zeroNil = settings.zeroNil ?? true;
 
@@ -650,8 +651,8 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
           const recipientCurrentAtPosition = playersOnTeam(playerTable, teamMembership, recipient.team.index, (pos) => pos === candidate.exactPosition);
           const higherRatedCount = recipientCurrentAtPosition.filter((p) => p.OverallRating > candidate.ovr).length;
           const wouldRankTopTwo = higherRatedCount <= 1;
-          if (prestigeGap <= prestigeGapCap || wouldRankTopTwo) {
-            const viaTopTwo = prestigeGap > prestigeGapCap && wouldRankTopTwo;
+          if (prestigeGap <= prestigeGapCap || (allowTopTwoException && wouldRankTopTwo)) {
+            const viaTopTwo = prestigeGap > prestigeGapCap && allowTopTwoException && wouldRankTopTwo;
             const reason = viaTopTwo
               ? ` [via top-2 exception -- prestige gap ${prestigeGap} (cap ${prestigeGapCap}), donor prestige ${donorPrestige}, recipient prestige ${recipientPrestige}]`
               : ` [prestige gap ${prestigeGap} (cap ${prestigeGapCap}), donor prestige ${donorPrestige}, recipient prestige ${recipientPrestige}]`;

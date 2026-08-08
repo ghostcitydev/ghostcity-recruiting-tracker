@@ -19,9 +19,10 @@ type ImportResult = {
 type Pos = 'QB'|'HB'|'FB'|'WR'|'TE'|'LT'|'LG'|'C'|'RG'|'RT'|'EDGE'|'DT'|'LB'|'CB'|'S'|'K'|'P';
 type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: number; classTarget: number; preferredByPos?: Record<Pos,number>; hardMaxByPos?: Record<Pos,number> };
 type TwCheckOverride = { min: number; max: number };
-type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; zeroNil?: boolean };
+type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; allowTopTwoException?: boolean; zeroNil?: boolean };
 type RebalanceSettings = { enabled: boolean };
 type PipelineSettings = { enabled: boolean; [key: string]: unknown };
+type FangSettings = { enabled: boolean; fileName?: string; config?: Record<string, unknown> | null };
 
 function readNsd(): NsdSettings {
   try {
@@ -41,6 +42,7 @@ function readPipeline(): PipelineSettings {
   try { return JSON.parse(localStorage.getItem('gc_mod_pipeline') ?? '{}'); }
   catch { return { enabled: false }; }
 }
+function readFang(): FangSettings { try { return JSON.parse(localStorage.getItem('gc_mod_fang') ?? '{}'); } catch { return { enabled: false }; } }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -65,6 +67,7 @@ export default function ImportPage() {
   const [tw, setTw] = useState<TwSettings>({ enabled: false });
   const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
   const [pipeline, setPipeline] = useState<PipelineSettings>({ enabled: false });
+  const [fang, setFang] = useState<FangSettings>({ enabled: false });
   const [modsMounted, setModsMounted] = useState(false);
 
   // Import flow
@@ -72,7 +75,7 @@ export default function ImportPage() {
   const [flow, setFlow] = useState<FlowState>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
-  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline'; data: Record<string, unknown> }[]>([]);
+  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]>([]);
 
   const router = useRouter();
 
@@ -104,6 +107,7 @@ export default function ImportPage() {
     setTw(readTw());
     setRebalance(readRebalance());
     setPipeline(readPipeline());
+    setFang(readFang());
     setModsMounted(true);
   }, []);
 
@@ -155,8 +159,17 @@ export default function ImportPage() {
     const twActive  = tw.enabled  && snapshot === 'preseason';
     const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
     const pipelineActive = pipeline.enabled && snapshot === 'preseason';
+    const fangActive = fang.enabled && snapshot === 'preseason';
 
     try {
+      if (fangActive) {
+        if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
+        setFlow('running_mod');
+        const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
+        const fangData = await fangRes.json();
+        if (!fangRes.ok) throw new Error(fangData.error ?? "Fang's Recruiting Generator failed");
+        setModLogs((logs) => [...logs, { type: 'fang', data: { ...(fangData.result ?? {}), log: fangData.log ?? [] } }]);
+      }
       // Transfer Wave: run natively, reimport automatically
       if (twActive) {
         setFlow('running_mod');
@@ -171,6 +184,7 @@ export default function ImportPage() {
               severeThresholdOverrides: tw.severeThresholdOverrides,
               enableTier2: tw.enableTier2,
               prestigeGapCap: tw.prestigeGapCap,
+              allowTopTwoException: tw.allowTopTwoException,
               zeroNil: tw.zeroNil,
             },
           }),
@@ -241,7 +255,8 @@ export default function ImportPage() {
   const twActive  = modsMounted && tw.enabled  && snapshot === 'preseason';
   const rebalanceActive = modsMounted && rebalance.enabled && snapshot === 'preseason';
   const pipelineActive = modsMounted && pipeline.enabled && snapshot === 'preseason';
-  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive;
+  const fangActive = modsMounted && fang.enabled && snapshot === 'preseason';
+  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive || fangActive;
 
   const isIdle = flow === 'idle';
 
@@ -261,6 +276,13 @@ export default function ImportPage() {
           style={{ background: 'var(--ocean-800)', border: '1px solid var(--ocean-700)' }}
         >
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Active mods for this import</p>
+          {fangActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>Fang's Recruiting Generator</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs first in preseason, updates recruits, then the remaining enabled mods and import run.</span>
+            </p>
+          )}
           {nsdActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
@@ -382,7 +404,9 @@ export default function ImportPage() {
             className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ background: 'var(--ocean-600)' }}
           >
-            {pipelineActive && twActive && rebalanceActive
+            {fangActive
+              ? (pipelineActive || twActive || rebalanceActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
+              : pipelineActive && twActive && rebalanceActive
               ? 'Run Transfer Wave + Rebalance + Pipelines + Import'
               : pipelineActive && rebalanceActive
               ? 'Run Rebalance + Pipelines + Import'
@@ -525,8 +549,16 @@ export default function ImportPage() {
 
 // ── Mod log panel ──────────────────────────────────────────
 
-function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline'; data: Record<string, unknown> } }) {
+function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> } }) {
   const d = log.data;
+
+  if (log.type === 'fang') return (
+    <div className="rounded-lg border px-4 py-3 text-xs space-y-2" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+      <p className="font-semibold" style={{ color: 'var(--ocean-100)' }}>FANG'S RECRUITING GENERATOR</p>
+      <p style={{ color: 'var(--ocean-300)' }}>{Number(d.candidates ?? 0)} recruit candidates processed · {Number(d.named ?? 0)} names · {Number(d.sized ?? 0)} sizes · {Number(d.portraits ?? 0)} portraits</p>
+      <p style={{ color: 'var(--ocean-600)' }}>Backup created: {String(d.backupPath ?? 'not reported')}</p>
+    </div>
+  );
 
   if (log.type === 'pipeline') return (
     <div className="rounded-lg border px-4 py-3 text-xs space-y-1" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
