@@ -802,20 +802,19 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
   // Write unsigned recruit individuals — delete and recreate for clean re-import
   // Use raw SQL to avoid Prisma client cache issues with newer models
   console.log(`[importSave] unsignedIndividuals collected: ${unsignedIndividuals.length}, unsigned.total: ${unsigned.total}`);
-  await prisma.$executeRawUnsafe(`DELETE FROM "UnsignedRecruit" WHERE "seasonId" = ?`, season.id);
+  await prisma.unsignedRecruit.deleteMany({ where: { seasonId: season.id } });
   let unsignedWritten = 0;
   if (unsignedIndividuals.length > 0) {
     try {
-      for (const r of unsignedIndividuals) {
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO "UnsignedRecruit" ("id","seasonId","firstName","lastName","position","posGroup","starRating","overall","recruitType","previousTeam") VALUES (lower(hex(randomblob(16))),?,?,?,?,?,?,?,?,?)`,
-          season.id, r.firstName, r.lastName, r.position, r.posGroup, r.starRating, r.overall ?? null, r.recruitType, r.previousTeam ?? null
-        );
-      }
+      await prisma.unsignedRecruit.createMany({ data: unsignedIndividuals.map((r) => ({
+        seasonId: season.id, firstName: r.firstName, lastName: r.lastName,
+        position: r.position, posGroup: r.posGroup, starRating: r.starRating,
+        overall: r.overall ?? null, recruitType: r.recruitType, previousTeam: r.previousTeam ?? null,
+      })) });
       unsignedWritten = unsignedIndividuals.length;
-      console.log(`[importSave] unsignedRecruit raw INSERT wrote ${unsignedWritten} rows`);
+      console.log(`[importSave] unsignedRecruit wrote ${unsignedWritten} rows`);
     } catch (err) {
-      console.error('[importSave] unsignedRecruit raw INSERT failed:', err);
+      console.error('[importSave] unsignedRecruit INSERT failed:', err);
     }
   }
 
