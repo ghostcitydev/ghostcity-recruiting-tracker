@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { safeJson } from '@/lib/safeFetch';
+import { upload } from '@vercel/blob/client';
 
 type SaveFile = { name: string; path: string };
+type UploadedSave = { name: string; url: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
   seasonYear: number;
@@ -52,6 +54,11 @@ export default function ImportPage() {
   const [defaultDir, setDefaultDir] = useState('');
   const [isDefaultDir, setIsDefaultDir] = useState(true);
   const [selectedPath, setSelectedPath] = useState('');
+  const [cloudMode, setCloudMode] = useState(false);
+  const [uploadedSave, setUploadedSave] = useState<UploadedSave | null>(null);
+  const [uploadingSave, setUploadingSave] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [loadError, setLoadError] = useState('');
   const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -101,7 +108,9 @@ export default function ImportPage() {
   }
 
   useEffect(() => {
-    loadSaves();
+    const hosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    setCloudMode(hosted);
+    if (!hosted) loadSaves();
     loadSeasons();
     setNsd(readNsd());
     setTw(readTw());
@@ -110,6 +119,22 @@ export default function ImportPage() {
     setFang(readFang());
     setModsMounted(true);
   }, []);
+
+  async function uploadCloudSave(file: File) {
+    setUploadingSave(true); setUploadError(''); setUploadedSave(null);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'dynasty-save';
+      const blob = await upload(`dynasty-uploads/${Date.now()}-${safeName}`, file, {
+        access: 'private',
+        handleUploadUrl: '/api/uploads/dynasty',
+      });
+      setUploadedSave({ name: file.name, url: blob.url });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Unable to upload the dynasty save.');
+    } finally {
+      setUploadingSave(false);
+    }
+  }
 
   async function saveFolder() {
     setFolderSaving(true); setFolderError('');
@@ -143,7 +168,7 @@ export default function ImportPage() {
     const res = await fetch('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: selectedPath, snapshot }),
+      body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Import failed');
@@ -152,7 +177,7 @@ export default function ImportPage() {
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedPath) return;
+    if (cloudMode ? !uploadedSave : !selectedPath) return;
     setError(''); setResult(null); setModLogs([]);
 
     const nsdActive = nsd.enabled && snapshot === 'signing_day';
@@ -160,6 +185,11 @@ export default function ImportPage() {
     const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
     const pipelineActive = pipeline.enabled && snapshot === 'preseason';
     const fangActive = fang.enabled && snapshot === 'preseason';
+
+    if (cloudMode && (nsdActive || twActive || rebalanceActive || pipelineActive || fangActive)) {
+      setError('Cloud save modification is not enabled yet. For now, use the desktop app for Fang and the other embedded mods; browser imports are available for dashboard tracking.');
+      return;
+    }
 
     try {
       if (fangActive) {
@@ -320,7 +350,30 @@ export default function ImportPage() {
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-500)' }}>
             Save File
           </label>
-          {saves.length > 0 ? (
+          {cloudMode ? (
+            <div className="rounded-lg border px-4 py-3" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadCloudSave(file);
+                  event.currentTarget.value = '';
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" disabled={!isIdle || uploadingSave} onClick={() => uploadInputRef.current?.click()} className="rounded px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: 'var(--ocean-600)' }}>
+                  {uploadingSave ? 'Uploading save…' : uploadedSave ? 'Choose another save' : 'Choose dynasty save'}
+                </button>
+                <span className="text-sm" style={{ color: uploadedSave ? 'var(--ocean-200)' : 'var(--ocean-400)' }}>
+                  {uploadedSave ? `Ready: ${uploadedSave.name}` : 'Your save is uploaded privately for this import.'}
+                </span>
+              </div>
+              {uploadError && <p className="mt-2 text-xs" style={{ color: '#fca5a5' }}>{uploadError}</p>}
+              <p className="mt-2 text-xs" style={{ color: 'var(--ocean-500)' }}>Browser imports currently update Ghost City tracking data. Use the desktop app for save-modifying tools until cloud processing is enabled.</p>
+            </div>
+          ) : saves.length > 0 ? (
             <select
               value={selectedPath}
               onChange={(e) => setSelectedPath(e.target.value)}
@@ -400,7 +453,7 @@ export default function ImportPage() {
         {flow === 'idle' && (
           <button
             type="submit"
-            disabled={!selectedPath}
+            disabled={cloudMode ? !uploadedSave : !selectedPath}
             className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ background: 'var(--ocean-600)' }}
           >
