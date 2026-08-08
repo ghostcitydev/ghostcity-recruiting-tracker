@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // at runtime, which breaks once Turbopack bundles that code into a chunk.
   serverExternalPackages: ['madden-franchise', 'better-sqlite3'],
   outputFileTracingIncludes: {
-    '/api/cloud/process': [
+    '/api/cloud/worker': [
       './lib/embeddedMods/fang/**',
       './lib/embeddedMods/pocketScout/**',
       './lib/embeddedMods/pipeline/**',
