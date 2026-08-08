@@ -12,4 +12,10 @@ console.log('[prepare-standalone] Copying static assets...');
 fs.cpSync(path.join(ROOT, '.next', 'static'), path.join(STANDALONE, '.next', 'static'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'public'), path.join(STANDALONE, 'public'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'lib', 'embeddedMods'), path.join(STANDALONE, 'embeddedMods'), { recursive: true });
+// `madden-franchise` is externalized by Next, but its schema lookup JSON is
+// not always included by standalone tracing. Copy the runtime data explicitly
+// so packaged PocketScout/import routes can resolve slotsLookup.json.
+const franchiseData = path.join(ROOT, 'node_modules', 'madden-franchise', 'data');
+const standaloneFranchiseData = path.join(STANDALONE, 'node_modules', 'madden-franchise', 'data');
+fs.cpSync(franchiseData, standaloneFranchiseData, { recursive: true });
 console.log('[prepare-standalone] Done.');
