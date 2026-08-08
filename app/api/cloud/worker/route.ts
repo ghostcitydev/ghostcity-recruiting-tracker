@@ -11,6 +11,10 @@ import { POST as runNsd } from '@/app/api/mods/nsd-assign/route';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
+type Job = { state: 'queued' | 'running' | 'complete' | 'failed'; result?: Awaited<ReturnType<typeof processSave>>; error?: string };
+const jobs = globalThis as typeof globalThis & { cloudJobs?: Map<string, Job> };
+const cloudJobs = jobs.cloudJobs ?? new Map<string, Job>();
+jobs.cloudJobs = cloudJobs;
 
 type CloudPayload = {
   blobUrl: string;
@@ -69,8 +73,24 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json() as CloudPayload;
     if (!payload.blobUrl || !payload.snapshot) return Response.json({ error: 'Missing uploaded dynasty save or snapshot.' }, { status: 400 });
-    return Response.json(await processSave(payload));
+    const jobId = crypto.randomUUID();
+    cloudJobs.set(jobId, { state: 'queued' });
+    void (async () => {
+      cloudJobs.set(jobId, { state: 'running' });
+      try { cloudJobs.set(jobId, { state: 'complete', result: await processSave(payload) }); }
+      catch (error) { cloudJobs.set(jobId, { state: 'failed', error: error instanceof Error ? error.message : 'Cloud processing failed.' }); }
+    })();
+    return Response.json({ jobId, state: 'queued' }, { status: 202 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Cloud processing failed.' }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  if (process.env.CLOUD_WORKER_MODE !== 'true' || request.headers.get('authorization') !== `Bearer ${process.env.CLOUD_WORKER_SECRET}`) return Response.json({ error: 'Unauthorized worker request.' }, { status: 401 });
+  const jobId = new URL(request.url).searchParams.get('jobId');
+  if (!jobId) return Response.json({ ok: true, worker: true });
+  const job = cloudJobs.get(jobId);
+  if (!job) return Response.json({ error: 'Processing job not found. It may have been interrupted by a worker restart.' }, { status: 404 });
+  return Response.json(job);
 }

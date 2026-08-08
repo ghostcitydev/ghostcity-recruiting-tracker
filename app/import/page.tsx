@@ -8,6 +8,7 @@ import { upload } from '@vercel/blob/client';
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
 type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]; downloadPath: string };
+type CloudJob = { state: 'queued' | 'running' | 'complete' | 'failed'; result?: CloudWorkflowResult; error?: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
   seasonYear: number;
@@ -80,7 +81,7 @@ export default function ImportPage() {
   const [modsMounted, setModsMounted] = useState(false);
 
   // Import flow
-  type FlowState = 'idle' | 'running_mod' | 'running_import' | 'done' | 'error';
+  type FlowState = 'idle' | 'running_mod' | 'running_import' | 'running_cloud' | 'done' | 'error';
   const [flow, setFlow] = useState<FlowState>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
@@ -168,7 +169,7 @@ export default function ImportPage() {
 
   async function runImport() {
     if (cloudMode) {
-      const response = await safeJson<CloudWorkflowResult>('/api/cloud/process', {
+      const response = await safeJson<CloudWorkflowResult | { jobId: string }>('/api/cloud/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +179,17 @@ export default function ImportPage() {
         }),
       });
       if (!response.ok || !response.data) throw new Error(response.error || 'Cloud processing failed');
-      const cloud = response.data;
+      let cloud: CloudWorkflowResult;
+      if ('jobId' in response.data) {
+        const jobId = response.data.jobId;
+        while (true) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const job = await safeJson<CloudJob>(`/api/cloud/process?jobId=${encodeURIComponent(jobId)}`);
+          if (!job.ok || !job.data) throw new Error(job.error || 'Cloud processing status could not be read');
+          if (job.data.state === 'failed') throw new Error(job.data.error || 'Cloud processing failed');
+          if (job.data.state === 'complete' && job.data.result) { cloud = job.data.result; break; }
+        }
+      } else cloud = response.data;
       setModLogs(cloud.modLogs ?? []);
       setCloudDownloadPath(cloud.downloadPath ?? '');
       return cloud.importResult;
@@ -205,7 +216,7 @@ export default function ImportPage() {
 
     try {
       if (cloudMode) {
-        setFlow('running_mod');
+        setFlow('running_cloud');
         const importResult = await runImport();
         setResult(importResult);
         setFlow('done');
@@ -507,6 +518,11 @@ export default function ImportPage() {
         {flow === 'running_import' && (
           <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
             {modLogs.length ? '⏳ Mod complete — importing save…' : '⏳ Importing…'}
+          </p>
+        )}
+        {flow === 'running_cloud' && (
+          <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
+            ⏳ Processing and importing your save securely…
           </p>
         )}
 

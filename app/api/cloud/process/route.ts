@@ -7,7 +7,17 @@ type CloudPayload = {
   mods?: Record<string, unknown>;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const jobId = new URL(request.url).searchParams.get('jobId');
+  if (jobId) {
+    const workerUrl = process.env.CLOUD_WORKER_URL;
+    const secret = process.env.CLOUD_WORKER_SECRET;
+    if (!workerUrl || !secret) return Response.json({ error: 'Cloud processing is not configured yet.' }, { status: 503 });
+    try {
+      const response = await fetch(new URL(`/api/cloud/worker?jobId=${encodeURIComponent(jobId)}`, workerUrl), { headers: { Authorization: `Bearer ${secret}` } });
+      return new Response(await response.text(), { status: response.status, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) { return Response.json({ error: `Could not reach the cloud worker: ${error instanceof Error ? error.message : 'network error'}` }, { status: 502 }); }
+  }
   return Response.json({ ok: true, worker: process.env.CLOUD_WORKER_MODE === 'true' });
 }
 
