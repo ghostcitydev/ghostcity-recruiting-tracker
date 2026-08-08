@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { safeJson } from '@/lib/safeFetch';
-import { upload } from '@vercel/blob/client';
 
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
@@ -111,9 +110,8 @@ export default function ImportPage() {
   }
 
   useEffect(() => {
-    const hosted = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    setCloudMode(hosted);
-    if (!hosted) loadSaves();
+    setCloudMode(false);
+    loadSaves();
     loadSeasons();
     setNsd(readNsd());
     setTw(readTw());
