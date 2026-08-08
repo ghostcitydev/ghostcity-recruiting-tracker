@@ -84,6 +84,7 @@ export default function ImportPage() {
   const [flow, setFlow] = useState<FlowState>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
+  const [modStatus, setModStatus] = useState('Running selected mod…');
   const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]>([]);
 
   const router = useRouter();
@@ -222,6 +223,7 @@ export default function ImportPage() {
       }
       if (fangActive) {
         if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
+        setModStatus("Running Fang's Recruiting Generator…");
         setFlow('running_mod');
         const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
         const fangData = await fangRes.json();
@@ -230,6 +232,7 @@ export default function ImportPage() {
       }
       // Transfer Wave: run natively, reimport automatically
       if (twActive) {
+        setModStatus('Running Transfer Wave engine…');
         setFlow('running_mod');
         const twRes = await fetch('/api/mods/transfer-wave-run', {
           method: 'POST',
@@ -254,6 +257,7 @@ export default function ImportPage() {
 
       // Rebalance always follows Transfer Wave and precedes import.
       if (rebalanceActive) {
+        setModStatus('Running CFB Rebalance…');
         setFlow('running_mod');
         const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
         const rebalanceData = await rebalanceRes.json();
@@ -264,6 +268,7 @@ export default function ImportPage() {
       // Pipeline recalculation is the final preseason modification so the
       // following import reads the finished Transfer Wave + Rebalance state.
       if (pipelineActive) {
+        setModStatus('Running Dynamic Recruiting Pipelines…');
         setFlow('running_mod');
         const pipelineRes = await fetch('/api/mods/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: pipeline }) });
         const pipelineData = await pipelineRes.json();
@@ -273,6 +278,7 @@ export default function ImportPage() {
 
       // NSD mod: run automatically
       if (nsdActive) {
+        setModStatus('Running NSD Assign…');
         setFlow('running_mod');
         const modRes = await fetch('/api/mods/nsd-assign', {
           method: 'POST',
@@ -510,7 +516,7 @@ export default function ImportPage() {
 
         {flow === 'running_mod' && (
           <p className="text-sm" style={{ color: 'var(--ocean-400)' }}>
-            ⏳ {snapshot === 'preseason' ? 'Running Transfer Wave engine…' : 'Running NSD mod…'}
+            ⏳ {modStatus}
           </p>
         )}
         {flow === 'running_import' && (
