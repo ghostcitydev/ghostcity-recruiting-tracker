@@ -33,7 +33,17 @@ Unlike everything above, **Toolbox edits your live dynasty save file** the next 
 
 ---
 
-## Download
+## Run locally in your browser (recommended)
+
+This is the simplest full-featured setup: it runs entirely on your own PC, reads your normal EA saves folder, and supports every embedded mod. Nothing is uploaded anywhere.
+
+1. Download and extract the **Ghost City RLT Local** release folder.
+2. Double-click **`SETUP LOCAL TRACKER.bat`** once. It installs the local requirements, creates your private tracker database, and opens Ghost City RLT at `http://localhost:3000`.
+3. After that, use **`RUN LOCAL TRACKER.bat`** whenever you want to use the tracker.
+
+Keep the small command window open while using the tracker; closing it stops the local server. Node.js LTS is the only prerequisite.
+
+## Portable desktop app
 
 Grab the latest **Ghost City RLT Portable.exe** from the [Releases page](https://github.com/ghostcitydev/ghostcity-recruiting-tracker/releases). No installer — just download it and double-click. Put it anywhere you like (Desktop, a folder, wherever).
 
@@ -112,17 +122,17 @@ Nothing leaves your machine either way — no network calls, no telemetry.
 
 ---
 
-## Dev setup (source)
+## Local browser setup (source)
 
 If you want to run from source or contribute:
 
 ```
 git clone https://github.com/ghostcitydev/ghostcity-recruiting-tracker.git
 cd ghostcity-recruiting-tracker
-setup.bat
+SETUP LOCAL TRACKER.bat
 ```
 
-Requires Node.js 18+. `setup.bat` installs dependencies, creates the local SQLite database, and opens the app at `http://localhost:3000`. After that, use `start.bat` to launch it again.
+Requires Node.js 18+. The setup file installs dependencies, creates the local SQLite database, and opens the app at `http://localhost:3000`. After that, use `RUN LOCAL TRACKER.bat` to launch it again.
 
 **Working on the Electron app itself?**
 

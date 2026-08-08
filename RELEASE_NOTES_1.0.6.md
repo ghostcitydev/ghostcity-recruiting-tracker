@@ -2,6 +2,11 @@
 
 ## Highlights
 
+### Clean local-browser setup
+
+- Added **`SETUP LOCAL TRACKER.bat`** for first-time setup and **`RUN LOCAL TRACKER.bat`** for every later launch.
+- The local-browser workflow runs on `http://localhost:3000`, keeps every save and mod operation on the user's PC, and supports the full embedded mod suite without Electron.
+
 - Added Fang's Recruiting Generator as an embedded preseason mod.
 - Fang runs first, before Transfer Wave, CFB Rebalance, Dynamic Recruiting Pipelines, and the Ghost City import.
 - Added a Browse button for Fang settings JSON files.
