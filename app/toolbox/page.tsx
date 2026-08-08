@@ -358,7 +358,7 @@ function TwModCard() {
       enabled={s.enabled}
       onToggle={(v) => update({ enabled: v })}
       title="Preseason Transfer Wave"
-      author="Balla's Transfer Wave V1.1.0 (native)"
+      author="Balla's Transfer Wave V2.0.0 (native)"
       snapshot="preseason"
       description="Generates a realistic transfer portal wave in preseason. Runs the redistribution engine natively — no external app needed. Modifies the save file directly, then reimports automatically."
       warning="Game must be closed or at the main menu — not inside a dynasty — before running. Recommended for Year 2–3 and beyond, after the dynasty has had time to develop naturally."
