@@ -1,152 +1,98 @@
 # Ghost City RLT
 
-**Ghost City's Recruiting Landscape Tracker** — a local desktop app for tracking recruiting classes, transfer portal activity, program grades, and team ratings across every season of your **EA Sports College Football 27** dynasty. Also includes a Toolbox for bulk-editing your save file (school grades, prestige, rosters, NIL, and history resets).
+Ghost City's Recruiting Landscape Tracker is a local companion for EA Sports College Football 27 dynasties. It tracks recruiting, transfers, rosters, pipelines, team ratings, and program history across seasons—and includes optional tools that can update a local dynasty save.
 
-Built for dynasty nerds who want more than what the game shows you.
+Everything runs on your PC. Your dynasty save, tracker database, and mod settings are not uploaded to a server.
 
----
+## Run Ghost City RLT
 
-## Features
+### Portable app — recommended
 
-### Tracking (read-only — your save file is never touched)
+Download **Ghost City RLT Portable.exe** from the [Releases page](https://github.com/ghostcitydev/ghostcity-recruiting-tracker/releases), place it anywhere, and double-click it.
 
-- **Dashboard** — sortable table of every FBS team with OVR, prestige, recruiting rank, star breakdowns, transfer in/out/net, and program grades
-- **Star filter** — toggle between All / High School+JUCO / Transfer Portal; star columns update accordingly
-- **Grades panel** — toggle to show Atmosphere, Brand, Budget, Traditions, Conference Prestige, and Facilities grades per team
-- **Power 4 / Group of 5 filters** — quick conference group filtering above individual conferences
-- **Pipelines** — track regional recruiting influence levels and HS recruit hauls by pipeline, with year-over-year history
-- **Charts** — trend lines per team, recruit composition stacked bars, plus three national charts (OVR band distribution, unsigned recruits by star/source, transfer portal volume)
-- **Unsigned recruits page** — tracks unsigned prospects at snapshot time, split by HS/JUCO and Transfer Portal with per-star breakdowns
-- **CSV export** — export dashboard stats, unsigned recruits, pipeline influence, or HS recruits to CSV (buttons on Dashboard, Charts, Pipelines, and Unsigned pages)
-- **Season delete** — remove any imported season from the Import page
-- **JUCO fix** — junior college recruits counted in the HS bucket, matching the game's own grouping
+There is no installer, setup wizard, Node.js requirement, or separate mod download. Your tracker data is stored in `%AppData%\ghost-city-rlt\cfb27.db`, so replacing the exe during an update does not erase your history.
 
-### Toolbox — writes directly to your save file
+### Optional local browser mode
 
-Unlike everything above, **Toolbox edits your live dynasty save file** the next time you load it in-game. There's no in-app undo — see [Save file safety](#save-file-safety-toolbox) before using it.
+If you prefer a browser window instead of the portable app, download the project folder and install Node.js LTS.
 
-- **Rebalance Rosters** — bulk-adjusts player attribute ratings (fixed value or tightened toward a midpoint) to blunt the snowball effect; skips free agents and unsigned recruits
-- **Zero NIL Demands** — sets NIL value to 0 for every unsigned recruit
-- **Program Setup → School Grades** — bulk-edit team grades (fixed, tighten toward a midpoint, preserve, custom per-school, or reset to the game's year-zero defaults)
-- **Program Setup → Prestige (direct)** — bulk-edit team prestige scores directly
-- **Program Setup → History** — zeroes every team's historical record (wins/losses/championships/bowls/recruiting classes/accolades) and coach career stats, and resets pro-potential grades to C+, for a clean-slate start
+1. Double-click `setup-ghost-city-rlt.bat` once.
+2. After setup, double-click `run-ghost-city-rlt.bat` whenever you want to use the tracker.
+3. Keep the command window open while using `http://localhost:3000`.
 
----
+This is still completely local and supports the same save-file and mod workflow.
 
-## Optional: run locally in your browser
+## What it tracks
 
-This is the simplest full-featured setup: it runs entirely on your own PC, reads your normal EA saves folder, and supports every embedded mod. Nothing is uploaded anywhere.
+- **Dashboard:** FBS team ratings, prestige, recruiting, records, transfers, grades, and champion badges.
+- **Players:** recruiting classes, transfers, roster ratings, positional depth, and Access to Recruits views with combined filters.
+- **Unsigned:** remaining high-school/JUCO and transfer-portal prospects, including star/source breakdowns and previous teams for transfers.
+- **Pipelines:** team and region pipeline influence, recruiting reach, and preseason pipeline changes.
+- **Charts:** multi-season team trends, national distributions, recruit composition, and sortable/exportable data views.
+- **History:** one Preseason and one Signing Day snapshot per season, with CSV export and season deletion from Import.
 
-1. Download and extract the **Ghost City RLT Local** release folder.
-2. Double-click **`setup-ghost-city-rlt.bat`** once. It installs the local requirements, creates your private tracker database, and opens Ghost City RLT at `http://localhost:3000`.
-3. After that, use **`run-ghost-city-rlt.bat`** whenever you want to use the tracker.
+## Import a save
 
-Keep the small command window open while using the tracker; closing it stops the local server. Node.js LTS is the only prerequisite.
+1. Save your dynasty in-game.
+2. On **Import**, choose the dynasty save from the automatically detected EA saves folder. Use **Change** if your saves are elsewhere.
+3. Select **Preseason** or **Signing Day** and import.
+4. Open Dashboard, Players, Pipelines, Charts, or Unsigned to explore the snapshot.
 
-## Portable desktop app (recommended)
+Normal imports read the save and create a local tracker snapshot. They do not change the save file.
 
-Grab the latest **Ghost City RLT Portable.exe** from the [Releases page](https://github.com/ghostcitydev/ghostcity-recruiting-tracker/releases). No installer — just download it and double-click. Put it anywhere you like (Desktop, a folder, wherever).
+## Embedded dynasty mods
 
-Your data is stored in `%AppData%\ghost-city-rlt\cfb27.db`. It survives app updates — moving or deleting the exe won't touch your data. Back that file up if you want to preserve your history long-term.
+Mods are configured in **Toolbox** and run automatically as part of the appropriate Import workflow. They modify the selected local save, then Ghost City RLT reimports it.
 
----
+### Preseason order
 
-## Requirements
+1. **Fang's Recruiting Generator** — optional; select a Fang settings JSON in Toolbox. Fang runs first and creates an RLT backup.
+2. **Preseason Transfer Wave** — optional; recommended for Year 2–3 and beyond. It redistributes transfer-portal players using roster need and prestige rules.
+3. **CFB Rebalance** — optional; runs after Transfer Wave and refreshes its backup in `RLT Backups`.
+4. **Dynamic Recruiting Pipelines** — optional; runs after Rebalance and refreshes the Pipelines page.
+5. **Ghost City import** — records the final preseason snapshot.
 
-- Windows 10/11 (64-bit)
-- EA Sports College Football 27 on PC with an active dynasty save
+### Signing Day
 
-For the portable exe: no Node.js, database setup, or config files. Just run it.
+**NSD: Assign Unsigned Players** can place unsigned recruits on teams with roster need, then reimport the save. Run it once per National Signing Day only.
 
----
+### Important timing rules
 
-## Importing your save
+- Before running any save-writing mod, exit the dynasty to the game's **main menu**. The game can remain open.
+- Back up a save before trying a new mod or setting for the first time.
+- Do not run NSD Assign twice on the same Signing Day.
+- Keep Transfer Wave disabled until your dynasty has developed for a few seasons unless you intentionally want an early redistribution.
 
-1. Open the app and click **Import** in the nav bar
-2. Pick your dynasty save from the dropdown (auto-detects saves in `Documents\EA SPORTS College Football 27\saves\`)
-3. Click **Import Save** — takes about 10–20 seconds
-4. Navigate to **Dashboard** to see your data
+## Toolbox utilities
 
-Importing is read-only — the save file itself is never modified. Import after **National Signing Day** each season to capture recruit commitments, using the same autosave file each time; the tracker detects the season year automatically.
-
-If your saves live somewhere other than the default `Documents\EA SPORTS College Football 27\saves\` folder (redirected Documents, a different drive, OneDrive, etc.), click **Change** next to "Looking in:" on the Import page and point it at the right folder.
-
----
-
-## Save file safety (Toolbox)
-
-Everything under **Toolbox** writes changes directly into your dynasty save file — the same file EA Sports College Football 27 loads. Those changes take effect the next time you load that dynasty in-game. This is different from every other page in the app, which only reads data.
-
-A few things worth knowing:
-
-- Toolbox always edits the save file tied to your **most recently imported season** (by in-game year) — not whatever save is currently selected on the Import page.
-- Every destructive Toolbox action shows an in-app confirmation before writing, but there's no in-app undo once you confirm.
-- **Back up your save file before using Toolbox**, especially the first time. Copy the file from `Documents\EA SPORTS College Football 27\saves\` somewhere safe before running Rebalance Rosters, Zero NIL Demands, or any Program Setup action.
-- Toolbox actions are best run right before the specific game phase they target (e.g. Rebalance Rosters before *Encourage Transfers*, Zero NIL Demands before recruiting opens) — see the in-app description on each card for timing.
-
----
-
-## Updating
-
-Download the new exe from the Releases page and run it — your data carries over automatically.
-
----
+Toolbox also includes direct local save utilities for school grades, prestige, NIL, roster rebalance, recruiting dealbreakers, history resets, and related dynasty maintenance. These tools write to the save file; review each confirmation and back up first.
 
 ## Troubleshooting
 
-**Blank screen on launch**
-- Wait 5–10 seconds; the app server starts in the background on first launch
-- If it stays blank, close and reopen the app
+**No save appears on Import**
 
-**Import fails with an error**
-- Make sure the dynasty is saved in-game before importing
-- Try importing again — some saves take two attempts on first run
+Use **Change** beside the save-folder path and select the folder containing your EA dynasty saves.
 
-**Data looks wrong / facilities score is blank**
-- Delete the old season from the Import page and re-import
+**A mod reports that the save is in use**
 
-**Toolbox says "No save file path found" or "Save file not found"**
-- Import a season first — Toolbox edits the save file tied to your most recent import, so it needs at least one imported season to know which file to write to
-- If you moved or deleted the original save file since importing, Toolbox can't find it — re-import from its new location
+Exit the dynasty to the main menu, save first, then retry.
 
----
+**Toolbox cannot find a save file**
 
-## How it works
+Import that dynasty first. Toolbox works with the save tied to the most recently imported season.
 
-The app reads your save file using the [`madden-franchise`](https://github.com/WiiExpertise/madden-franchise) library, which understands the binary Frostbite format EA uses.
+**Local browser mode will not start**
 
-- **Importing** (Import page) extracts per-team stats, recruiting data, grades, pipeline info, and transfer portal data and stores a snapshot in a local SQLite database. The save file itself is never touched.
-- **Toolbox** goes the other direction — it opens your most-recently-imported save file and writes changes back into it directly, which the game picks up next time you load that dynasty.
+Run `setup-ghost-city-rlt.bat` again, ensure Node.js LTS is installed, and keep the command window open after launching.
 
-Nothing leaves your machine either way — no network calls, no telemetry.
+## Updating
 
----
-
-## Local browser setup (source)
-
-If you want to run from source or contribute:
-
-```
-git clone https://github.com/ghostcitydev/ghostcity-recruiting-tracker.git
-cd ghostcity-recruiting-tracker
-setup-ghost-city-rlt.bat
-```
-
-Requires Node.js 18+. The setup file installs dependencies, creates the local SQLite database, and opens the app at `http://localhost:3000`. After that, use `run-ghost-city-rlt.bat` to launch it again.
-
-**Working on the Electron app itself?**
-
-- **`test-mode.bat`** — double-click to open the real desktop app window against a live dev server. Same as `npm run electron:dev` below, no command line needed. Code changes hot-reload; close the window to stop.
-- `npm run dev` — plain Next.js dev server at `http://localhost:3000`, open in any browser. Fastest loop for UI/API work.
-- `npm run electron:dev` — opens the real Electron desktop window pointed at a live dev server. Use this when testing anything Electron-specific (window behavior, native dialogs, packaging-sensitive code paths). Hot reload works.
-- `npm run dist` — builds the production portable exe (`.next/standalone` output + electron-builder). Only needed when cutting an actual release; not required for day-to-day development.
-
-**Gotcha:** `npm run dist` rebuilds the native `better-sqlite3` module against Electron's ABI, which breaks `npm run dev` / `npm run electron:dev` afterward (`ERR_DLOPEN_FAILED`, wrong `NODE_MODULE_VERSION`). If that happens, run `npm rebuild better-sqlite3` to switch it back to plain Node.js.
-
----
+For the portable app, download the newest exe and replace the old one. Your tracker data remains in place.
 
 ## Credits
 
-- Save file parsing: [`madden-franchise`](https://github.com/WiiExpertise/madden-franchise) by WiiExpertise
-- Built with Next.js, Prisma, Chart.js, and Tailwind CSS
-- Logo & brand: Ghost City RLT
+- Save parsing: [madden-franchise](https://github.com/WiiExpertise/madden-franchise) by WiiExpertise
+- Fang's Recruiting Generator by Fang / RO27
+- NSD Assign by PocketScout Utilities
+- CFB Rebalance by Dogsh*t
+- Ghost City RLT is built with Next.js, Prisma, Chart.js, and Tailwind CSS
