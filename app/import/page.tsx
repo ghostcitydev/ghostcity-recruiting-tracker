@@ -7,6 +7,7 @@ import { upload } from '@vercel/blob/client';
 
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
+type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]; downloadPath: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
   seasonYear: number;
@@ -58,6 +59,7 @@ export default function ImportPage() {
   const [uploadedSave, setUploadedSave] = useState<UploadedSave | null>(null);
   const [uploadingSave, setUploadingSave] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [cloudDownloadPath, setCloudDownloadPath] = useState('');
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [loadError, setLoadError] = useState('');
   const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
@@ -165,6 +167,23 @@ export default function ImportPage() {
   }
 
   async function runImport() {
+    if (cloudMode) {
+      const res = await fetch('/api/cloud/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blobUrl: uploadedSave?.url,
+          snapshot,
+          mods: { fang, tw, rebalance, pipeline, nsd },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Cloud processing failed');
+      const cloud = data as CloudWorkflowResult;
+      setModLogs(cloud.modLogs ?? []);
+      setCloudDownloadPath(cloud.downloadPath ?? '');
+      return cloud.importResult;
+    }
     const res = await fetch('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -186,12 +205,14 @@ export default function ImportPage() {
     const pipelineActive = pipeline.enabled && snapshot === 'preseason';
     const fangActive = fang.enabled && snapshot === 'preseason';
 
-    if (cloudMode && (nsdActive || twActive || rebalanceActive || pipelineActive || fangActive)) {
-      setError('Cloud save modification is not enabled yet. For now, use the desktop app for Fang and the other embedded mods; browser imports are available for dashboard tracking.');
-      return;
-    }
-
     try {
+      if (cloudMode) {
+        setFlow('running_mod');
+        const importResult = await runImport();
+        setResult(importResult);
+        setFlow('done');
+        return;
+      }
       if (fangActive) {
         if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
         setFlow('running_mod');
@@ -278,7 +299,7 @@ export default function ImportPage() {
     }
   }
 
-  function reset() { setFlow('idle'); setResult(null); setError(''); setModLogs([]); }
+  function reset() { setFlow('idle'); setResult(null); setError(''); setModLogs([]); setCloudDownloadPath(''); }
 
   // Which mods are active for the selected snapshot — only after localStorage loads
   const nsdActive = modsMounted && nsd.enabled && snapshot === 'signing_day';
@@ -371,7 +392,7 @@ export default function ImportPage() {
                 </span>
               </div>
               {uploadError && <p className="mt-2 text-xs" style={{ color: '#fca5a5' }}>{uploadError}</p>}
-              <p className="mt-2 text-xs" style={{ color: 'var(--ocean-500)' }}>Browser imports currently update Ghost City tracking data. Use the desktop app for save-modifying tools until cloud processing is enabled.</p>
+              <p className="mt-2 text-xs" style={{ color: 'var(--ocean-500)' }}>Your save stays private. Enabled mods run in the secure processing worker, then you can download the updated save.</p>
             </div>
           ) : saves.length > 0 ? (
             <select
@@ -521,6 +542,11 @@ export default function ImportPage() {
                 <button onClick={() => router.push('/')} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ background: 'var(--ocean-600)' }}>
                   View Dashboard
                 </button>
+                {cloudDownloadPath && (
+                  <a href={`/api/cloud/download?path=${encodeURIComponent(cloudDownloadPath)}`} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ background: 'var(--ocean-500)' }}>
+                    Download Updated Save
+                  </a>
+                )}
                 <button type="button" onClick={reset} className="rounded-lg px-4 py-2 text-sm font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}>
                   Import Another
                 </button>

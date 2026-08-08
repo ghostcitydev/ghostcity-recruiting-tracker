@@ -16,9 +16,9 @@ export async function materializePrivateSave(blobUrl: string) {
   const result = await get(blobUrl, { access: 'private' });
   if (!result || result.statusCode !== 200 || !result.stream) throw new Error('Uploaded dynasty save was not found. Please upload it again.');
 
-  const directory = path.join(os.tmpdir(), 'ghost-city-rlt');
+  const directory = path.join(os.tmpdir(), 'ghost-city-rlt', crypto.randomUUID());
   await mkdir(directory, { recursive: true });
-  const filePath = path.join(directory, `${crypto.randomUUID()}-${safeFileName(result.blob.pathname)}`);
+  const filePath = path.join(directory, safeFileName(result.blob.pathname));
   await pipeline(Readable.fromWeb(result.stream), createWriteStream(filePath));
-  return { filePath, cleanup: () => rm(filePath, { force: true }) };
+  return { filePath, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
