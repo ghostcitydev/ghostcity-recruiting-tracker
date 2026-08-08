@@ -12,6 +12,10 @@ import { POST as runNsd } from '@/app/api/mods/nsd-assign/route';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
+export async function GET() {
+  return Response.json({ ok: true, worker: process.env.CLOUD_WORKER_MODE === 'true' });
+}
+
 type CloudPayload = {
   blobUrl: string;
   snapshot: SnapshotType;
