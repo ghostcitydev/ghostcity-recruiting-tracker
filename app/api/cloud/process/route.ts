@@ -1,13 +1,6 @@
 import { del, put } from '@vercel/blob';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { materializePrivateSave } from '@/lib/cloudSave';
-import { importSaveFile, type SnapshotType } from '@/lib/importSave';
-import { POST as runFang } from '@/app/api/mods/fang/route';
-import { POST as runTransferWave } from '@/app/api/mods/transfer-wave-run/route';
-import { POST as runRebalance } from '@/app/api/mods/rebalance/route';
-import { POST as runPipeline } from '@/app/api/mods/pipeline/route';
-import { POST as runNsd } from '@/app/api/mods/nsd-assign/route';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -18,7 +11,7 @@ export async function GET() {
 
 type CloudPayload = {
   blobUrl: string;
-  snapshot: SnapshotType;
+  snapshot: 'preseason' | 'signing_day';
   mods?: { fang?: { enabled?: boolean; config?: Record<string, unknown> | null }; tw?: { enabled?: boolean; [key: string]: unknown }; rebalance?: { enabled?: boolean }; pipeline?: { enabled?: boolean; [key: string]: unknown }; nsd?: { enabled?: boolean; [key: string]: unknown } };
 };
 
@@ -30,6 +23,10 @@ async function invoke(handler: (request: Request) => Promise<Response>, payload:
 }
 
 async function processSave(payload: CloudPayload) {
+  // These dependencies include the desktop mod runtime. Keep them lazy so the
+  // Vercel proxy can start without loading desktop-only native modules.
+  const { materializePrivateSave } = await import('@/lib/cloudSave');
+  const { importSaveFile } = await import('@/lib/importSave');
   const save = await materializePrivateSave(payload.blobUrl);
   const modLogs: { type: string; data: Record<string, unknown> }[] = [];
   const mods = payload.mods ?? {};
@@ -37,23 +34,28 @@ async function processSave(payload: CloudPayload) {
   try {
     if (payload.snapshot === 'preseason' && mods.fang?.enabled) {
       if (!mods.fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is selected.");
+      const { POST: runFang } = await import('@/app/api/mods/fang/route');
       const data = await invoke(runFang, { savePath: save.filePath, settings: mods.fang.config });
       modLogs.push({ type: 'fang', data: { ...(data.result as Record<string, unknown> ?? {}), log: data.log ?? [] } });
     }
     if (payload.snapshot === 'preseason' && mods.tw?.enabled) {
       const { enabled: _enabled, ...settings } = mods.tw;
+      const { POST: runTransferWave } = await import('@/app/api/mods/transfer-wave-run/route');
       const data = await invoke(runTransferWave, { savePath: save.filePath, reimport: false, settings });
       modLogs.push({ type: 'tw', data: { ...(data.modResult as Record<string, unknown> ?? {}), log: data.log ?? [] } });
     }
     if (payload.snapshot === 'preseason' && mods.rebalance?.enabled) {
+      const { POST: runRebalance } = await import('@/app/api/mods/rebalance/route');
       const data = await invoke(runRebalance, { savePath: save.filePath });
       modLogs.push({ type: 'rebalance', data: (data.result as Record<string, unknown>) ?? {} });
     }
     if (payload.snapshot === 'preseason' && mods.pipeline?.enabled) {
+      const { POST: runPipeline } = await import('@/app/api/mods/pipeline/route');
       const data = await invoke(runPipeline, { savePath: save.filePath, settings: mods.pipeline });
       modLogs.push({ type: 'pipeline', data: (data.result as Record<string, unknown>) ?? {} });
     }
     if (payload.snapshot === 'signing_day' && mods.nsd?.enabled) {
+      const { POST: runNsd } = await import('@/app/api/mods/nsd-assign/route');
       const data = await invoke(runNsd, { savePath: save.filePath, reimport: false, bypassWeekRequirement: false, placementSettings: mods.nsd });
       modLogs.push({ type: 'nsd', data: (data.modResult as Record<string, unknown>) ?? {} });
     }
