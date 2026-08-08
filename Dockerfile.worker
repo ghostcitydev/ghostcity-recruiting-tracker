@@ -11,4 +11,4 @@ ENV NODE_ENV=production
 ENV CLOUD_WORKER_MODE=true
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx next start -p ${PORT:-3000}"]
+CMD ["sh", "-c", "node .next/standalone/server.js"]
