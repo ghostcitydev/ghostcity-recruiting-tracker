@@ -80,6 +80,16 @@ export async function POST(request: Request) {
   const workerUrl = process.env.CLOUD_WORKER_URL;
   const secret = process.env.CLOUD_WORKER_SECRET;
   if (!workerUrl || !secret) return Response.json({ error: 'Cloud processing is not configured yet. Use the desktop app until the Railway worker is connected.' }, { status: 503 });
-  const workerResponse = await fetch(new URL('/api/cloud/process', workerUrl), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` }, body: JSON.stringify(payload) });
-  return new Response(await workerResponse.text(), { status: workerResponse.status, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const workerResponse = await fetch(new URL('/api/cloud/process', workerUrl), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` }, body: JSON.stringify(payload) });
+    const text = await workerResponse.text();
+    try {
+      JSON.parse(text);
+      return new Response(text, { status: workerResponse.status, headers: { 'Content-Type': 'application/json' } });
+    } catch {
+      return Response.json({ error: `Cloud worker returned HTTP ${workerResponse.status} instead of a processing result. Check the Railway deployment logs.` }, { status: 502 });
+    }
+  } catch (error) {
+    return Response.json({ error: `Could not reach the cloud worker: ${error instanceof Error ? error.message : 'network error'}` }, { status: 502 });
+  }
 }

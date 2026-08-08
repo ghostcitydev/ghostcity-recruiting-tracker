@@ -168,7 +168,7 @@ export default function ImportPage() {
 
   async function runImport() {
     if (cloudMode) {
-      const res = await fetch('/api/cloud/process', {
+      const response = await safeJson<CloudWorkflowResult>('/api/cloud/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,21 +177,19 @@ export default function ImportPage() {
           mods: { fang, tw, rebalance, pipeline, nsd },
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Cloud processing failed');
-      const cloud = data as CloudWorkflowResult;
+      if (!response.ok || !response.data) throw new Error(response.error || 'Cloud processing failed');
+      const cloud = response.data;
       setModLogs(cloud.modLogs ?? []);
       setCloudDownloadPath(cloud.downloadPath ?? '');
       return cloud.importResult;
     }
-    const res = await fetch('/api/import', {
+    const response = await safeJson<ImportResult>('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Import failed');
-    return data as ImportResult;
+    if (!response.ok || !response.data) throw new Error(response.error || 'Import failed');
+    return response.data;
   }
 
   async function handleImport(e: React.FormEvent) {
