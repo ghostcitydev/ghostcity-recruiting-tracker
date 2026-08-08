@@ -64,25 +64,17 @@ jobs:
           files: dist/*.exe
           overwrite_files: true
           body: |
-            ## What's New
+            ## Changes since 1.0.5
 
-            ### Embedded dynasty tools
-            - **Preseason Transfer Wave**, **NSD Assign**, and **CFB Rebalance** now run directly inside Ghost City RLT
-            - **Dynamic Recruiting Pipelines** is now embedded with presets, advanced weighting controls, coach settings, and Academy Mode
-            - Preseason pipeline influence is available on the Pipelines page by team and by region
-            - Transfer Wave output is now a sortable player table, with raw diagnostics available on demand
-            - Rebalance runs after Transfer Wave, creates a safe backup in `RLT Backups`, then the save is re-imported
+            - Added Fang's Recruiting Generator as an embedded preseason mod. Select its settings JSON in Toolbox; it runs before Transfer Wave, Rebalance, Pipelines, and the import.
+            - Added Fang results and backup details to the import log.
+            - Updated PocketScout Utilities to 0.9.10 for the current EA title update.
+            - Updated Transfer Wave to v2.0, including configurable top-two destination handling for prestige-cap exceptions.
+            - Fixed the portable build so required `madden-franchise` lookup data is included.
+            - Added a clean optional local-browser workflow: `setup-ghost-city-rlt.bat` once, then `run-ghost-city-rlt.bat` for later launches.
 
-            ### Players and recruiting
-            - Recruiting filters now combine correctly, including star rating plus recruit type (for example, 5-star transfers)
-            - Added dedicated Transfers and Unsigned pages, plus new Access to Recruits and positional views
-            - Added National Champion and Conference Champion badges
-            - Improved recruit-composition chart sizing and player table controls
+            ## Upgrade note
 
-            ### Toolbox and reliability
-            - Added the Toolbox for dynasty utilities and mod settings
-            - Improved import flow, mod logs, and hydration stability
-            - Fixed NSD re-import handling for `HardCommitted` players, Signing Day transfer data, and previous-team display
-            - Rebalance refreshes its `RLT Backups` safety copy on each intentional run
+            Replace your old portable exe with the new one; your existing tracker data remains intact.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
