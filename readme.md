@@ -33,7 +33,7 @@ Unlike everything above, **Toolbox edits your live dynasty save file** the next 
 
 ---
 
-## Run locally in your browser (recommended)
+## Optional: run locally in your browser
 
 This is the simplest full-featured setup: it runs entirely on your own PC, reads your normal EA saves folder, and supports every embedded mod. Nothing is uploaded anywhere.
 
@@ -43,7 +43,7 @@ This is the simplest full-featured setup: it runs entirely on your own PC, reads
 
 Keep the small command window open while using the tracker; closing it stops the local server. Node.js LTS is the only prerequisite.
 
-## Portable desktop app
+## Portable desktop app (recommended)
 
 Grab the latest **Ghost City RLT Portable.exe** from the [Releases page](https://github.com/ghostcitydev/ghostcity-recruiting-tracker/releases). No installer — just download it and double-click. Put it anywhere you like (Desktop, a folder, wherever).
 
@@ -56,7 +56,7 @@ Your data is stored in `%AppData%\ghost-city-rlt\cfb27.db`. It survives app upda
 - Windows 10/11 (64-bit)
 - EA Sports College Football 27 on PC with an active dynasty save
 
-No Node.js. No database setup. No config files. Just run the exe.
+For the portable exe: no Node.js, database setup, or config files. Just run it.
 
 ---
 
