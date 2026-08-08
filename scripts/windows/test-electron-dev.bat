@@ -13,7 +13,7 @@ echo.
 if not exist "node_modules" (
     echo  First-time setup required. Running setup.bat...
     echo.
-    call setup.bat
+    call "%~dp0setup-local.bat"
 )
 
 call npm run electron:dev

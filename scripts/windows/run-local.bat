@@ -1,17 +1,18 @@
 @echo off
 setlocal
+cd /d "%~dp0\..\.."
 
 :: If deps or DB missing, run first-time setup automatically
 if not exist "node_modules" (
     echo  First-time setup required. Running setup.bat...
     echo.
-    call setup.bat
+    call "%~dp0setup-local.bat"
     exit /b %errorlevel%
 )
 if not exist "dev.db" (
     echo  Database missing. Running setup.bat...
     echo.
-    call setup.bat
+    call "%~dp0setup-local.bat"
     exit /b %errorlevel%
 )
 
