@@ -6,7 +6,8 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma && prisma generate --schema prisma/schema.postgres.prisma",
+    "postinstall": "npm run prisma:generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -20,13 +21,29 @@
     "copyright": "Copyright © 2026",
     "npmRebuild": false,
     "afterPack": "./scripts/after-pack.js",
-    "files": ["electron/**/*", "package.json"],
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
     "extraResources": [
-      { "from": "prisma/migrations", "to": "migrations" },
-      { "from": "public/other mods", "to": "mods" }
+      {
+        "from": "prisma/migrations",
+        "to": "migrations"
+      },
+      {
+        "from": "public/other mods",
+        "to": "mods"
+      }
     ],
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "public/icon.ico",
       "artifactName": "${productName} Setup ${version}.${ext}"
     },
@@ -37,16 +54,20 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Ghost City RLT"
     },
-    "portable": { "artifactName": "${productName} Portable ${version}.exe" }
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.exe"
+    }
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.8.0",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.4.0",
     "madden-franchise": "^4.3.1",
     "next": "16.2.10",
+    "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "react": "19.2.4",
     "react-chartjs-2": "^5.3.1",
