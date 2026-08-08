@@ -5,7 +5,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run prisma:generate && npm run build
+RUN npm run prisma:generate && npm run build \
+  && mkdir -p .next/standalone/node_modules/madden-franchise \
+  && cp -R node_modules/madden-franchise/data .next/standalone/node_modules/madden-franchise/data
 
 ENV NODE_ENV=production
 ENV CLOUD_WORKER_MODE=true
