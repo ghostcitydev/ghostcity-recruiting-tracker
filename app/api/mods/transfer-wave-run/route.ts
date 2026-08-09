@@ -65,7 +65,14 @@ export async function POST(request: Request) {
     const code = fs.readFileSync(modPath, 'utf-8')
       .replaceAll("await import('madden-franchise')", "await Promise.resolve(require('madden-franchise'))");
     const mod = { exports: {} as Record<string, unknown> };
-    const req = createRequire(pathToFileURL(modPath).href);
+    const modRequire = createRequire(pathToFileURL(modPath).href);
+    // The portable build keeps Transfer Wave in resources/mods while shared
+    // dependencies live under resources/standalone/node_modules. Resolve the
+    // franchise parser from the running app, not from the copied mod folder.
+    const appRequire = createRequire(pathToFileURL(path.join(process.cwd(), 'package.json')).href);
+    const req = (specifier: string) => specifier === 'madden-franchise'
+      ? appRequire(specifier)
+      : modRequire(specifier);
     vm.Script.prototype; // ensure vm is retained by bundler
     new vm.Script(`(function(require,module,exports){${code}})`).runInThisContext()(req, mod, mod.exports);
     redistribution = mod.exports as typeof redistribution;
