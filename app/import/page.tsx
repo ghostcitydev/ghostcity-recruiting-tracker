@@ -221,15 +221,26 @@ export default function ImportPage() {
         setFlow('done');
         return;
       }
-      if (fangActive) {
-        if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
-        setModStatus("Running Fang's Recruiting Generator…");
+      // Preseason order: Rebalance, Pipelines, Transfer Wave, then Fang.
+      // Transfer Wave runs second-to-last when Fang is enabled.
+      if (rebalanceActive) {
+        setModStatus('Running CFB Rebalance…');
         setFlow('running_mod');
-        const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
-        const fangData = await fangRes.json();
-        if (!fangRes.ok) throw new Error(fangData.error ?? "Fang's Recruiting Generator failed");
-        setModLogs((logs) => [...logs, { type: 'fang', data: { ...(fangData.result ?? {}), log: fangData.log ?? [] } }]);
+        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
+        const rebalanceData = await rebalanceRes.json();
+        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
+        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
       }
+
+      if (pipelineActive) {
+        setModStatus('Running Dynamic Recruiting Pipelines…');
+        setFlow('running_mod');
+        const pipelineRes = await fetch('/api/mods/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: pipeline }) });
+        const pipelineData = await pipelineRes.json();
+        if (!pipelineRes.ok) throw new Error(pipelineData.error ?? 'Pipeline Tool failed');
+        setModLogs((logs) => [...logs, { type: 'pipeline', data: pipelineData.result ?? {} }]);
+      }
+
       // Transfer Wave: run natively, reimport automatically
       if (twActive) {
         setModStatus('Running Transfer Wave engine…');
@@ -255,27 +266,16 @@ export default function ImportPage() {
         setModLogs((logs) => [...logs, { type: 'tw', data: { ...(twData.modResult ?? {}), log: twData.log ?? [] } }]);
       }
 
-      // Rebalance always follows Transfer Wave and precedes import.
-      if (rebalanceActive) {
-        setModStatus('Running CFB Rebalance…');
-        setFlow('running_mod');
-        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
-        const rebalanceData = await rebalanceRes.json();
-        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
-        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
-      }
 
-      // Pipeline recalculation is the final preseason modification so the
-      // following import reads the finished Transfer Wave + Rebalance state.
-      if (pipelineActive) {
-        setModStatus('Running Dynamic Recruiting Pipelines…');
+      if (fangActive) {
+        if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
+        setModStatus("Running Fang's Recruiting Generator…");
         setFlow('running_mod');
-        const pipelineRes = await fetch('/api/mods/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: pipeline }) });
-        const pipelineData = await pipelineRes.json();
-        if (!pipelineRes.ok) throw new Error(pipelineData.error ?? 'Pipeline Tool failed');
-        setModLogs((logs) => [...logs, { type: 'pipeline', data: pipelineData.result ?? {} }]);
+        const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
+        const fangData = await fangRes.json();
+        if (!fangRes.ok) throw new Error(fangData.error ?? "Fang's Recruiting Generator failed");
+        setModLogs((logs) => [...logs, { type: 'fang', data: { ...(fangData.result ?? {}), log: fangData.log ?? [] } }]);
       }
-
       // NSD mod: run automatically
       if (nsdActive) {
         setModStatus('Running NSD Assign…');
@@ -344,7 +344,7 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Fang's Recruiting Generator</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs first in preseason, updates recruits, then the remaining enabled mods and import run.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs last among enabled Preseason mods, immediately before import.</span>
             </p>
           )}
           {nsdActive && (
@@ -358,21 +358,21 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Preseason Transfer Wave</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — the exe will launch so you can apply your transfer wave, then you'll import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs second-to-last among enabled Preseason mods, immediately before Fang when enabled.</span>
             </p>
           )}
           {rebalanceActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>CFB Rebalance</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Transfer Wave and before import. A backup is created beside the save first.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs before Pipelines, Transfer Wave, Fang, and import. A backup is created beside the save first.</span>
             </p>
           )}
           {pipelineActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Dynamic Recruiting Pipelines</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Rebalance, then the import refreshes Pipelines.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Rebalance and before Transfer Wave, Fang, and import.</span>
             </p>
           )}
         </div>

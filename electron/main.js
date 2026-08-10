@@ -20,6 +20,30 @@ const MIGRATIONS_DIR = isDev
 let mainWindow = null;
 let httpServer = null;
 
+function tableExists(db, tableName) {
+  return Boolean(db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+  ).get(tableName));
+}
+
+function ensureColumn(db, tableName, columnName, definition) {
+  if (!tableExists(db, tableName)) return;
+  const columns = new Set(
+    db.prepare(`PRAGMA table_info("${tableName}")`).all().map((column) => column.name)
+  );
+  if (!columns.has(columnName)) {
+    db.exec(`ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${definition}`);
+  }
+}
+
+// Repair a historical partial recruit migration so upgrades do not leave an
+// existing database unable to import a Signing Day save.
+function repairRecruitSchema(db) {
+  ensureColumn(db, 'SignedRecruit', 'previousTeam', 'TEXT');
+  ensureColumn(db, 'SignedRecruit', 'classYear', 'TEXT');
+  ensureColumn(db, 'UnsignedRecruit', 'previousTeam', 'TEXT');
+}
+
 // ── Migration runner ───────────────────────────────────────────────────────────
 
 function runMigrations(dbPath) {
@@ -75,6 +99,7 @@ function runMigrations(dbPath) {
   // Enable WAL mode once — persists across connections, improves read concurrency
   db.exec('PRAGMA journal_mode=WAL');
   db.exec('PRAGMA synchronous=NORMAL');
+  repairRecruitSchema(db);
 
   db.close();
 }

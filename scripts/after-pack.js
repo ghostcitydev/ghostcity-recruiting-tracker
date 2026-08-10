@@ -16,6 +16,15 @@ exports.default = async function afterPack(context) {
   fs.cpSync(path.join(root, '.next', 'standalone'), standaloneDest, { recursive: true, force: true });
   console.log('[afterPack] Copied .next/standalone -> resources/standalone');
 
+  // Preserve Fang's dynamic JSON resources at the exact packaged runtime
+  // path, even if standalone tracing omits them.
+  fs.cpSync(
+    path.join(root, 'lib', 'embeddedMods', 'fang', 'data'),
+    path.join(standaloneDest, 'lib', 'embeddedMods', 'fang', 'data'),
+    { recursive: true, force: true }
+  );
+  console.log('[afterPack] Synced Fang data resources');
+
   const packages = [
     'better-sqlite3',
     'bindings',

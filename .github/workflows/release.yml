@@ -64,14 +64,12 @@ jobs:
           files: dist/*.exe
           overwrite_files: true
           body: |
-            ## Changes since 1.0.5
+            ## Changes since 1.0.6
 
-            - Added Fang's Recruiting Generator as an embedded preseason mod. Select its settings JSON in Toolbox; it runs before Transfer Wave, Rebalance, Pipelines, and the import.
-            - Added Fang results and backup details to the import log.
-            - Updated PocketScout Utilities to 0.9.10 for the current EA title update.
-            - Updated Transfer Wave to v2.0, including configurable top-two destination handling for prestige-cap exceptions.
-            - Fixed the portable build so required `madden-franchise` lookup data is included.
-            - Added a clean optional local-browser workflow: `setup-ghost-city-rlt.bat` once, then `run-ghost-city-rlt.bat` for later launches.
+            - Fixed the portable EXE packaging for Fang's Recruiting Generator. Its name and portrait resources are now included at runtime.
+            - Fixed upgrades from older tracker databases: missing signed/unsigned recruit columns are repaired automatically at startup.
+            - Updated Preseason execution order: CFB Rebalance, Dynamic Recruiting Pipelines, Transfer Wave, then Fang, followed by import.
+            - Updated the Toolbox and Import descriptions to show the actual execution order.
 
             ## Upgrade note
 

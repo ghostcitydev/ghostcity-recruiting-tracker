@@ -185,7 +185,7 @@ function FangModCard() {
     };
     reader.readAsText(file);
   };
-  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Fang's Recruiting Generator" author="Fang / RO27 Official V3.4" snapshot="preseason" description="Regenerates preseason recruits using Fang's selected settings profile. It runs first, then Transfer Wave, Rebalance, Pipelines, and the Ghost City import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created before changes.">
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Fang's Recruiting Generator" author="Fang / RO27 Official V3.4" snapshot="preseason" description="Regenerates preseason recruits using Fang's selected settings profile. It runs last, after Rebalance, Pipelines, and Transfer Wave, immediately before the Ghost City import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created before changes.">
     <Section label="Settings JSON">
       <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={(event) => chooseFile(event.target.files?.[0])} className="hidden" />
       <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--ocean-700)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-600)', cursor: 'pointer' }}>Browse…</button>
@@ -742,7 +742,7 @@ function PipelineModCard() {
     update({ preset:name, wRoster:values[0], wStar:values[1], wCoach:values[2], wGeo:values[3] });
   };
   const weight = (key: 'wRoster'|'wStar'|'wCoach'|'wGeo', value: number) => update({ [key]: value, preset:'custom' } as Partial<PipelineSettings>);
-  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Dynamic Recruiting Pipelines" author="Dynamic Recruiting Pipeline Tool v1.1.0" snapshot="preseason" description="Recomputes recruiting pipelines from roster makeup, star quality, coaches, geography, and prior pipelines. Runs after Transfer Wave and CFB Rebalance, then imports the updated pipeline data." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh Pipeline Backup is created before changes.">
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Dynamic Recruiting Pipelines" author="Dynamic Recruiting Pipeline Tool v1.1.0" snapshot="preseason" description="Recomputes recruiting pipelines from roster makeup, star quality, coaches, geography, and prior pipelines. Runs after CFB Rebalance and before Transfer Wave, Fang, and import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh Pipeline Backup is created before changes.">
     <Section label="Preset & Core Settings">
       <div className="grid grid-cols-2 gap-3">
         <div><label className="block text-xs font-medium mb-1" style={{color:'var(--ocean-300)'}}>Preset</label><select value={s.preset} onChange={e => preset(e.target.value as PipelineSettings['preset'])} className="w-full rounded border px-2 py-1.5 text-sm" style={{background:'var(--ocean-800)',borderColor:'var(--ocean-700)',color:'var(--ocean-100)'}}><option value="rosterDriven">Roster-driven</option><option value="blueChipFocused">Blue-chip focused</option><option value="coachLegacy">Coach-legacy</option><option value="grounded">Grounded</option><option value="custom">Custom</option></select></div>

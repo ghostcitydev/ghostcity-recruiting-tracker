@@ -42,6 +42,9 @@ next-env.d.ts
 
 /app/generated/prisma
 
+# Local dynasty regression fixtures. These are intentionally never committed.
+/test-fixtures/
+
 # sqlite
 *.db
 
