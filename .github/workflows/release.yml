@@ -68,7 +68,7 @@ jobs:
 
             - Fixed the portable EXE packaging for Fang's Recruiting Generator. Its name and portrait resources are now included at runtime.
             - Fixed upgrades from older tracker databases: missing signed/unsigned recruit columns are repaired automatically at startup.
-            - Updated Preseason execution order: CFB Rebalance, Dynamic Recruiting Pipelines, Transfer Wave, then Fang, followed by import.
+            - Updated Preseason execution order: Fang, Dynamic Recruiting Pipelines, Transfer Wave, CFB Rebalance, then import.
             - Updated the Toolbox and Import descriptions to show the actual execution order.
 
             ## Upgrade note
