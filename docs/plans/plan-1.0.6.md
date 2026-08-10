@@ -9,7 +9,7 @@ Harden the newly embedded preseason workflow and make its results easier to veri
 ### 1. Fang Recruiting Generator
 
 - Keep the settings picker as a visible **Browse…** button and retain the selected JSON profile for the next preseason import.
-- Run Fang first in the preseason workflow, before Transfer Wave, Rebalance, Pipelines, and the Ghost City import.
+- Run the preseason workflow in this order: Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Ghost City import.
 - Keep the embedded direct read/calculate/write flow; do not require launching an external executable.
 - Create a fresh `RLT Backups` copy before modifying the save.
 - **Verified:** the Toolbox loads with Fang enabled and the Browse button rendered; a temporary-save smoke test processed 259 candidates, including names, sizes, and portraits.
@@ -23,7 +23,7 @@ Harden the newly embedded preseason workflow and make its results easier to veri
 
 ### 3. Preseason import reliability
 
-- Treat the preseason sequence as one explicit flow: Transfer Wave → Rebalance → Dynamic Pipelines → Import.
+- Treat the preseason sequence as one explicit flow: Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Import.
 - Improve step-specific errors and logs so it is clear which stage completed if a later stage fails.
 - Standardize backups under `RLT Backups`, with clear timestamps and tool labels.
 - Ensure rerunning a failed later stage does not rerun Transfer Wave unnecessarily.

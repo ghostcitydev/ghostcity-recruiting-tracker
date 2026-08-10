@@ -47,9 +47,9 @@ Mods are configured in **Toolbox** and run automatically as part of the appropri
 ### Preseason order
 
 1. **Fang's Recruiting Generator** — optional; select a Fang settings JSON in Toolbox. Fang runs first and creates an RLT backup.
-2. **Preseason Transfer Wave** — optional; recommended for Year 2–3 and beyond. It redistributes transfer-portal players using roster need and prestige rules.
-3. **CFB Rebalance** — optional; runs after Transfer Wave and refreshes its backup in `RLT Backups`.
-4. **Dynamic Recruiting Pipelines** — optional; runs after Rebalance and refreshes the Pipelines page.
+2. **Dynamic Recruiting Pipelines** — optional; runs after Fang and refreshes pipeline influence data.
+3. **Preseason Transfer Wave** — optional; recommended for Year 2–3 and beyond. It redistributes transfer-portal players using roster need and prestige rules.
+4. **CFB Rebalance** — optional; runs after Transfer Wave and refreshes its backup in `RLT Backups`.
 5. **Ghost City import** — records the final preseason snapshot.
 
 ### Signing Day

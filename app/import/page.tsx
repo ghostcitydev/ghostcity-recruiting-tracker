@@ -221,17 +221,16 @@ export default function ImportPage() {
         setFlow('done');
         return;
       }
-      // Preseason order: Rebalance, Pipelines, Transfer Wave, then Fang.
-      // Transfer Wave runs second-to-last when Fang is enabled.
-      if (rebalanceActive) {
-        setModStatus('Running CFB Rebalance…');
+      // Preseason order: Fang, Pipelines, Transfer Wave, Rebalance, then import.
+      if (fangActive) {
+        if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
+        setModStatus("Running Fang's Recruiting Generator…");
         setFlow('running_mod');
-        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
-        const rebalanceData = await rebalanceRes.json();
-        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
-        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
+        const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
+        const fangData = await fangRes.json();
+        if (!fangRes.ok) throw new Error(fangData.error ?? "Fang's Recruiting Generator failed");
+        setModLogs((logs) => [...logs, { type: 'fang', data: { ...(fangData.result ?? {}), log: fangData.log ?? [] } }]);
       }
-
       if (pipelineActive) {
         setModStatus('Running Dynamic Recruiting Pipelines…');
         setFlow('running_mod');
@@ -267,14 +266,13 @@ export default function ImportPage() {
       }
 
 
-      if (fangActive) {
-        if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
-        setModStatus("Running Fang's Recruiting Generator…");
+      if (rebalanceActive) {
+        setModStatus('Running CFB Rebalance…');
         setFlow('running_mod');
-        const fangRes = await fetch('/api/mods/fang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath, settings: fang.config }) });
-        const fangData = await fangRes.json();
-        if (!fangRes.ok) throw new Error(fangData.error ?? "Fang's Recruiting Generator failed");
-        setModLogs((logs) => [...logs, { type: 'fang', data: { ...(fangData.result ?? {}), log: fangData.log ?? [] } }]);
+        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
+        const rebalanceData = await rebalanceRes.json();
+        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
+        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
       }
       // NSD mod: run automatically
       if (nsdActive) {
@@ -494,9 +492,9 @@ export default function ImportPage() {
             {fangActive
               ? (pipelineActive || twActive || rebalanceActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
               : pipelineActive && twActive && rebalanceActive
-              ? 'Run Transfer Wave + Rebalance + Pipelines + Import'
+              ? 'Run Pipelines + Transfer Wave + Rebalance + Import'
               : pipelineActive && rebalanceActive
-              ? 'Run Rebalance + Pipelines + Import'
+              ? 'Run Pipelines + Rebalance + Import'
               : pipelineActive
               ? 'Run Pipeline Tool + Import'
               : rebalanceActive && twActive
