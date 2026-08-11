@@ -64,12 +64,14 @@ jobs:
           files: dist/*.exe
           overwrite_files: true
           body: |
-            ## Changes since 1.0.6
+            ## 1.0.8
 
-            - Fixed the portable EXE packaging for Fang's Recruiting Generator. Its name and portrait resources are now included at runtime.
-            - Fixed upgrades from older tracker databases: missing signed/unsigned recruit columns are repaired automatically at startup.
-            - Updated Preseason execution order: Fang, Dynamic Recruiting Pipelines, Transfer Wave, CFB Rebalance, then import.
-            - Updated the Toolbox and Import descriptions to show the actual execution order.
+            - Added Dynamic Conference Realignment to the Signing Day workflow.
+            - Updated Preseason Transfer Wave to v2.0.1.
+            - Corrected Signing Day attribution for signed transfers when a stale committed-player reference disagrees with the signed school.
+            - Added Import history backup and restore packages. Restore replaces only matching year/snapshot records and preserves all other history.
+            - Reduced portable build size by excluding local databases, environment files, old build output, and redundant upstream apps while retaining every embedded runtime resource.
+            - Preseason order: Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Import.
 
             ## Upgrade note
 

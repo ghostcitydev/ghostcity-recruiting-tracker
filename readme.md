@@ -29,7 +29,7 @@ This is still completely local and supports the same save-file and mod workflow.
 - **Unsigned:** remaining high-school/JUCO and transfer-portal prospects, including star/source breakdowns and previous teams for transfers.
 - **Pipelines:** team and region pipeline influence, recruiting reach, and preseason pipeline changes.
 - **Charts:** multi-season team trends, national distributions, recruit composition, and sortable/exportable data views.
-- **History:** one Preseason and one Signing Day snapshot per season, with CSV export and season deletion from Import.
+- **History:** one Preseason and one Signing Day snapshot per season, with CSV export, season deletion, and full import-history backup/restore packages from Import.
 
 ## Import a save
 
@@ -39,6 +39,10 @@ This is still completely local and supports the same save-file and mod workflow.
 4. Open Dashboard, Players, Pipelines, Charts, or Unsigned to explore the snapshot.
 
 Normal imports read the save and create a local tracker snapshot. They do not change the save file.
+
+### Preserve or switch tracking histories
+
+Use **Export Imports** under **Imported Seasons** to save your tracker history as a JSON package before starting a new dynasty, clearing data, or moving to another PC. Use **Restore Imports** to bring it back later. Restoring replaces only matching year/snapshot records and leaves all other tracked seasons intact.
 
 ## Embedded dynasty mods
 

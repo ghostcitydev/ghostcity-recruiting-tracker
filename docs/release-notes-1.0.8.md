@@ -15,9 +15,12 @@
 - Removed duplicate upstream desktop applications and source archives from the portable package; embedded tools continue to run inside RLT.
 - Prevented prior build output, the local development database, and `.env` files from entering portable builds.
 - Added a clean standalone-build step so stale generated files cannot inflate future releases.
+- Corrected Signing Day destination reconciliation for signed transfers. RLT now uses the recruit's signed top school instead of a stale team committed-player reference when those records disagree.
+- Added **Export Imports** and **Restore Imports** on the Import page. A package preserves imported seasons, recruiting classes, unsigned players, pipelines, roster data, and charts history. Restoring replaces only matching season/snapshot pairs and keeps every other imported season.
 
 ## Important notes
 
 - The preseason order remains **Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Import**.
 - Keep Dynamic Conference Realignment enabled at each Signing Day to build its history. Early seasons may return no moves while history and moratorium requirements are still being established.
 - Exit the dynasty to the main menu before running any save-writing mod. The game can remain open.
+- To correct a prior Signing Day snapshot, re-import just that season's Signing Day save; other tracked seasons are preserved.

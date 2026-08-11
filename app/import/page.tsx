@@ -16,6 +16,7 @@ type ImportResult = {
   teamsSkipped: string[];
   unsignedWritten?: number;
 };
+type ImportPackageResult = { ok: true; seasons: number; teams: number };
 
 // ── Mod settings (read from localStorage) ─────────────────
 
@@ -63,6 +64,7 @@ export default function ImportPage() {
   const [uploadError, setUploadError] = useState('');
   const [cloudDownloadPath, setCloudDownloadPath] = useState('');
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const importPackageInputRef = useRef<HTMLInputElement>(null);
   const [loadError, setLoadError] = useState('');
   const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -72,6 +74,9 @@ export default function ImportPage() {
   const [folderInput, setFolderInput] = useState('');
   const [folderSaving, setFolderSaving] = useState(false);
   const [folderError, setFolderError] = useState('');
+  const [packageBusy, setPackageBusy] = useState(false);
+  const [packageMessage, setPackageMessage] = useState('');
+  const [packageError, setPackageError] = useState('');
 
   // Mod state
   const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 });
@@ -168,6 +173,26 @@ export default function ImportPage() {
       setShowFolderEdit(false);
       await loadSaves();
     } finally { setFolderSaving(false); }
+  }
+
+  async function restoreImportPackage(file: File) {
+    setPackageBusy(true); setPackageMessage(''); setPackageError('');
+    try {
+      const packageData = JSON.parse(await file.text());
+      const response = await safeJson<ImportPackageResult>('/api/import-package', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(packageData),
+      });
+      if (!response.ok || !response.data) throw new Error(response.error ?? 'Could not restore imports.');
+      setPackageMessage(`Restored ${response.data.seasons} season${response.data.seasons === 1 ? '' : 's'} from ${file.name}.`);
+      await loadSeasons();
+    } catch (err) {
+      setPackageError(err instanceof Error ? err.message : 'Could not read that imports package.');
+    } finally {
+      setPackageBusy(false);
+      if (importPackageInputRef.current) importPackageInputRef.current.value = '';
+    }
   }
 
   async function runImport() {
@@ -605,10 +630,29 @@ export default function ImportPage() {
       </form>
 
       {/* Season management */}
-      {seasons.length > 0 && (
-        <div className="mt-10 border-t pt-8" style={{ borderColor: 'var(--ocean-800)' }}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Imported Seasons</h2>
+      <div className="mt-10 border-t pt-8" style={{ borderColor: 'var(--ocean-800)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Imported Seasons</h2>
+              <p className="mt-1 text-xs" style={{ color: 'var(--ocean-500)' }}>Save this tracker history before switching dynasties or starting fresh.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href="/api/import-package" className="rounded px-3 py-1 text-xs font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}>
+                Export Imports
+              </a>
+              <input
+                ref={importPackageInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void restoreImportPackage(file);
+                }}
+              />
+              <button type="button" disabled={packageBusy} onClick={() => importPackageInputRef.current?.click()} className="rounded px-3 py-1 text-xs font-medium disabled:opacity-40" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}>
+                {packageBusy ? 'Restoring…' : 'Restore Imports'}
+              </button>
             {confirmDeleteAll ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs" style={{ color: 'var(--ocean-400)' }}>Delete all seasons?</span>
@@ -629,12 +673,15 @@ export default function ImportPage() {
                   Cancel
                 </button>
               </div>
-            ) : (
+            ) : seasons.length > 0 ? (
               <button onClick={() => { setConfirmDeleteAll(true); setConfirmDeleteId(null); }} className="rounded px-3 py-1 text-xs font-medium" style={{ background: '#DC2626', color: '#fff' }}>
                 Delete All
               </button>
-            )}
+            ) : null}
+            </div>
           </div>
+          {packageMessage && <p className="mt-3 text-xs" style={{ color: '#4ade80' }}>{packageMessage}</p>}
+          {packageError && <p className="mt-3 text-xs" style={{ color: '#f87171' }}>{packageError}</p>}
           <div className="mt-3 flex flex-col gap-2">
             {seasons.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border px-4 py-2.5" style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}>
@@ -665,8 +712,7 @@ export default function ImportPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
