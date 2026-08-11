@@ -6,7 +6,7 @@ import { safeJson } from '@/lib/safeFetch';
 
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
-type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]; downloadPath: string };
+type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> }[]; downloadPath: string };
 type CloudJob = { state: 'queued' | 'running' | 'complete' | 'failed'; result?: CloudWorkflowResult; error?: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
@@ -26,6 +26,7 @@ type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwChec
 type RebalanceSettings = { enabled: boolean };
 type PipelineSettings = { enabled: boolean; [key: string]: unknown };
 type FangSettings = { enabled: boolean; fileName?: string; config?: Record<string, unknown> | null };
+type RealignmentSettings = { enabled: boolean; [key: string]: unknown };
 
 function readNsd(): NsdSettings {
   try {
@@ -46,6 +47,7 @@ function readPipeline(): PipelineSettings {
   catch { return { enabled: false }; }
 }
 function readFang(): FangSettings { try { return JSON.parse(localStorage.getItem('gc_mod_fang') ?? '{}'); } catch { return { enabled: false }; } }
+function readRealignment(): RealignmentSettings { try { return JSON.parse(localStorage.getItem('gc_mod_realignment') ?? '{}'); } catch { return { enabled: false }; } }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -77,6 +79,7 @@ export default function ImportPage() {
   const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
   const [pipeline, setPipeline] = useState<PipelineSettings>({ enabled: false });
   const [fang, setFang] = useState<FangSettings>({ enabled: false });
+  const [realignment, setRealignment] = useState<RealignmentSettings>({ enabled: false });
   const [modsMounted, setModsMounted] = useState(false);
 
   // Import flow
@@ -85,7 +88,7 @@ export default function ImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [modStatus, setModStatus] = useState('Running selected mod…');
-  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> }[]>([]);
+  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> }[]>([]);
 
   const router = useRouter();
 
@@ -119,6 +122,7 @@ export default function ImportPage() {
     setRebalance(readRebalance());
     setPipeline(readPipeline());
     setFang(readFang());
+    setRealignment(readRealignment());
     setModsMounted(true);
   }, []);
 
@@ -174,7 +178,7 @@ export default function ImportPage() {
         body: JSON.stringify({
           blobUrl: uploadedSave?.url,
           snapshot,
-          mods: { fang, tw, rebalance, pipeline, nsd },
+          mods: { fang, tw, rebalance, pipeline, nsd, realignment },
         }),
       });
       if (!response.ok || !response.data) throw new Error(response.error || 'Cloud processing failed');
@@ -212,6 +216,7 @@ export default function ImportPage() {
     const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
     const pipelineActive = pipeline.enabled && snapshot === 'preseason';
     const fangActive = fang.enabled && snapshot === 'preseason';
+    const realignmentActive = realignment.enabled && snapshot === 'signing_day';
 
     try {
       if (cloudMode) {
@@ -298,6 +303,18 @@ export default function ImportPage() {
         if (!modRes.ok) throw new Error(modData.error ?? 'NSD mod failed');
         setModLogs((logs) => [...logs, { type: 'nsd', data: modData.modResult ?? {} }]);
       }
+      if (realignmentActive) {
+        setModStatus('Generating conference realignment recommendations…');
+        setFlow('running_mod');
+        const realignmentRes = await fetch('/api/mods/realignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ savePath: selectedPath, settings: realignment }),
+        });
+        const realignmentData = await realignmentRes.json();
+        if (!realignmentRes.ok) throw new Error(realignmentData.error ?? 'Conference realignment recommendations failed');
+        setModLogs((logs) => [...logs, { type: 'realignment', data: realignmentData.result ?? {} }]);
+      }
 
       // Import the (now-modified) save
       setFlow('running_import');
@@ -318,7 +335,8 @@ export default function ImportPage() {
   const rebalanceActive = modsMounted && rebalance.enabled && snapshot === 'preseason';
   const pipelineActive = modsMounted && pipeline.enabled && snapshot === 'preseason';
   const fangActive = modsMounted && fang.enabled && snapshot === 'preseason';
-  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive || fangActive;
+  const realignmentActive = modsMounted && realignment.enabled && snapshot === 'signing_day';
+  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive || fangActive || realignmentActive;
 
   const isIdle = flow === 'idle';
 
@@ -350,6 +368,13 @@ export default function ImportPage() {
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>NSD: Assign Unsigned Players</strong>
               <span style={{ color: 'var(--ocean-400)' }}> — will run before importing, then save will be reimported.</span>
+            </p>
+          )}
+          {realignmentActive && (
+            <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
+              <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
+              <strong>Dynamic Conference Realignment</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after NSD as a recommendation only. Apply moves through Custom Conferences during the offseason.</span>
             </p>
           )}
           {twActive && (
@@ -491,6 +516,10 @@ export default function ImportPage() {
           >
             {fangActive
               ? (pipelineActive || twActive || rebalanceActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
+              : nsdActive && realignmentActive
+              ? 'Run NSD + Realignment + Import'
+              : realignmentActive
+              ? 'Run Realignment + Import'
               : pipelineActive && twActive && rebalanceActive
               ? 'Run Pipelines + Transfer Wave + Rebalance + Import'
               : pipelineActive && rebalanceActive
@@ -644,8 +673,20 @@ export default function ImportPage() {
 
 // ── Mod log panel ──────────────────────────────────────────
 
-function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang'; data: Record<string, unknown> } }) {
+function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> } }) {
   const d = log.data;
+
+  if (log.type === 'realignment') {
+    const moves = Array.isArray(d.summary) ? d.summary as [string, string][] : [];
+    return (
+      <div className="rounded-lg border px-4 py-3 text-xs space-y-2" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+        <p className="font-semibold" style={{ color: 'var(--ocean-100)' }}>DYNAMIC CONFERENCE REALIGNMENT</p>
+        <p style={{ color: 'var(--ocean-300)' }}>Season {String(d.season ?? '—')} · {moves.length} recommended conference move{moves.length === 1 ? '' : 's'}.</p>
+        {moves.length > 0 ? <div className="flex flex-wrap gap-2">{moves.map(([conference, team], index) => <span key={`${conference}-${team}-${index}`} className="rounded px-2 py-1" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)' }}>{team} → {conference}</span>)}</div> : <p style={{ color: 'var(--ocean-500)' }}>No moves met the current thresholds.</p>}
+        <p style={{ color: '#fbbf24' }}>⚠ Recommendations only — RLT did not alter your save. Apply any accepted moves in CFB 27’s Custom Conferences during the offseason.</p>
+      </div>
+    );
+  }
 
   if (log.type === 'fang') return (
     <div className="rounded-lg border px-4 py-3 text-xs space-y-2" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>

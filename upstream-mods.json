@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "mods": [
+    {
+      "id": "transfer-wave",
+      "name": "Preseason Transfer Wave",
+      "repository": "Aball1495/CFB27-Preseason-Transfer-Wave",
+      "embeddedVersion": "V2.0.1",
+      "sourceCommit": "46aca379be6f2e566b3559b279bb0cf223d4034e",
+      "releaseAsset": "Preseason.Transfer.Wave.V2.0.1.zip",
+      "integration": "RLT embeds lib/redistribution.js; update requires a local Preseason fixture run."
+    },
+    {
+      "id": "dynamic-pipelines",
+      "name": "Dynamic Recruiting Pipelines",
+      "repository": "Aball1495/CFB27-Dynamic-Pipeline-Tool",
+      "embeddedVersion": "v1.1.0+rlt-safe-write",
+      "upstreamCandidate": "v.1.2.0",
+      "sourceCommit": "901d662eb2c0adf37140a2d8cf7cc9ae73333052",
+      "releaseAsset": "Dynamic.Recruiting.Pipeline.Tool.v1.2.0.zip",
+      "integration": "RLT retains its hardened save wrapper; port upstream collision fixes only after a fixture test."
+    },
+    {
+      "id": "dynamic-realignment",
+      "name": "Dynamic Conference Realignment",
+      "repository": "Slappey47/CFB27-Dynamic-Realignment-Tool",
+      "embeddedVersion": "V0.1.2.1",
+      "sourceCommit": "868f9311e042e451cf64d8b293365330dcf58ae1",
+      "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.1.2.1.zip",
+      "integration": "Recommendation-only Signing Day stage; never writes the dynasty save."
+    }
+  ]
+}

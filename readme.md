@@ -54,13 +54,15 @@ Mods are configured in **Toolbox** and run automatically as part of the appropri
 
 ### Signing Day
 
-**NSD: Assign Unsigned Players** can place unsigned recruits on teams with roster need, then reimport the save. Run it once per National Signing Day only.
+1. **NSD: Assign Unsigned Players** — optional; places unsigned recruits on teams with roster need, then reimports the save. Run it once per National Signing Day only.
+2. **Dynamic Conference Realignment** — optional; runs after NSD and generates conference-movement recommendations from geography, prestige, tenure, and multi-season history. It never edits the dynasty save. Review the results after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
 
 ### Important timing rules
 
 - Before running any save-writing mod, exit the dynasty to the game's **main menu**. The game can remain open.
 - Back up a save before trying a new mod or setting for the first time.
 - Do not run NSD Assign twice on the same Signing Day.
+- Keep Dynamic Conference Realignment enabled for each Signing Day if you want it to build its history. Early seasons may produce no recommendations while its history and moratorium settings are still in effect.
 - Keep Transfer Wave disabled until your dynasty has developed for a few seasons unless you intentionally want an early redistribution.
 
 ## Toolbox utilities
@@ -94,5 +96,8 @@ For the portable app, download the newest exe and replace the old one. Your trac
 - Save parsing: [madden-franchise](https://github.com/WiiExpertise/madden-franchise) by WiiExpertise
 - Fang's Recruiting Generator by Fang / RO27
 - NSD Assign by PocketScout Utilities
+- Dynamic Conference Realignment by Slappey47
+- Preseason Transfer Wave by Balla / Aball1495
+- Dynamic Recruiting Pipelines by Balla / Aball1495
 - CFB Rebalance by Dogsh*t
 - Ghost City RLT is built with Next.js, Prisma, Chart.js, and Tailwind CSS

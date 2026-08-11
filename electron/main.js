@@ -177,6 +177,9 @@ function createWindow() {
 app.whenReady().then(async () => {
   const dbPath = path.join(app.getPath('userData'), 'cfb27.db');
   process.env.DATABASE_URL = `file:${dbPath}`;
+  // Embedded tools that keep safe, app-local history (such as conference
+  // realignment) use this instead of writing beside a dynasty save.
+  process.env.GC_RLT_DATA_DIR = app.getPath('userData');
 
   // Show a loading window immediately so users know the app is starting
   const iconPath = isDev

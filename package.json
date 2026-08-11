@@ -1,6 +1,6 @@
 {
   "name": "ghost-city-rlt",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Ghost City's Recruiting Landscape Tracker for EA Sports CFB 27",
   "author": "ghostcitydev",
   "private": true,
@@ -12,8 +12,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "mods:check": "node scripts/check-upstream-mods.mjs",
     "electron:dev": "electron .",
-    "dist": "next build && node scripts/prepare-standalone.js && electron-rebuild -f -w better-sqlite3 && electron-builder --win --x64"
+    "dist": "node scripts/clean-standalone.js && next build && node scripts/prepare-standalone.js && electron-rebuild -f -w better-sqlite3 && electron-builder --win --x64"
   },
   "build": {
     "appId": "com.ghostcityrlt",
@@ -31,8 +32,8 @@
         "to": "migrations"
       },
       {
-        "from": "public/other mods",
-        "to": "mods"
+        "from": "public/other mods/redistribution.js",
+        "to": "mods/redistribution.js"
       }
     ],
     "win": {

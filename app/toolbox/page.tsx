@@ -9,6 +9,7 @@ const LS_TW  = 'gc_mod_tw';
 const LS_RB  = 'gc_mod_rb';
 const LS_PIPELINE = 'gc_mod_pipeline';
 const LS_FANG = 'gc_mod_fang';
+const LS_REALIGNMENT = 'gc_mod_realignment';
 
 // NSD position keys (PocketScout)
 const NSD_POSITIONS = ['QB','HB','FB','WR','TE','LT','LG','C','RG','RT','EDGE','DT','LB','CB','S','K','P'] as const;
@@ -77,6 +78,8 @@ type PipelineSettings = {
   showAdvanced: boolean;
 };
 type FangSettings = { enabled: boolean; fileName: string; config: Record<string, unknown> | null };
+type RealignmentSettings = { enabled: boolean; moratoriumPeriod: number; applicationProcessingLength: number; prestigeAvgLength: number; NDlock: number };
+const REALIGNMENT_DEFAULTS: RealignmentSettings = { enabled: false, moratoriumPeriod: 1, applicationProcessingLength: 3, prestigeAvgLength: 5, NDlock: 1 };
 const PIPELINE_DEFAULTS: PipelineSettings = { enabled:false, preset:'rosterDriven', wRoster:.35,wStar:.35,wCoach:.2,wGeo:.1,decay:.75,geoRadius:300,maxPipelines:10,coachRampMode:'ramp',coachRampSeasons:3,coachInclude:{HeadCoach:true,OffensiveCoordinator:true,DefensiveCoordinator:true},academyMode:false,academyTargetCount:42,academyUniform:true,academyUniformTier:'Respected',academyExempt:true,showAdvanced:false };
 
 const NSD_DEFAULTS: NsdSettings = {
@@ -143,6 +146,8 @@ function loadPipeline(): PipelineSettings { try { const s=JSON.parse(localStorag
 function savePipeline(s: PipelineSettings) { localStorage.setItem(LS_PIPELINE, JSON.stringify(s)); }
 function loadFang(): FangSettings { try { const s = JSON.parse(localStorage.getItem(LS_FANG) ?? '{}'); return { enabled: Boolean(s.enabled), fileName: String(s.fileName ?? ''), config: s.config && typeof s.config === 'object' ? s.config : null }; } catch { return { enabled: false, fileName: '', config: null }; } }
 function saveFang(s: FangSettings) { localStorage.setItem(LS_FANG, JSON.stringify(s)); }
+function loadRealignment(): RealignmentSettings { try { return { ...REALIGNMENT_DEFAULTS, ...JSON.parse(localStorage.getItem(LS_REALIGNMENT) ?? '{}') }; } catch { return REALIGNMENT_DEFAULTS; } }
+function saveRealignment(s: RealignmentSettings) { localStorage.setItem(LS_REALIGNMENT, JSON.stringify(s)); }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -157,12 +162,37 @@ export default function ToolboxPage() {
         </p>
       </div>
       <NsdModCard />
+      <RealignmentModCard />
       <FangModCard />
       <TwModCard />
       <RbModCard />
       <PipelineModCard />
     </div>
   );
+}
+
+function RealignmentModCard() {
+  const [s, setS] = useState<RealignmentSettings>(REALIGNMENT_DEFAULTS);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setS(loadRealignment()); setMounted(true); }, []);
+  if (!mounted) return <ModCardSkeleton />;
+  const update = (patch: Partial<RealignmentSettings>) => { const next = { ...s, ...patch }; setS(next); saveRealignment(next); };
+  return <ModCard
+    enabled={s.enabled}
+    onToggle={(enabled) => update({ enabled })}
+    title="Dynamic Conference Realignment"
+    author="Slappey47"
+    snapshot="signing_day"
+    description="Generates conference-movement recommendations from prestige, geography, tenure, and multi-season history. It runs after NSD Assign, then Ghost City imports normally."
+    warning="This does not edit your save. Review the recommendations after import, then apply any moves through CFB 27’s Custom Conferences during the offseason."
+  >
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <NumberField label="Moratorium years" description="Years before moves may begin." value={s.moratoriumPeriod} min={0} max={10} onChange={(moratoriumPeriod) => update({ moratoriumPeriod })} />
+      <NumberField label="Process length" description="Years of interest before an invite/expulsion." value={s.applicationProcessingLength} min={1} max={10} onChange={(applicationProcessingLength) => update({ applicationProcessingLength })} />
+      <NumberField label="Prestige history" description="Seasons considered for prestige." value={s.prestigeAvgLength} min={1} max={10} onChange={(prestigeAvgLength) => update({ prestigeAvgLength })} />
+    </div>
+    <Setting id="realignment-nd-lock" label="Keep Notre Dame independent" description="Prevents Notre Dame from joining a conference." checked={s.NDlock === 1} onChange={(checked) => update({ NDlock: checked ? 1 : 0 })} />
+  </ModCard>;
 }
 
 function FangModCard() {

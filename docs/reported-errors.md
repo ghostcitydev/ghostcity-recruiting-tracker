@@ -4,7 +4,14 @@ This is the support history for errors reported while Ghost City RLT was being
 developed and released. Entries use the release in which the fix first appears
 instead of tying a report to a specific player save.
 
-## Current status — 1.0.7 (August 2026)
+## Current status — 1.0.8 (August 2026)
+
+| Reported symptom | Cause | Fix | Verification |
+| --- | --- | --- | --- |
+| No integrated Signing Day conference realignment workflow | RLT previously had no way to retain the multi-season history required by the Dynamic Conference Realignment tool. | Added an embedded, read-only Dynamic Conference Realignment workflow after NSD Assign. It stores its history in RLT app data and returns recommendations for manual application in CFB 27's Custom Conferences menu. | Tested on a local Signing Day import: NSD Assign completed, RLT imported the save, and five realignment recommendations were produced. |
+| Portable EXE did not include the current Transfer Wave implementation | The packaged app needed to be rebuilt from the locally verified 1.0.8 source. | Rebuilt the portable package after the current application build and Electron-native SQLite rebuild completed. | Build includes the full standalone app, bundled mod resources, and Electron-specific `better-sqlite3`. |
+
+## 1.0.7 (August 2026)
 
 | Reported symptom | Cause | Fix | Verification |
 | --- | --- | --- | --- |

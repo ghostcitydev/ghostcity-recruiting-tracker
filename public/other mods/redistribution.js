@@ -39,14 +39,16 @@ function isRealTeam(team) {
 // other direction: does THIS team's own UserCharacter reference resolve
 // to a coach flagged IsUserControlled?
 function isUserControlledTeam(franchise, team, coachTable) {
+  // The reliable signal is whether the team has a non-zero UserCharacter
+  // reference at all -- CPU teams leave this empty (tableId=0 or no
+  // reference), user-controlled teams have a real coach reference here.
+  // IsUserControlled on the coach record is NOT reliable -- confirmed
+  // null on a real save (DYNASTY-HHOUSE), making it useless as a check.
   if (!team.fields || !('UserCharacter' in team.fields)) return false;
   const field = team.fields.UserCharacter;
-  if (!field.isReference) return false;
+  if (!field || !field.isReference) return false;
   const ref = field.referenceData;
-  if (!ref || ref.tableId === 0) return false;
-  const coachRecord = coachTable.records[ref.rowNumber];
-  if (!coachRecord) return false;
-  try { return coachRecord.IsUserControlled === true; } catch { return false; }
+  return !!(ref && ref.tableId !== 0);
 }
 
 // Player.TeamIndex is NOT reliable as the source of truth for "who is
@@ -61,12 +63,21 @@ function isUserControlledTeam(franchise, team, coachTable) {
 // game actually renders rosters from, so it's the authoritative read
 // source. This builds playerRowIndex -> teamIndex for every player
 // resolvable through a real team's Roster array.
-async function buildRosterTeamByPlayerIndex(franchise, teamTable, playerTable, log = () => {}) {
+async function buildRosterTeamByPlayerIndex(franchise, teamTable, playerTable, log = () => {}, excludeUserTeam = false) {
   const map = new Map();
   const playerTableId = playerTable.header.tableId;
   let collisions = 0;
   for (const team of teamTable.records) {
     if (!isRealTeam(team)) continue;
+    // When excludeUserTeam is true (transfer run() path only), user-team
+    // players are invisible to every count, rebalance, and transfer
+    // decision -- the tool is for CPU teams only. Read-only paths like
+    // Team Health pass false so they can still display the user team's
+    // real counts correctly.
+    if (excludeUserTeam) {
+      const ucField = team.fields && team.fields.UserCharacter;
+      if (ucField && ucField.isReference && ucField.referenceData && ucField.referenceData.tableId !== 0) continue;
+    }
     if (!team.fields || !('Roster' in team.fields) || !team.fields.Roster.isReference) continue;
     const ref = team.fields.Roster.referenceData;
     const rosterTable = resolveTable(franchise, ref.tableId);
@@ -96,8 +107,8 @@ async function buildRosterTeamByPlayerIndex(franchise, teamTable, playerTable, l
 // array (true free agents/unsigned recruits -- confirmed harmless: every
 // such player observed across real test saves carries the TeamIndex=255
 // unassigned sentinel, not a real team reference).
-async function buildAuthoritativeTeamMap(franchise, teamTable, playerTable, log = () => {}) {
-  const rosterTeamByPlayerIndex = await buildRosterTeamByPlayerIndex(franchise, teamTable, playerTable, log);
+async function buildAuthoritativeTeamMap(franchise, teamTable, playerTable, log = () => {}, excludeUserTeam = false) {
+  const rosterTeamByPlayerIndex = await buildRosterTeamByPlayerIndex(franchise, teamTable, playerTable, log, excludeUserTeam);
 
   // Players not found in ANY real team's Roster array do NOT fall back
   // to their raw TeamIndex field -- that's exactly the field this whole
@@ -325,6 +336,8 @@ async function rankTeamPosition(franchise, team, exactPosition, playerTable, tea
     }
     let schoolYear;
     try { schoolYear = p.SchoolYear; } catch { schoolYear = 'Unknown'; }
+    // True Freshman are never eligible for transfer -- see isTrueFreshmanPlayer().
+    if (isTrueFreshmanPlayer(p) && !protectedReason) protectedReason = 'true freshman -- never transferred';
     return { player: p, exactPosition, ovr: p.OverallRating, schoolYear, depthIndex, inChart: depthIndex !== null, protectedReason, team };
   });
   const eligible = results.filter((r) => !r.protectedReason);
@@ -339,6 +352,19 @@ function compareExpendability(a, b) {
   const bClassRank = CLASS_YEAR_EXPENDABILITY_RANK[b.schoolYear] ?? 1.5;
   if (aClassRank !== bClassRank) return aClassRank - bClassRank;
   return a.ovr - b.ovr;
+}
+
+// Returns true for True Freshman (non-redshirt) -- these players are
+// brand new to their team and must NEVER be transferred anywhere, in
+// Tier 1/2 or Waterfall. RS Freshman and above can and should move
+// when necessary.
+// Confirmed against real save data (DYNASTY-HHOUSE):
+//   SchoolYear='Freshman' + RedshirtStatus='Eligible' = True Freshman
+//   SchoolYear='Freshman' + RedshirtStatus='Previous' = RS Freshman
+function isTrueFreshmanPlayer(p) {
+  try {
+    return p.SchoolYear === 'Freshman' && p.RedshirtStatus === 'Eligible';
+  } catch { return false; }
 }
 
 function isEmptyPlayerSlot(slotField, playerTable, playerTableId) {
@@ -520,10 +546,11 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
   // via graduation anyway. Deliberately scalable/adjustable, per
   // request -- start at 90, move it if warranted.
   const waterfallQbOvrThreshold = settings.waterfallQbOvrThreshold ?? 90;
-  // Dedicated prestige-gap cap for the Waterfall, reuses the shared
-  // prestigeGapCap setting -- the same cap covers both Tier 2 and
-  // Waterfall moves, labeled accordingly in the Settings UI.
-  const waterfallPrestigeGapCap = prestigeGapCap;
+  // Dedicated prestige-gap cap for the Waterfall, separate from the
+  // Tier 2 cap above so they can be tuned independently -- e.g. using
+  // just T1 + Waterfall with T2 off doesn't require touching the T2
+  // cap at all. Same default (3) but wired to its own settings key.
+  const waterfallPrestigeGapCap = settings.waterfallPrestigeGapCap ?? 3;
   const zeroNil = settings.zeroNil ?? true;
 
   const { default: Franchise } = await import('madden-franchise');
@@ -551,7 +578,9 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
   log(`${cpuTeams.length} CPU teams in the league.`);
 
   log('Resolving authoritative team rosters (Roster array, not just TeamIndex)...');
-  const teamMembership = await buildAuthoritativeTeamMap(franchise, teamTable, playerTable, log);
+  // excludeUserTeam=true -- user-team players must be invisible to
+  // every count, rebalance pass, and transfer decision in this tool.
+  const teamMembership = await buildAuthoritativeTeamMap(franchise, teamTable, playerTable, log, true);
 
   const affectedTeamIndexes = new Set();
   let totalRelabelCount = 0;
@@ -604,7 +633,7 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
         { members: ['LT', 'RT'], priority: [otPremium, otOther] },
         { members: ['LG', 'RG', 'C'], priority: [gPremium, 'C', gOther] },
         { members: ['LE', 'RE'], priority: ['LE', 'RE'] },
-        { members: ['LOLB', 'MLB', 'ROLB'], priority: ['MLB', 'LOLB', 'ROLB'] },
+        { members: ['LOLB', 'MLB', 'ROLB'], priority: ['MLB', 'ROLB', 'LOLB'] },
         { members: ['FS', 'SS'], priority: ['FS', 'SS'] },
       ];
       for (const { members, priority } of POOLS) {
@@ -884,6 +913,8 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
           const qualifiesByOvr = rank2Candidate.OverallRating >= waterfallQbOvrThreshold;
           if (!qualifiesByClass && !qualifiesByOvr) break;
           if (teamMembership.get(rank2Candidate.index) !== team.index) break;
+          // True Freshman are never waterfall candidates.
+          if (isTrueFreshmanPlayer(rank2Candidate)) break;
 
           seedsChecked++;
           const minCheckCount = waterfallGroupCount(team.index, checkKey);
@@ -907,6 +938,9 @@ async function run({ savePath, dryRun, log = () => {}, settings = {} }) {
           // this exact player -- re-check current membership rather
           // than trusting the precomputed snapshot.
           if (teamMembership.get(seedCandidate.index) !== team.index) continue;
+          // True Freshman are never waterfall candidates -- same rule
+          // as Tier 1/2. See isTrueFreshman logic in rankTeamPosition.
+          if (isTrueFreshmanPlayer(seedCandidate)) continue;
 
           // MIN GATE -- a departure is only allowed if the donor's
           // GROUP total stays at or above effective min once this
