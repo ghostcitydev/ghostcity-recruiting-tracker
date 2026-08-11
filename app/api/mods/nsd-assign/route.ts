@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import { copyFile, mkdir } from 'node:fs/promises';
 import { prisma } from '@/lib/prisma';
 import { importSaveFile } from '@/lib/importSave';
 
@@ -26,6 +27,18 @@ export async function POST(request: Request) {
   }
   if (!saveFilePath) {
     return NextResponse.json({ error: 'No save file path provided. Select a save file on the Import page.' }, { status: 400 });
+  }
+
+  // Ghost City's full restore point: created before any PocketScout code runs.
+  const backupDir = path.join(process.cwd(), 'backups', 'pocketscout-backups');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const preRunBackupPath = path.join(backupDir, `${path.basename(saveFilePath)}.gc-rlt-pre-pocket-scout.${timestamp}.bak`);
+  try {
+    await mkdir(backupDir, { recursive: true });
+    await copyFile(saveFilePath, preRunBackupPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Could not create the required pre-PocketScout backup: ${message}` }, { status: 500 });
   }
 
   // Use new Function to bypass Turbopack's static import analysis for ESM modules
@@ -61,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   // Run NSD assign, passing the resolved session
-  let modResult: unknown;
+  let modResult: Record<string, unknown>;
   try {
     modResult = await recruitingHelperModule.run({
       inputPath: saveFilePath,
@@ -73,7 +86,7 @@ export async function POST(request: Request) {
         assignmentMode: 'smart',
         placementSettings,
       },
-    });
+    }) as Record<string, unknown>;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: `PocketScout NSD mod failed: ${message}` }, { status: 500 });
@@ -86,7 +99,7 @@ export async function POST(request: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return NextResponse.json({
-        modResult,
+        modResult: { ...modResult, preRunBackupPath },
         reimportError: `Mod ran but reimport failed: ${message}`,
       });
     }
@@ -94,10 +107,10 @@ export async function POST(request: Request) {
 
   // Log shape so we can debug zero-count issues in dev console
   if (process.env.NODE_ENV !== 'production') {
-    const r = modResult as Record<string, unknown>;
+    const r = modResult;
     console.log('[nsd-assign] result keys:', Object.keys(r ?? {}));
     console.log('[nsd-assign] transfersAssigned:', r?.transfersAssigned, '| zeroOfferTransfers:', r?.zeroOfferTransfers);
   }
 
-  return NextResponse.json({ ok: true, modResult });
+  return NextResponse.json({ ok: true, modResult: { ...modResult, preRunBackupPath } });
 }

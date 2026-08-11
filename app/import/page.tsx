@@ -816,6 +816,7 @@ function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipel
         )}
 
         <p style={{ color: 'var(--ocean-600)' }}>Save file was modified in place and reimported — all pages now reflect the updated roster.</p>
+        {d.preRunBackupPath && <p style={{ color: 'var(--ocean-600)' }}>Full pre-PocketScout backup: {String(d.preRunBackupPath)}</p>}
       </div>
     );
   }
