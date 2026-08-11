@@ -68,7 +68,6 @@ jobs:
 
             - Added Dynamic Conference Realignment to the Signing Day workflow.
             - Updated Preseason Transfer Wave to v2.0.1.
-            - Corrected Signing Day attribution for signed transfers when a stale committed-player reference disagrees with the signed school.
             - Added Import history backup and restore packages. Restore replaces only matching year/snapshot records and preserves all other history.
             - Reduced portable build size by excluding local databases, environment files, old build output, and redundant upstream apps while retaining every embedded runtime resource.
             - Preseason order: Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Import.

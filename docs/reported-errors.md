@@ -10,7 +10,6 @@ instead of tying a report to a specific player save.
 | --- | --- | --- | --- |
 | No integrated Signing Day conference realignment workflow | RLT previously had no way to retain the multi-season history required by the Dynamic Conference Realignment tool. | Added an embedded, read-only Dynamic Conference Realignment workflow after NSD Assign. It stores its history in RLT app data and returns recommendations for manual application in CFB 27's Custom Conferences menu. | Tested on a local Signing Day import: NSD Assign completed, RLT imported the save, and five realignment recommendations were produced. |
 | Portable EXE did not include the current Transfer Wave implementation | The packaged app needed to be rebuilt from the locally verified 1.0.8 source. | Rebuilt the portable package after the current application build and Electron-native SQLite rebuild completed. | Build includes the full standalone app, bundled mod resources, and Electron-specific `better-sqlite3`. |
-| A signed transfer was attributed to the wrong team in RLT | A stale `CommittedPlayers` reference could disagree with the game’s signed-school record. | Signing Day import now reconciles signed recruits using their current top/signed school; PocketScout `HardCommitted` recruits still use their actual roster assignment. | Verified against the Grant Lawless/Clemson and Nevada PocketScout assignment scenario. |
 
 ## 1.0.7 (August 2026)
 

@@ -123,10 +123,10 @@ type RecruitAnalysis = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitAnalysis> {
   const recruitTable = tableByName(franchise, 'Recruit');
-  await recruitTable.readRecords(['Player', 'Class', 'RecruitStage', 'TopSchoolsList']);
+  await recruitTable.readRecords(['Player', 'Class', 'RecruitStage']);
 
   const playerTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'TeamIndex', 'HomePipeline', 'Position', 'FirstName', 'LastName', 'OverallRating']);
+  await playerTable.readRecords(['ProspectStarRating', 'PrevTeamIndex', 'HomePipeline', 'Position', 'FirstName', 'LastName', 'OverallRating']);
 
   // Build player-row → Recruit record map for Class lookups
   const playerToRecruit = new Map<number, { isTransfer: boolean; cls: string }>();
@@ -150,9 +150,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     return tableCache.get(id);
   }
 
-  // Read per-team recruits from CommittedPlayers arrays. These arrays are useful
-  // fallbacks, but can retain a stale reference after a transfer signs elsewhere.
-  // We reconcile signed recruits against their current signing destination below.
+  // Read per-team recruits from CommittedPlayers array on each team.
   const byTeam = new Map<string, RecruitBreakdown>();
   const posRecruitsByTeam = new Map<string, Map<string, PosRecruitStar>>();
   const pipelineRecruitsByTeam = new Map<string, Map<string, PipelineRecruitStar>>();
@@ -164,7 +162,8 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
     if (!teamRec.isEmpty && Number.isInteger(teamIndex)) teamByIndex.set(teamIndex, teamRec);
   }
 
-  const committedPlayerRowsByTeam = new Map<string, Set<number>>();
+  // The game uses Team.CommittedPlayers as the Signing Day destination record.
+  // TopSchoolsList remains a recruiting ranking, even after the player signs.
   for (const teamRec of teamTable.records) {
     if (teamRec.isEmpty || !teamRec.DisplayName) continue;
     const teamName: string = teamRec.DisplayName;
@@ -173,75 +172,16 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
 
     const cpTable = await getTable(cpRef.tableId);
     const cpRec = cpTable.records[cpRef.row];
-    const playerRows = new Set<number>();
+    const breakdown = emptyBreakdown();
+    const posMap = new Map<string, PosRecruitStar>();
+    const pipelineMap = new Map<string, PipelineRecruitStar>();
 
     for (const f of Object.keys(cpRec.fields)) {
       try {
         const val = cpRec[f];
         const ref = parseRef(val);
         if (!ref) continue;
-        playerRows.add(ref.row);
-      } catch { /* skip unreadable slots */ }
-    }
-    if (playerRows.size) committedPlayerRowsByTeam.set(teamName, playerRows);
-  }
-
-  async function resolveTopSchoolTeamIndex(recruitRec: any): Promise<number | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const listRef = parseRef(recruitRec.TopSchoolsList);
-    if (!listRef) return null;
-    try {
-      const listTable = await getTable(listRef.tableId);
-      const listRec = listTable.records[listRef.row];
-      if (!listRec || listRec.isEmpty) return null;
-      const fields = Object.keys(listRec.fields).sort((a, b) => {
-        const aSlot = Number(a.match(/(\d+)$/)?.[1] ?? Number.MAX_SAFE_INTEGER);
-        const bSlot = Number(b.match(/(\d+)$/)?.[1] ?? Number.MAX_SAFE_INTEGER);
-        return aSlot - bSlot;
-      });
-      for (const field of fields) {
-        const targetRef = parseRef(listRec[field]);
-        if (!targetRef) continue;
-        const targetTable = await getTable(targetRef.tableId);
-        const targetRec = targetTable.records[targetRef.row];
-        const teamIndex = Number(targetRec?.TeamId ?? targetRec?.TeamIndex);
-        if (Number.isInteger(teamIndex) && teamByIndex.has(teamIndex)) return teamIndex;
-      }
-    } catch { /* fall back to the committed-player array */ }
-    return null;
-  }
-
-  const signedStages = new Set(['Signed', 'Committed', 'HardCommitted']);
-  for (const recruitRec of recruitTable.records) {
-    if (recruitRec.isEmpty || !signedStages.has(String(recruitRec.RecruitStage))) continue;
-    const playerRef = parseRef(recruitRec.Player);
-    if (!playerRef) continue;
-    const playerRec = playerTable.records[playerRef.row];
-    if (!playerRec || playerRec.isEmpty) continue;
-
-    // PocketScout hard commits move the Player to its actual roster immediately.
-    // Ordinary Signing Day recruits remain unassigned until the offseason, so use
-    // their #1 school instead. This prevents stale CommittedPlayers references
-    // from attributing a signed transfer to the wrong team.
-    const rosterTeamIndex = Number(playerRec.TeamIndex);
-    const destinationIndex = recruitRec.RecruitStage === 'HardCommitted' && teamByIndex.has(rosterTeamIndex)
-      ? rosterTeamIndex
-      : await resolveTopSchoolTeamIndex(recruitRec);
-    const destination = destinationIndex == null ? null : teamByIndex.get(destinationIndex)?.DisplayName as string | undefined;
-    if (!destination) continue;
-
-    for (const rows of committedPlayerRowsByTeam.values()) rows.delete(playerRef.row);
-    if (!committedPlayerRowsByTeam.has(destination)) committedPlayerRowsByTeam.set(destination, new Set());
-    committedPlayerRowsByTeam.get(destination)!.add(playerRef.row);
-  }
-
-  for (const [teamName, playerRows] of committedPlayerRowsByTeam) {
-    const breakdown = emptyBreakdown();
-    const posMap = new Map<string, PosRecruitStar>();
-    const pipelineMap = new Map<string, PipelineRecruitStar>();
-
-    for (const playerRow of playerRows) {
-      try {
-        const prec = playerTable.records[playerRow];
+        const prec = playerTable.records[ref.row];
         if (!prec || prec.isEmpty) continue;
 
         breakdown.total++;
@@ -252,7 +192,7 @@ async function analyzeRecruits(franchise: any, teamTable: any): Promise<RecruitA
         // Track per-position group recruiting
         const rawPos = prec.Position as string;
         const posGroup = POS_GROUP_MAP[rawPos];
-        const recruitInfo = playerToRecruit.get(playerRow);
+        const recruitInfo = playerToRecruit.get(ref.row);
         const isTransfer = recruitInfo?.isTransfer ?? false;
         const recruitCls = recruitInfo?.cls ?? '';
 
