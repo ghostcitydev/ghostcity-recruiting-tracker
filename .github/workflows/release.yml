@@ -69,6 +69,7 @@ jobs:
             - Added Dynamic Conference Realignment to the Signing Day workflow.
             - Updated Preseason Transfer Wave to v2.0.1.
             - Added Import history backup and restore packages. Restore replaces only matching year/snapshot records and preserves all other history.
+            - Signing Day imports use the game's recorded committed destination; NSD Assign creates a full pre-PocketScout backup before any mod work begins.
             - Reduced portable build size by excluding local databases, environment files, old build output, and redundant upstream apps while retaining every embedded runtime resource.
             - Preseason order: Fang → Dynamic Recruiting Pipelines → Transfer Wave → CFB Rebalance → Import.
 

@@ -10,6 +10,8 @@
 
 ## Packaging and reliability
 
+- **1.0.8 patch:** Signing Day imports now honor the game's committed-player destination instead of treating the visible top-school ranking as a signed destination.
+- **1.0.8 patch:** NSD Assign creates a full pre-PocketScout restore point before scanning or running any PocketScout code. It is saved in `backups\\pocketscout-backups` and shown in the mod log.
 - Rebuilt the portable app directly from the locally verified 1.0.8 source.
 - Kept the Electron-native SQLite module and all required embedded Fang, PocketScout, Transfer Wave, Pipeline, Rebalance, and Realignment runtime resources.
 - Removed duplicate upstream desktop applications and source archives from the portable package; embedded tools continue to run inside RLT.
