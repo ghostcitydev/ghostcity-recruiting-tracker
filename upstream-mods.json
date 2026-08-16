@@ -14,20 +14,19 @@
       "id": "dynamic-pipelines",
       "name": "Dynamic Recruiting Pipelines",
       "repository": "Aball1495/CFB27-Dynamic-Pipeline-Tool",
-      "embeddedVersion": "v1.1.0+rlt-safe-write",
-      "upstreamCandidate": "v.1.2.0",
+      "embeddedVersion": "v1.2.0+rlt-safe-write",
       "sourceCommit": "901d662eb2c0adf37140a2d8cf7cc9ae73333052",
       "releaseAsset": "Dynamic.Recruiting.Pipeline.Tool.v1.2.0.zip",
-      "integration": "RLT retains its hardened save wrapper; port upstream collision fixes only after a fixture test."
+      "integration": "RLT retains its hardened save wrapper and includes v1.2.0 stale-reference, collision, and post-repair ownership fixes."
     },
     {
       "id": "dynamic-realignment",
       "name": "Dynamic Conference Realignment",
       "repository": "Slappey47/CFB27-Dynamic-Realignment-Tool",
-      "embeddedVersion": "V0.1.2.1",
-      "sourceCommit": "868f9311e042e451cf64d8b293365330dcf58ae1",
-      "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.1.2.1.zip",
-      "integration": "Recommendation-only Signing Day stage; never writes the dynasty save."
+      "embeddedVersion": "V0.2.0",
+      "sourceCommit": "0608347118fb9cd20bbcacd9dad436f2052c4376",
+      "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.2.0.zip",
+      "integration": "Recommendation-only Signing Day stage; never writes the dynasty save. Includes the v0.2.0 conference-size and Hawai‘i travel settings."
     }
   ]
 }

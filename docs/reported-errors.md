@@ -4,7 +4,14 @@ This is the support history for errors reported while Ghost City RLT was being
 developed and released. Entries use the release in which the fix first appears
 instead of tying a report to a specific player save.
 
-## Current status — 1.0.8 (August 2026)
+## Current status — 1.0.9 (August 2026)
+
+| Reported issue | Cause | Fix | Verification |
+|---|---|---|---|
+| Pipeline updates could reuse a still-owned row after a damaged pipeline slot | The older allocator only knew each team's contiguous pipeline prefix, so valid rows after a hole could appear unclaimed. Stale `Unrecognized` rows could also remain structurally referenced. | Updated the embedded Pipeline Tool to the v1.2.0 integrity logic: stale references are reclaimed, allocation starts from full live ownership, and per-team ownership is rebuilt after repair. | Production build and code checks pass; retain a backup before any first run on an existing dynasty. |
+| Realignment lacked the current conference-size and Hawai‘i settings | RLT was still exposing the earlier embedded defaults. | Updated the embedded settings to Dynamic Conference Realignment v0.2.0 values and added the new Toolbox controls. Realignment remains recommendation-only. | Settings are persisted and passed to the Signing Day recommendation stage. |
+
+## 1.0.8 (August 2026)
 
 | Reported symptom | Cause | Fix | Verification |
 | --- | --- | --- | --- |

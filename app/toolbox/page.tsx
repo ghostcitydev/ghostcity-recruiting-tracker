@@ -78,8 +78,8 @@ type PipelineSettings = {
   showAdvanced: boolean;
 };
 type FangSettings = { enabled: boolean; fileName: string; config: Record<string, unknown> | null };
-type RealignmentSettings = { enabled: boolean; moratoriumPeriod: number; applicationProcessingLength: number; prestigeAvgLength: number; NDlock: number };
-const REALIGNMENT_DEFAULTS: RealignmentSettings = { enabled: false, moratoriumPeriod: 1, applicationProcessingLength: 3, prestigeAvgLength: 5, NDlock: 1 };
+type RealignmentSettings = { enabled: boolean; moratoriumPeriod: number; applicationProcessingLength: number; prestigeAvgLength: number; NDlock: number; shawaiiBonus: number; P4confsize: number; PAC12confsize: number; G5confsize: number };
+const REALIGNMENT_DEFAULTS: RealignmentSettings = { enabled: false, moratoriumPeriod: 1, applicationProcessingLength: 3, prestigeAvgLength: 5, NDlock: 1, shawaiiBonus: 100, P4confsize: 16, PAC12confsize: 12, G5confsize: 12 };
 const PIPELINE_DEFAULTS: PipelineSettings = { enabled:false, preset:'rosterDriven', wRoster:.35,wStar:.35,wCoach:.2,wGeo:.1,decay:.75,geoRadius:300,maxPipelines:10,coachRampMode:'ramp',coachRampSeasons:3,coachInclude:{HeadCoach:true,OffensiveCoordinator:true,DefensiveCoordinator:true},academyMode:false,academyTargetCount:42,academyUniform:true,academyUniformTier:'Respected',academyExempt:true,showAdvanced:false };
 
 const NSD_DEFAULTS: NsdSettings = {
@@ -190,6 +190,12 @@ function RealignmentModCard() {
       <NumberField label="Moratorium years" description="Years before moves may begin." value={s.moratoriumPeriod} min={0} max={10} onChange={(moratoriumPeriod) => update({ moratoriumPeriod })} />
       <NumberField label="Process length" description="Years of interest before an invite/expulsion." value={s.applicationProcessingLength} min={1} max={10} onChange={(applicationProcessingLength) => update({ applicationProcessingLength })} />
       <NumberField label="Prestige history" description="Seasons considered for prestige." value={s.prestigeAvgLength} min={1} max={10} onChange={(prestigeAvgLength) => update({ prestigeAvgLength })} />
+    </div>
+    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <NumberField label="Hawai‘i travel adjustment" description="Offsets geographic travel pressure for Hawai‘i (100 = upstream default)." value={s.shawaiiBonus} min={0} max={200} onChange={(shawaiiBonus) => update({ shawaiiBonus })} />
+      <NumberField label="Power 4 conference size" description="Target membership for ACC, Big Ten, Big 12, and SEC." value={s.P4confsize} min={8} max={20} onChange={(P4confsize) => update({ P4confsize })} />
+      <NumberField label="Pac-12 conference size" description="Target membership for the Pac-12." value={s.PAC12confsize} min={8} max={20} onChange={(PAC12confsize) => update({ PAC12confsize })} />
+      <NumberField label="Group of 5 conference size" description="Target membership for American, CUSA, MAC, MWC, and Sun Belt." value={s.G5confsize} min={8} max={20} onChange={(G5confsize) => update({ G5confsize })} />
     </div>
     <Setting id="realignment-nd-lock" label="Keep Notre Dame independent" description="Prevents Notre Dame from joining a conference." checked={s.NDlock === 1} onChange={(checked) => update({ NDlock: checked ? 1 : 0 })} />
   </ModCard>;
