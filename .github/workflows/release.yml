@@ -75,10 +75,11 @@ jobs:
             ## ${{ steps.pkg.outputs.VERSION }}
 
             - Embedded PocketScout Utilities 0.9.12's complete National Signing Day workflow: combined assignment and roster-plan preview, explicit confirmation, roster-plan application, and final roster/depth-chart reconciliation.
-            - Preserves normal incoming-freshman dealbreakers and NIL requirements by default; the legacy Invalid-dealbreaker behavior is now optional.
+            - Preserves normal incoming-freshman dealbreakers and NIL requirements by default, now correctly applied across every NSD path (manual recruit commits, board hard-commits, unsigned/transfer shortage fills, and Final Talent Rescue swaps); the legacy Invalid-dealbreaker behavior is now optional.
             - Creates a full pre-PocketScout restore point before changing the selected save.
             - Fixed Positional Depth and Roster Ratings after Transfer Wave by reading the game's authoritative team roster arrays.
             - Saves Dynamic Conference Realignment recommendations with each Signing Day import for review on the Realignment page.
+            - Updated the embedded Dynamic Conference Realignment mod to upstream V0.2.1, fixing wrong or missing Mountain West recommendations on dynasties started after EA renamed that conference's save field from `MWC` to `MW`.
             - Includes both the portable single EXE and a faster-starting no-install ZIP/folder build.
 
             ## Upgrade note
