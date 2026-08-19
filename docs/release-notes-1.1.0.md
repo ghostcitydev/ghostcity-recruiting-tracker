@@ -7,7 +7,7 @@
 - Added an explicit confirmation step. After confirmation, Ghost City applies unsigned assignments once, applies the reviewed roster plan, reconciles roster storage, depth charts, jersey numbers, and weight development, then runs realignment recommendations and imports the final save.
 - Added Toolbox controls for the complete roster plan, user-controlled teams, and PocketScout's CSV preview report.
 - Added a full pre-run restore point under `backups/pocketscout-backups` before PocketScout changes the selected save.
-- Preserves incoming freshmen's normal dealbreakers and NIL requirements by default. The old Invalid-dealbreaker behavior remains available as an off-by-default legacy compatibility option.
+- Preserves incoming freshmen's normal dealbreakers and NIL requirements by default. The old Invalid-dealbreaker behavior remains available as an off-by-default legacy compatibility option, and now correctly applies across every NSD path—manual recruit commits, board hard-commits, unsigned/transfer shortage fills, and Final Talent Rescue swaps all respect the toggle, not just the main Assign Unsigned Players pass.
 
 ## Tracker accuracy
 
@@ -32,6 +32,9 @@
 - Realignment remains recommendation-only. Ghost City does not change a
   dynasty’s conference membership; apply any accepted moves in CFB 27’s
   **Custom Conferences** menu during the offseason.
+- Updated the embedded Dynamic Conference Realignment mod to upstream V0.2.1.
+  Fixes wrong or missing Mountain West recommendations on dynasties started
+  after EA renamed that conference's save field from `MWC` to `MW`.
 
 ## Reliability checks
 
