@@ -195,7 +195,7 @@ export default function ImportPage() {
     }
   }
 
-  async function runImport() {
+  async function runImport(realignmentResult?: Record<string, unknown>) {
     if (cloudMode) {
       const response = await safeJson<CloudWorkflowResult | { jobId: string }>('/api/cloud/process', {
         method: 'POST',
@@ -225,7 +225,7 @@ export default function ImportPage() {
     const response = await safeJson<ImportResult>('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot }),
+      body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot, realignment: realignmentResult }),
     });
     if (!response.ok || !response.data) throw new Error(response.error || 'Import failed');
     return response.data;
@@ -244,6 +244,7 @@ export default function ImportPage() {
     const realignmentActive = realignment.enabled && snapshot === 'signing_day';
 
     try {
+      let realignmentResult: Record<string, unknown> | undefined;
       if (cloudMode) {
         setFlow('running_cloud');
         const importResult = await runImport();
@@ -338,12 +339,13 @@ export default function ImportPage() {
         });
         const realignmentData = await realignmentRes.json();
         if (!realignmentRes.ok) throw new Error(realignmentData.error ?? 'Conference realignment recommendations failed');
-        setModLogs((logs) => [...logs, { type: 'realignment', data: realignmentData.result ?? {} }]);
+        realignmentResult = realignmentData.result ?? {};
+        setModLogs((logs) => [...logs, { type: 'realignment', data: realignmentResult }]);
       }
 
       // Import the (now-modified) save
       setFlow('running_import');
-      const importResult = await runImport();
+      const importResult = await runImport(realignmentResult);
       setResult(importResult);
       setFlow('done');
     } catch (err) {

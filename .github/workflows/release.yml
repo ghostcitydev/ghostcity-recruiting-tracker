@@ -66,12 +66,13 @@ jobs:
           body: |
             ## ${{ steps.pkg.outputs.VERSION }}
 
-            - Updated embedded Dynamic Recruiting Pipelines to v1.2.0, including its pipeline-row integrity repairs.
-            - Updated Dynamic Conference Realignment to v0.2.0 defaults and added Power 4, Pac-12, Group of 5, and Hawai‘i controls.
+            - Fixed Positional Depth and Roster Ratings after Transfer Wave. The tracker now reads the game’s authoritative team roster arrays rather than stale player-team fields, so incoming transfers appear at their destination and phantom roster counts are removed.
+            - Signing Day Dynamic Conference Realignment recommendations are saved with the imported season and can be reviewed on the new Realignment page.
             - Realignment remains a recommendation-only Signing Day stage; it never edits conference membership in your save.
 
             ## Upgrade note
 
             Replace your old portable exe with the new one; your existing tracker data remains intact.
+            Existing preseason data can be refreshed by reimporting the already-modified save with Transfer Wave disabled.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

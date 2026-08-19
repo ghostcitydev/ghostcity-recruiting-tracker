@@ -12,6 +12,8 @@ Download **Ghost City RLT Portable.exe** from the [Releases page](https://github
 
 There is no installer, setup wizard, Node.js requirement, or separate mod download. Your tracker data is stored in `%AppData%\ghost-city-rlt\cfb27.db`, so replacing the exe during an update does not erase your history.
 
+The portable EXE unpacks itself before the app window appears. A first launch can take a few minutes while Windows scans it; do not click it repeatedly. If Windows shows an **Unblock** option in the file's Properties, select it before launching.
+
 ### Optional local browser mode
 
 If you prefer a browser window instead of the portable app, download the project folder and install Node.js LTS.
@@ -59,7 +61,7 @@ Mods are configured in **Toolbox** and run automatically as part of the appropri
 ### Signing Day
 
 1. **NSD: Assign Unsigned Players** — optional; places unsigned recruits on teams with roster need, then reimports the save. Run it once per National Signing Day only.
-2. **Dynamic Conference Realignment** — optional; runs after NSD and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review the results after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
+2. **Dynamic Conference Realignment** — optional; runs after NSD and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review saved results on the **Realignment** page after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
 
 ### Important timing rules
 

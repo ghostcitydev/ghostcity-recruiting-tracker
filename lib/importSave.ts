@@ -451,6 +451,10 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
     'ProgramPointsBudgetGrade',
     'CommittedPlayers',
     'MySchoolTrackingTable',
+    // Player.TeamIndex can be stale in live dynasty saves.  The roster array
+    // is the game-facing source of truth (and the same source Transfer Wave
+    // uses when deciding who is actually on each team).
+    'Roster',
   ]);
 
   // Read all school grades from MySchoolTrackingTable; each Team record carries a direct
@@ -535,10 +539,43 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
   try {
     const pTable = franchise.tables.find((t: any) => t.name === 'Player'); // eslint-disable-line @typescript-eslint/no-explicit-any
     await pTable.readRecords(['Position', 'TeamIndex', 'OverallRating', 'FirstName', 'LastName', 'SchoolYear', 'ProspectStarRating']);
+
+    // Do not use Player.TeamIndex for roster depth.  The game can leave that
+    // field pointing at an old team after a transfer while the Team.Roster
+    // array has already been updated.  That made incoming Transfer Wave
+    // players disappear from their destination and created phantom totals at
+    // the stale source team.  Resolve player-row -> team index from the
+    // roster references instead.
+    const rosterTeamByPlayerRow = new Map<number, number>();
+    const playerTableId = pTable.header.tableId as number;
+    const rosterTableCache = new Map<number, any>(); // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (const teamRec of teamTable.records) {
+      if (teamRec.isEmpty || !teamRec.DisplayName) continue;
+      const teamIdx = teamRec.TeamIndex as number;
+      if (!Number.isInteger(teamIdx) || teamIdx === 255) continue;
+      const rosterRef = parseRef(teamRec.Roster);
+      if (!rosterRef) continue;
+      let rosterTable = rosterTableCache.get(rosterRef.tableId);
+      if (!rosterTable) {
+        rosterTable = franchise.getTableById(rosterRef.tableId);
+        await rosterTable.readRecords();
+        rosterTableCache.set(rosterRef.tableId, rosterTable);
+      }
+      const rosterRec = rosterTable.records[rosterRef.row];
+      if (!rosterRec || rosterRec.isEmpty) continue;
+      for (const fieldName of Object.keys(rosterRec.fields)) {
+        const playerRef = parseRef(rosterRec[fieldName]);
+        if (!playerRef || playerRef.tableId !== playerTableId) continue;
+        const player = pTable.records[playerRef.row];
+        if (!player || player.isEmpty) continue;
+        rosterTeamByPlayerRow.set(playerRef.row, teamIdx);
+      }
+    }
+
     for (const p of (pTable.records as any[])) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (p.isEmpty) continue;
-      const teamIdx = p.TeamIndex as number;
-      if (teamIdx == null || teamIdx === 255) continue;
+      const teamIdx = rosterTeamByPlayerRow.get(p.index as number);
+      if (teamIdx == null) continue;
       const rawPos = p.Position as string;
       const posGroup = POS_GROUP_MAP[rawPos];
       if (!posGroup) continue;

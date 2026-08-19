@@ -4,7 +4,13 @@ This is the support history for errors reported while Ghost City RLT was being
 developed and released. Entries use the release in which the fix first appears
 instead of tying a report to a specific player save.
 
-## Current status — 1.0.9 (August 2026)
+## Current status — 1.1.0 (August 2026)
+
+| Reported issue | Cause | Fix | Verification |
+|---|---|---|---|
+| Positional Depth showed missing Transfer Wave arrivals or implausibly large counts at another school | CFB 27 can leave `Player.TeamIndex` stale after a roster move. RLT used that field while Transfer Wave correctly used the team roster arrays. | RLT now resolves roster players through the authoritative `Team.Roster` references, matching Transfer Wave’s membership logic. | Refreshed the affected Preseason save: Ball State correctly showed two incoming QBs and stale phantom counts were removed. Local lint and production build pass. |
+| Signing Day realignment recommendations disappeared after leaving the Import page | Recommendations existed only in the temporary mod result. | Successful Signing Day imports now save the recommendation list by season; the new Realignment page displays it later. | Local route and production build verification pass. |
+| Portable EXE appears to do nothing or takes a very long time to launch | The 300+ MB self-extracting portable app must unpack and can be scanned by Windows before Electron opens a window. | Added clear first-launch guidance. A no-install ZIP/folder build is planned alongside the single EXE for a faster future startup path. | Current portable EXE remains supported; ZIP/folder delivery is planned, not yet shipped. |
 
 | Reported issue | Cause | Fix | Verification |
 |---|---|---|---|

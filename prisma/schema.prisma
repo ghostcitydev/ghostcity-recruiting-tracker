@@ -51,6 +51,7 @@ model Season {
   rosterPlayers           RosterPlayer[]
   pipelinePosRecruits     TeamPipelinePositionRecruit[]
   prospectPool            PipelineProspect[]
+  realignmentMoves       ConferenceRealignmentMove[]
 
   @@unique([year, snapshot])
 }
@@ -336,4 +337,18 @@ model UnsignedRecruit {
   overall      Int?
   recruitType  String
   previousTeam String?
+}
+
+// Recommendation history created by the Dynamic Conference Realignment stage.
+// These are never applied to the dynasty save automatically.
+model ConferenceRealignmentMove {
+  id             String @id @default(cuid())
+  season         Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId       String
+  teamName       String
+  fromConference String?
+  toConference   String
+  createdAt      DateTime @default(now())
+
+  @@unique([seasonId, teamName, toConference])
 }
