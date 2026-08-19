@@ -14,6 +14,9 @@ console.log('[prepare-standalone] Copying static assets...');
 // environment secrets, or the upstream reference-app folder.
 for (const generatedPath of [
   path.join(STANDALONE, 'dist'),
+  path.join(STANDALONE, 'backups'),
+  path.join(STANDALONE, 'archive'),
+  path.join(STANDALONE, 'extracts'),
   path.join(STANDALONE, 'public'),
   path.join(STANDALONE, 'dev.db'),
   path.join(STANDALONE, '.env'),

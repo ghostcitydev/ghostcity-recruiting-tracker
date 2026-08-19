@@ -1,5 +1,14 @@
 # Ghost City RLT 1.1.0
 
+## PocketScout 0.9.12 complete NSD workflow
+
+- Embedded PocketScout's complete **Assign Unsigned Players and Roster Fix** workflow—not only the assignment step.
+- Signing Day now builds a combined preview before writing anything. The preview includes unsigned assignments, internal position changes, unsigned shortage fills, FCS pool trades and cuts, mirrored-position fixes, and Final Talent Rescue moves.
+- Added an explicit confirmation step. After confirmation, Ghost City applies unsigned assignments once, applies the reviewed roster plan, reconciles roster storage, depth charts, jersey numbers, and weight development, then runs realignment recommendations and imports the final save.
+- Added Toolbox controls for the complete roster plan, user-controlled teams, and PocketScout's CSV preview report.
+- Added a full pre-run restore point under `backups/pocketscout-backups` before PocketScout changes the selected save.
+- Preserves incoming freshmen's normal dealbreakers and NIL requirements by default. The old Invalid-dealbreaker behavior remains available as an off-by-default legacy compatibility option.
+
 ## Tracker accuracy
 
 - Fixed **Positional Depth** and **Roster Ratings** after Preseason Transfer Wave.
@@ -37,10 +46,9 @@ The single-file **Portable EXE** remains available. Its large self-extracting
 format can take several minutes to open on a first launch while Windows scans
 and unpacks it.
 
-For a future release, Ghost City will also offer a **no-install ZIP/folder
-build** alongside the single EXE. Players will unzip it once and run `Ghost
-City RLT.exe` directly—still no installer or setup required, with a faster and
-more dependable startup path.
+This release also offers a **no-install ZIP/folder build** alongside the single
+EXE. Unzip it once and run `Ghost City RLT.exe` directly—still no installer or
+setup required, with a faster and more dependable startup path.
 
 ## Reminder: Preseason workflow
 

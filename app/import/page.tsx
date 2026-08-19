@@ -6,7 +6,8 @@ import { safeJson } from '@/lib/safeFetch';
 
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
-type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> }[]; downloadPath: string };
+type ModLogType = 'nsd' | 'nsd-roster-plan' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment';
+type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: ModLogType; data: Record<string, unknown> }[]; downloadPath: string };
 type CloudJob = { state: 'queued' | 'running' | 'complete' | 'failed'; result?: CloudWorkflowResult; error?: string };
 type Season = { id: string; year: number; label: string };
 type ImportResult = {
@@ -21,7 +22,8 @@ type ImportPackageResult = { ok: true; seasons: number; teams: number };
 // ── Mod settings (read from localStorage) ─────────────────
 
 type Pos = 'QB'|'HB'|'FB'|'WR'|'TE'|'LT'|'LG'|'C'|'RG'|'RT'|'EDGE'|'DT'|'LB'|'CB'|'S'|'K'|'P';
-type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: number; classTarget: number; preferredByPos?: Record<Pos,number>; hardMaxByPos?: Record<Pos,number> };
+type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: number; classTarget: number; clearRecruitingDealbreakers: boolean; runRosterPlan: boolean; includeUserControlledTeams: boolean; createRosterPlanCsv: boolean; preferredByPos?: Record<Pos,number>; hardMaxByPos?: Record<Pos,number> };
+type NsdPlanPreview = { unsigned: Record<string, unknown>; roster: Record<string, unknown>; proposalIds: string[]; savePath: string };
 type TwCheckOverride = { min: number; max: number };
 type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; allowTopTwoException?: boolean; zeroNil?: boolean };
 type RebalanceSettings = { enabled: boolean };
@@ -32,8 +34,8 @@ type RealignmentSettings = { enabled: boolean; [key: string]: unknown };
 function readNsd(): NsdSettings {
   try {
     const s = JSON.parse(localStorage.getItem('gc_mod_nsd') ?? '{}');
-    return { enabled: s.enabled ?? false, signingLimit: s.signingLimit ?? 35, finalRosterLimit: s.finalRosterLimit ?? 95, classTarget: s.classTarget ?? 25, preferredByPos: s.preferredByPos, hardMaxByPos: s.hardMaxByPos };
-  } catch { return { enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 }; }
+    return { enabled: s.enabled ?? false, signingLimit: s.signingLimit ?? 35, finalRosterLimit: s.finalRosterLimit ?? 95, classTarget: s.classTarget ?? 25, clearRecruitingDealbreakers: s.clearRecruitingDealbreakers === true, runRosterPlan: s.runRosterPlan !== false, includeUserControlledTeams: s.includeUserControlledTeams !== false, createRosterPlanCsv: s.createRosterPlanCsv === true, preferredByPos: s.preferredByPos, hardMaxByPos: s.hardMaxByPos };
+  } catch { return { enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25, clearRecruitingDealbreakers: false, runRosterPlan: true, includeUserControlledTeams: true, createRosterPlanCsv: false }; }
 }
 function readTw(): TwSettings {
   try { return JSON.parse(localStorage.getItem('gc_mod_tw') ?? '{}'); }
@@ -79,7 +81,7 @@ export default function ImportPage() {
   const [packageError, setPackageError] = useState('');
 
   // Mod state
-  const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25 });
+  const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25, clearRecruitingDealbreakers: false, runRosterPlan: true, includeUserControlledTeams: true, createRosterPlanCsv: false });
   const [tw, setTw] = useState<TwSettings>({ enabled: false });
   const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
   const [pipeline, setPipeline] = useState<PipelineSettings>({ enabled: false });
@@ -88,12 +90,13 @@ export default function ImportPage() {
   const [modsMounted, setModsMounted] = useState(false);
 
   // Import flow
-  type FlowState = 'idle' | 'running_mod' | 'running_import' | 'running_cloud' | 'done' | 'error';
+  type FlowState = 'idle' | 'running_mod' | 'preview_ready' | 'running_import' | 'running_cloud' | 'done' | 'error';
   const [flow, setFlow] = useState<FlowState>('idle');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [modStatus, setModStatus] = useState('Running selected mod…');
-  const [modLogs, setModLogs] = useState<{ type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> }[]>([]);
+  const [modLogs, setModLogs] = useState<{ type: ModLogType; data: Record<string, unknown> }[]>([]);
+  const [nsdPlanPreview, setNsdPlanPreview] = useState<NsdPlanPreview | null>(null);
 
   const router = useRouter();
 
@@ -231,8 +234,7 @@ export default function ImportPage() {
     return response.data;
   }
 
-  async function handleImport(e: React.FormEvent) {
-    e.preventDefault();
+  async function runSelectedFlow() {
     if (cloudMode ? !uploadedSave : !selectedPath) return;
     setError(''); setResult(null); setModLogs([]);
 
@@ -305,29 +307,68 @@ export default function ImportPage() {
         if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
         setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
       }
-      // NSD mod: run automatically
+      // NSD: preview the complete plan first, then apply it only after confirmation.
       if (nsdActive) {
-        setModStatus('Running NSD Assign…');
-        setFlow('running_mod');
-        const modRes = await fetch('/api/mods/nsd-assign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bypassWeekRequirement: false,
-            reimport: false,
-            savePath: selectedPath,
-            placementSettings: {
-              signingLimit: nsd.signingLimit,
-              finalRosterLimit: nsd.finalRosterLimit,
-              classTarget: nsd.classTarget,
-              ...(nsd.preferredByPos ? { preferredCountByPosition: nsd.preferredByPos } : {}),
-              ...(nsd.hardMaxByPos ? { hardMaximumByPosition: nsd.hardMaxByPos } : {}),
-            },
-          }),
-        });
-        const modData = await modRes.json();
-        if (!modRes.ok) throw new Error(modData.error ?? 'NSD mod failed');
-        setModLogs((logs) => [...logs, { type: 'nsd', data: modData.modResult ?? {} }]);
+        const placementSettings = {
+          signingLimit: nsd.signingLimit,
+          finalRosterLimit: nsd.finalRosterLimit,
+          classTarget: nsd.classTarget,
+          clearRecruitingDealbreakers: nsd.clearRecruitingDealbreakers,
+          ...(nsd.preferredByPos ? { preferredCountByPosition: nsd.preferredByPos } : {}),
+          ...(nsd.hardMaxByPos ? { hardMaximumByPosition: nsd.hardMaxByPos } : {}),
+        };
+
+        if (nsd.runRosterPlan) {
+          if (!nsdPlanPreview || nsdPlanPreview.savePath !== selectedPath) {
+            setModStatus('Building PocketScout NSD assignments and roster plan preview…');
+            setFlow('running_mod');
+            const previewRes = await fetch('/api/mods/nsd-roster-plan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'preview', savePath: selectedPath, placementSettings,
+                includeUserControlledTeams: nsd.includeUserControlledTeams,
+                rosterSettings: { createCsvReport: nsd.createRosterPlanCsv },
+              }),
+            });
+            const previewData = await previewRes.json();
+            if (!previewRes.ok) throw new Error(previewData.error ?? 'PocketScout roster-plan preview failed');
+            setNsdPlanPreview({ ...(previewData.preview ?? {}), savePath: selectedPath });
+            setFlow('preview_ready');
+            return;
+          }
+
+          setModStatus('Applying confirmed PocketScout assignments and roster plan…');
+          setFlow('running_mod');
+          const applyRes = await fetch('/api/mods/nsd-roster-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'apply', savePath: selectedPath, placementSettings,
+              includeUserControlledTeams: nsd.includeUserControlledTeams,
+              rosterSettings: { createCsvReport: nsd.createRosterPlanCsv },
+              proposalIds: nsdPlanPreview.proposalIds,
+            }),
+          });
+          const applyData = await applyRes.json();
+          if (!applyRes.ok) throw new Error(applyData.error ?? 'PocketScout roster-plan apply failed');
+          const applied = applyData.result ?? {};
+          setModLogs((logs) => [
+            ...logs,
+            { type: 'nsd', data: applied.unsigned ?? {} },
+            { type: 'nsd-roster-plan', data: { ...(applied.roster ?? {}), preRunBackupPath: applied.preRunBackupPath, appliedProposalCount: applied.appliedProposalCount } },
+          ]);
+        } else {
+          setModStatus('Running NSD Assign…');
+          setFlow('running_mod');
+          const modRes = await fetch('/api/mods/nsd-assign', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bypassWeekRequirement: false, reimport: false, savePath: selectedPath, placementSettings }),
+          });
+          const modData = await modRes.json();
+          if (!modRes.ok) throw new Error(modData.error ?? 'NSD mod failed');
+          setModLogs((logs) => [...logs, { type: 'nsd', data: modData.modResult ?? {} }]);
+        }
       }
       if (realignmentActive) {
         setModStatus('Generating conference realignment recommendations…');
@@ -340,7 +381,7 @@ export default function ImportPage() {
         const realignmentData = await realignmentRes.json();
         if (!realignmentRes.ok) throw new Error(realignmentData.error ?? 'Conference realignment recommendations failed');
         realignmentResult = realignmentData.result ?? {};
-        setModLogs((logs) => [...logs, { type: 'realignment', data: realignmentResult }]);
+        setModLogs((logs) => [...logs, { type: 'realignment', data: realignmentResult ?? {} }]);
       }
 
       // Import the (now-modified) save
@@ -354,7 +395,12 @@ export default function ImportPage() {
     }
   }
 
-  function reset() { setFlow('idle'); setResult(null); setError(''); setModLogs([]); setCloudDownloadPath(''); }
+  function handleImport(e: React.FormEvent) {
+    e.preventDefault();
+    void runSelectedFlow();
+  }
+
+  function reset() { setFlow('idle'); setResult(null); setError(''); setModLogs([]); setCloudDownloadPath(''); setNsdPlanPreview(null); }
 
   // Which mods are active for the selected snapshot — only after localStorage loads
   const nsdActive = modsMounted && nsd.enabled && snapshot === 'signing_day';
@@ -387,14 +433,14 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Fang's Recruiting Generator</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs last among enabled Preseason mods, immediately before import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs first, before Pipelines, Transfer Wave, Rebalance, and import.</span>
             </p>
           )}
           {nsdActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
-              <strong>NSD: Assign Unsigned Players</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — will run before importing, then save will be reimported.</span>
+              <strong>{nsd.runRosterPlan ? 'PocketScout NSD Assign + Roster Plan' : 'NSD: Assign Unsigned Players'}</strong>
+              <span style={{ color: 'var(--ocean-400)' }}>{nsd.runRosterPlan ? ' — builds a complete preview first. Nothing is written until you review and confirm it.' : ' — will run before importing, then the save will be reimported.'}</span>
             </p>
           )}
           {realignmentActive && (
@@ -408,21 +454,21 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Preseason Transfer Wave</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs second-to-last among enabled Preseason mods, immediately before Fang when enabled.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Pipelines and before Rebalance and import.</span>
             </p>
           )}
           {rebalanceActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>CFB Rebalance</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs before Pipelines, Transfer Wave, Fang, and import. A backup is created beside the save first.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Transfer Wave and immediately before import. A backup is created first.</span>
             </p>
           )}
           {pipelineActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Dynamic Recruiting Pipelines</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Rebalance and before Transfer Wave, Fang, and import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Fang and before Transfer Wave, Rebalance, and import.</span>
             </p>
           )}
         </div>
@@ -541,7 +587,9 @@ export default function ImportPage() {
             className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ background: 'var(--ocean-600)' }}
           >
-            {fangActive
+            {nsdActive && nsd.runRosterPlan
+              ? 'Preview NSD Assignments + Roster Plan'
+              : fangActive
               ? (pipelineActive || twActive || rebalanceActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
               : nsdActive && realignmentActive
               ? 'Run NSD + Realignment + Import'
@@ -566,6 +614,51 @@ export default function ImportPage() {
               : 'Import Save'}
           </button>
         )}
+
+        {flow === 'preview_ready' && nsdPlanPreview && (() => {
+          const unsigned = nsdPlanPreview.unsigned;
+          const roster = nsdPlanPreview.roster;
+          const summary = roster.summary && typeof roster.summary === 'object' ? roster.summary as Record<string, unknown> : {};
+          const assignments = Number(unsigned.transfersAssigned ?? unsigned.previewAssignments ?? roster.previewUnsignedAssignmentsPending ?? 0);
+          const cards = [
+            ['Unsigned Assignments', assignments],
+            ['Roster Changes', nsdPlanPreview.proposalIds.length],
+            ['Teams with Shortages', Number(summary.teamsWithShortages ?? 0)],
+            ['Unresolved Slots', Number(summary.unresolvedShortageSlots ?? 0)],
+          ] as const;
+          return (
+            <div className="rounded-lg border px-4 py-4 space-y-4" style={{ borderColor: 'var(--ocean-600)', background: 'var(--ocean-900)' }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--ocean-100)' }}>PocketScout NSD preview is ready</p>
+                <p className="mt-1 text-xs" style={{ color: '#fbbf24' }}>Nothing has been written to the dynasty save. Review the totals, then confirm once.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {cards.map(([label, value]) => (
+                  <div key={label} className="rounded p-2 text-center" style={{ background: 'var(--ocean-800)' }}>
+                    <div className="text-lg font-bold tabular-nums" style={{ color: 'var(--ocean-100)' }}>{value}</div>
+                    <div className="text-[11px]" style={{ color: 'var(--ocean-500)' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--ocean-400)' }}>
+                <p>Internal position changes: {Number(summary.internalPositionChangeProposals ?? 0)}</p>
+                <p>Unsigned shortage fills: {Number(summary.unsignedRecruitFillProposals ?? 0)}</p>
+                <p>FCS pool trades: {Number(summary.fcsPoolTradeProposals ?? 0)}</p>
+                <p>FCS pool cuts: {Number(summary.fcsPoolCutProposals ?? 0)}</p>
+                <p>Mirror rebalances: {Number(summary.mirrorRebalanceProposals ?? 0)}</p>
+                <p>Talent rescue moves: {Number(summary.talentRescueProposals ?? 0)}</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={() => void runSelectedFlow()} className="rounded-lg px-4 py-2 text-sm font-semibold text-white" style={{ background: 'var(--ocean-600)' }}>
+                  Apply Roster Plan + Import
+                </button>
+                <button type="button" onClick={reset} className="rounded-lg px-4 py-2 text-sm font-medium" style={{ background: 'var(--ocean-800)', color: 'var(--ocean-300)', border: '1px solid var(--ocean-700)' }}>
+                  Discard Preview
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
 
         {flow === 'running_mod' && (
@@ -601,8 +694,8 @@ export default function ImportPage() {
             <div className="rounded-lg border px-4 py-3 text-sm space-y-1.5" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
               <p><span style={{ color: '#4ade80' }}>✓</span> Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {result.snapshot === 'preseason' ? 'Preseason' : 'Signing Day'}</strong> · {result.teamsImported} teams updated in Ghost City.</p>
               {result.snapshot === 'signing_day' && (
-                <p className="text-xs" style={{ color: result.unsignedWritten > 0 ? 'var(--ocean-400)' : 'var(--ocean-600)' }}>
-                  {result.unsignedWritten > 0
+                <p className="text-xs" style={{ color: Number(result.unsignedWritten ?? 0) > 0 ? 'var(--ocean-400)' : 'var(--ocean-600)' }}>
+                  {Number(result.unsignedWritten ?? 0) > 0
                     ? `${result.unsignedWritten} unsigned recruit records saved`
                     : 'No unsigned recruits found in this save (all may have signed or been assigned)'}
                 </p>
@@ -721,7 +814,7 @@ export default function ImportPage() {
 
 // ── Mod log panel ──────────────────────────────────────────
 
-function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment'; data: Record<string, unknown> } }) {
+function ModLogPanel({ log }: { log: { type: ModLogType; data: Record<string, unknown> } }) {
   const d = log.data;
 
   if (log.type === 'realignment') {
@@ -750,6 +843,25 @@ function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipel
       <p style={{ color: 'var(--ocean-300)' }}>{Number(d.teamsUpdated ?? 0)} teams recomputed{Number(d.academyTeams ?? 0) ? ` · ${Number(d.academyTeams)} academy team(s)` : ''}</p>
     </div>
   );
+
+  if (log.type === 'nsd-roster-plan') {
+    const summary = d.summary && typeof d.summary === 'object' ? d.summary as Record<string, unknown> : {};
+    return (
+      <div className="rounded-lg border px-4 py-3 text-xs space-y-2" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
+        <p className="font-semibold" style={{ color: 'var(--ocean-100)' }}>POCKETSCOUT NSD — ROSTER PLAN</p>
+        <p style={{ color: 'var(--ocean-300)' }}>{Number(d.appliedProposalCount ?? summary.proposedMoves ?? 0)} confirmed roster changes applied.</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1" style={{ color: 'var(--ocean-400)' }}>
+          <p>Position changes: {Number(summary.internalPositionChangeProposals ?? 0)}</p>
+          <p>Unsigned fills: {Number(summary.unsignedRecruitFillProposals ?? 0)}</p>
+          <p>FCS pool trades: {Number(summary.fcsPoolTradeProposals ?? 0)}</p>
+          <p>FCS pool cuts: {Number(summary.fcsPoolCutProposals ?? 0)}</p>
+          <p>Mirror rebalances: {Number(summary.mirrorRebalanceProposals ?? 0)}</p>
+          <p>Talent rescue: {Number(summary.talentRescueProposals ?? 0)}</p>
+        </div>
+        <p style={{ color: 'var(--ocean-600)' }}>Full pre-PocketScout backup: {String(d.preRunBackupPath ?? 'not reported')}</p>
+      </div>
+    );
+  }
 
   if (log.type === 'rebalance') {
     const groups = Array.isArray(d.groups) ? d.groups as { label: string; moves: number; unresolved: string[] }[] : [];
@@ -804,7 +916,7 @@ function ModLogPanel({ log }: { log: { type: 'nsd' | 'tw' | 'rebalance' | 'pipel
           {Number(d.previousSchoolCount) > 0 && <p>↩ {String(d.previousSchoolCount)} returned to previous school</p>}
           {Number(d.smartPlacementCount) > 0 && <p>🎯 {String(d.smartPlacementCount)} placed via smart depth fit</p>}
           {Number(d.favoriteWalkOnCount) > 0 && <p>🚶 {String(d.favoriteWalkOnCount)} placed as walk-ons at favorite school</p>}
-          {dealbreakers > 0 && <p>🧹 {dealbreakers} recruiting dealbreakers cleared</p>}
+          {dealbreakers > 0 && <p>🧹 {dealbreakers} recruiting dealbreakers set to Invalid (legacy option)</p>}
           {d.baseNilPlayersReset != null && Number(d.baseNilPlayersReset) > 0 && <p>💰 {String(d.baseNilPlayersReset)} NIL base values reset</p>}
         </div>
 

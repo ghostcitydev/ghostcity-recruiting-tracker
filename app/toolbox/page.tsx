@@ -53,6 +53,10 @@ type NsdSettings = {
   signingLimit: number;
   finalRosterLimit: number;
   classTarget: number;
+  clearRecruitingDealbreakers: boolean;
+  runRosterPlan: boolean;
+  includeUserControlledTeams: boolean;
+  createRosterPlanCsv: boolean;
   preferredByPos: Record<NsdPos, number>;
   hardMaxByPos: Record<NsdPos, number>;
   showAdvanced: boolean;
@@ -87,6 +91,10 @@ const NSD_DEFAULTS: NsdSettings = {
   signingLimit: 35,
   finalRosterLimit: 95,
   classTarget: 25,
+  clearRecruitingDealbreakers: false,
+  runRosterPlan: true,
+  includeUserControlledTeams: true,
+  createRosterPlanCsv: false,
   preferredByPos: { ...NSD_PREFERRED_DEFAULTS },
   hardMaxByPos: { ...NSD_HARD_MAX_DEFAULTS },
   showAdvanced: false,
@@ -261,11 +269,11 @@ function NsdModCard() {
     <ModCard
       enabled={s.enabled}
       onToggle={(v) => update({ enabled: v })}
-      title="NSD: Assign Unsigned Players"
-      author="PocketScout Utilities"
+      title="NSD: Assign Unsigned Players + Roster Fix"
+      author="PocketScout Utilities 0.9.12"
       snapshot="signing_day"
-      description="On National Signing Day, assigns unsigned recruits to FBS schools that need depth by position. Runs before the Signing Day import — the modified save is reimported automatically."
-      warning="Run once per NSD — running twice can create duplicate players. Exit the dynasty to the main menu before running; the game can remain open."
+      description="On National Signing Day, previews unsigned assignments and the complete projected roster plan, then applies the confirmed plan before the final import."
+      warning="Preview freely, but confirm only once per NSD. Exit the dynasty to the main menu before applying; the game can remain open."
     >
       <Section label="Global Limits">
         <div className="grid grid-cols-3 gap-3">
@@ -289,6 +297,40 @@ function NsdModCard() {
             value={s.classTarget}
             min={1} max={s.signingLimit}
             onChange={(v) => update({ classTarget: v })}
+          />
+        </div>
+      </Section>
+
+      <Setting
+        id="nsd-clear-recruiting-dealbreakers"
+        label="Clear assigned recruits’ dealbreakers (legacy compatibility)"
+        description="Writes the game’s Invalid dealbreaker value. Leave off to preserve normal freshman dealbreakers and NIL requirements."
+        checked={s.clearRecruitingDealbreakers}
+        onChange={(clearRecruitingDealbreakers) => update({ clearRecruitingDealbreakers })}
+      />
+
+      <Section label="Roster Plan">
+        <div className="space-y-3">
+          <Setting
+            id="nsd-run-roster-plan"
+            label="Preview and apply the complete NSD roster plan"
+            description="Simulates unsigned assignments first, then proposes position changes, shortage fills, FCS moves/cuts, mirrored-position fixes, and Talent Rescue. You review the plan before anything is written."
+            checked={s.runRosterPlan}
+            onChange={(runRosterPlan) => update({ runRosterPlan })}
+          />
+          <Setting
+            id="nsd-include-user-teams"
+            label="Include user-controlled teams"
+            description="Allows the roster plan to propose and apply changes for user-controlled schools as well as CPU schools."
+            checked={s.includeUserControlledTeams}
+            onChange={(includeUserControlledTeams) => update({ includeUserControlledTeams })}
+          />
+          <Setting
+            id="nsd-create-roster-plan-csv"
+            label="Create CSV preview report"
+            description="Writes PocketScout's detailed roster-plan preview report under backups/pocketscout-reports."
+            checked={s.createRosterPlanCsv}
+            onChange={(createRosterPlanCsv) => update({ createRosterPlanCsv })}
           />
         </div>
       </Section>

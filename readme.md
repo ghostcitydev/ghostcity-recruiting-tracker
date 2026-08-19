@@ -60,14 +60,15 @@ Mods are configured in **Toolbox** and run automatically as part of the appropri
 
 ### Signing Day
 
-1. **NSD: Assign Unsigned Players** — optional; places unsigned recruits on teams with roster need, then reimports the save. Run it once per National Signing Day only.
-2. **Dynamic Conference Realignment** — optional; runs after NSD and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review saved results on the **Realignment** page after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
+1. **PocketScout NSD Assign + Roster Plan** — optional; previews unsigned-player assignments together with the complete projected roster plan. Review the totals before confirming. On confirmation, Ghost City applies the assignments once, applies the selected roster plan, reconciles roster storage, depth charts, jersey numbers, and weight development, then imports the finished save. A full restore point is created first under `backups/pocketscout-backups`.
+2. **Dynamic Conference Realignment** — optional; runs after PocketScout and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review saved results on the **Realignment** page after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
 
 ### Important timing rules
 
 - Before running any save-writing mod, exit the dynasty to the game's **main menu**. The game can remain open.
 - Back up a save before trying a new mod or setting for the first time.
-- Do not run NSD Assign twice on the same Signing Day.
+- Confirm the PocketScout NSD plan only once per Signing Day. Discarding a preview is safe because previews do not write to the save.
+- The legacy **Clear assigned recruits' dealbreakers** option is off by default so incoming freshmen retain valid dealbreakers and NIL requirements.
 - Keep Dynamic Conference Realignment enabled for each Signing Day if you want it to build its history. Early seasons may produce no recommendations while its history and moratorium settings are still in effect.
 - Realignment's Toolbox controls include Hawai‘i travel treatment and target sizes for Power 4, Pac-12, and Group of 5 conferences. The defaults match the bundled tool.
 - Keep Transfer Wave disabled until your dynasty has developed for a few seasons unless you intentionally want an early redistribution.
@@ -102,7 +103,7 @@ For the portable app, download the newest exe and replace the old one. Your trac
 
 - Save parsing: [madden-franchise](https://github.com/WiiExpertise/madden-franchise) by WiiExpertise
 - Fang's Recruiting Generator by Fang / RO27
-- NSD Assign by PocketScout Utilities
+- NSD Assign and Roster Plan by PocketScout Utilities 0.9.12
 - Dynamic Conference Realignment by Slappey47
 - Preseason Transfer Wave by Balla / Aball1495
 - Dynamic Recruiting Pipelines by Balla / Aball1495

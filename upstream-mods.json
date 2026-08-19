@@ -27,6 +27,15 @@
       "sourceCommit": "0608347118fb9cd20bbcacd9dad436f2052c4376",
       "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.2.0.zip",
       "integration": "Recommendation-only Signing Day stage; never writes the dynasty save. Includes the v0.2.0 conference-size and Hawai‘i travel settings."
+    },
+    {
+      "id": "pocketscout-nsd",
+      "name": "PocketScout Utilities — NSD Assign and Roster Plan",
+      "repository": "PocketScout Utilities local distribution",
+      "embeddedVersion": "0.9.12+rlt-schema-and-roster-fixes",
+      "sourceCommit": "not-published-with-local-distribution",
+      "releaseAsset": "PocketScout-Utilities-0_9_12",
+      "integration": "RLT incorporates the 0.9.12 combined assignment preview, complete NSD roster-plan preview/apply workflow, final roster reconciliation, tested CFB 27 schema resolver, and full pre-run backup location."
     }
   ]
 }
