@@ -23,10 +23,10 @@
       "id": "dynamic-realignment",
       "name": "Dynamic Conference Realignment",
       "repository": "Slappey47/CFB27-Dynamic-Realignment-Tool",
-      "embeddedVersion": "V0.2.0",
-      "sourceCommit": "0608347118fb9cd20bbcacd9dad436f2052c4376",
-      "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.2.0.zip",
-      "integration": "Recommendation-only Signing Day stage; never writes the dynasty save. Includes the v0.2.0 conference-size and Hawai‘i travel settings."
+      "embeddedVersion": "V0.2.1",
+      "sourceCommit": "7a7c2b4c6983394de55076d3df634d3cbba946b5",
+      "releaseAsset": "Slappey.s.Dynamic.Conference.Realignment.Tool.V0.2.1.zip",
+      "integration": "Recommendation-only Signing Day stage; never writes the dynasty save. Includes the v0.2.0 conference-size and Hawai‘i travel settings, plus the v0.2.1 fix for EA's MWC→MW conference field rename (RLT's readConferences normalizes \"MW\" back to \"MWC\" so settings.confDesiredSize keeps resolving the conference for dynasties started after that title update)."
     },
     {
       "id": "pocketscout-nsd",

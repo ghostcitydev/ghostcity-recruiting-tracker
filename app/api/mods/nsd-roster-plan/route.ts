@@ -216,6 +216,7 @@ export async function POST(request: Request) {
           positionTargets: rosterSettings.positionTargets ?? null,
           fcsPoolSettings: rosterSettings.fcsPoolSettings ?? null,
           talentRescueSettings: rosterSettings.talentRescueSettings ?? null,
+          clearRecruitingDealbreakers: placementSettings?.clearRecruitingDealbreakers === true,
         },
       });
     }
