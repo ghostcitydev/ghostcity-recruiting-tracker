@@ -35,10 +35,7 @@
 - Updated the embedded Dynamic Conference Realignment mod to upstream V0.2.1.
   Fixes wrong or missing Mountain West recommendations on dynasties started
   after EA renamed that conference's save field from `MWC` to `MW`.
-- Fixed a crash (`Cannot read properties of undefined (reading '<season>')`)
-  on Realignment runs for dynasties with realignment history recorded before
-  the V0.2.1 update above—Ghost City now recognizes the Mountain West's
-  older `MW`-keyed history alongside the current `MWC` key.
+- Fixed a Realignment crash affecting dynasties with realignment history recorded before the V0.2.1 update above—Ghost City now recognizes the Mountain West's older `MW`-keyed history alongside the current `MWC` key.
 
 ## Reliability checks
 
