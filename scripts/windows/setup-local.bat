@@ -74,3 +74,12 @@ start "" /b cmd /c "timeout /t 3 >nul && start http://localhost:3000"
 
 :: Start the dev server
 call npm run dev
+if %errorlevel% neq 0 (
+    echo.
+    echo  ============================================
+    echo  The server exited unexpectedly ^(code %errorlevel%^).
+    echo  Scroll up to see the error above this line,
+    echo  then press any key to close this window.
+    echo  ============================================
+    pause >nul
+)

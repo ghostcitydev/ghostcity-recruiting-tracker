@@ -25,3 +25,12 @@ echo  Close it to stop the server.
 echo.
 start "" /b cmd /c "timeout /t 2 >nul && start http://localhost:3000"
 call npm run dev
+if %errorlevel% neq 0 (
+    echo.
+    echo  ============================================
+    echo  The server exited unexpectedly ^(code %errorlevel%^).
+    echo  Scroll up to see the error above this line,
+    echo  then press any key to close this window.
+    echo  ============================================
+    pause >nul
+)
