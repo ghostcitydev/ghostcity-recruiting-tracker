@@ -23,7 +23,15 @@ async function resolveConferences(franchise: any, teamTable: any): Promise<Map<s
 
   for (const confRec of confTable.records) {
     if (confRec.isEmpty || !confRec.Name) continue;
-    const confName = confRec.Name as string;
+    // EA renamed the Mountain West conference's save field from "MWC" to
+    // "MW" for dynasties started after a title update (same field the
+    // embedded Dynamic Conference Realignment mod already normalizes in
+    // its own saveFile.js). Normalize it here too so every downstream
+    // consumer -- the Power 4 / Group of 5 conference filters on the
+    // Dashboard and Players pages included -- sees the same "MWC" name
+    // regardless of which one the save actually uses.
+    const rawConfName = confRec.Name as string;
+    const confName = rawConfName === 'MW' ? 'MWC' : rawConfName;
     const divArrRef = parseRef(confRec.Divisions);
     if (!divArrRef) continue;
     const divArrTable = await getTable(divArrRef.tableId);
