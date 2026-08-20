@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0\..\.."
+cd /d "%~dp0"
 
 echo.
 echo  Ghost City RLT - Hard Reset
@@ -29,4 +29,4 @@ if !FOUND!==0 (
 echo.
 echo  Starting a fresh server...
 echo.
-call "%~dp0run-local.bat"
+call "%~dp0scripts\windows\run-local.bat"
