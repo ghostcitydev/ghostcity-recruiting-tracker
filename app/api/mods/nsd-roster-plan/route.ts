@@ -227,7 +227,13 @@ export async function POST(request: Request) {
         preRunBackupPath,
         unsigned: compactUnsignedResult(unsignedResult),
         roster: rosterResult ? compactRosterResult(rosterResult) : null,
-        appliedProposalCount: proposalIds.length,
+        // Prefer the roster balancer's own post-apply count (accounts for
+        // ALL_TEAMS scope re-analyzing fresh at apply time, which can
+        // differ from what was originally selected in preview) and only
+        // fall back to the request's proposal count when apply didn't run.
+        appliedProposalCount: typeof rosterResult?.selectedProposalCount === 'number'
+          ? rosterResult.selectedProposalCount
+          : proposalIds.length,
       },
     });
   } catch (error) {
