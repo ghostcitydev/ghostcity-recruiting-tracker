@@ -451,6 +451,7 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
     'ProgramPointsBudgetGrade',
     'CommittedPlayers',
     'MySchoolTrackingTable',
+    'SchoolPipelineInfluenceList',
     // Player.TeamIndex can be stale in live dynasty saves.  The roster array
     // is the game-facing source of truth (and the same source Transfer Wave
     // uses when deciding who is actually on each team).
@@ -501,32 +502,47 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
     }
   } catch { /* coach table absent — skip */ }
 
-  // Build pipeline map: TeamIndex → array of { pipeline, level, value }
+  // Read the school-pipeline-influence array table + its detail table. Each
+  // Team record carries a direct ref (SchoolPipelineInfluenceList field) to
+  // its own row in the array table — row index ≠ TeamIndex, the same pitfall
+  // as MySchoolTrackingTable above, so entries are resolved per-team via that
+  // ref below rather than pre-built into a Map keyed by array row position
+  // (which silently attributed one team's real pipeline data to a
+  // different team whenever their TeamIndex happened to collide with
+  // another team's row position in this array).
   type PipelineEntry = { pipeline: string; level: string; value: number };
-  const pipelineMap = new Map<number, PipelineEntry[]>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pipelineArrTable: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pipelineTable: any = null;
   try {
-    const pipelineArrTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence[]'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const pipelineTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    pipelineArrTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence[]'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    pipelineTable = franchise.tables.find((t: any) => t.name === 'SchoolPipelineInfluence'); // eslint-disable-line @typescript-eslint/no-explicit-any
     if (pipelineArrTable && pipelineTable) {
       await pipelineArrTable.readRecords();
       await pipelineTable.readRecords(['Pipeline', 'InfluenceLevel', 'InfluenceValue']);
-      pipelineArrTable.records.forEach((arrRec: any, teamIdx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (arrRec.isEmpty) return;
-        const entries: PipelineEntry[] = [];
-        for (const f of Object.keys(arrRec.fields)) {
-          if (!f.startsWith('SchoolPipelineInfluence')) continue;
-          const ref = parseRef(arrRec[f]);
-          if (!ref) continue;
-          const pRec = pipelineTable.records[ref.row];
-          if (!pRec || pRec.isEmpty) continue;
-          const lvl = pRec.InfluenceLevel as string;
-          if (lvl === 'Unrecognized') continue; // skip zero-value
-          entries.push({ pipeline: pRec.Pipeline as string, level: lvl, value: pRec.InfluenceValue as number });
-        }
-        if (entries.length) pipelineMap.set(teamIdx, entries);
-      });
+    } else {
+      pipelineArrTable = null;
+      pipelineTable = null;
     }
-  } catch { /* pipeline table absent — skip */ }
+  } catch { pipelineArrTable = null; pipelineTable = null; }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function resolvePipelineEntries(arrRec: any): PipelineEntry[] {
+    const entries: PipelineEntry[] = [];
+    if (!arrRec || arrRec.isEmpty || !pipelineTable) return entries;
+    for (const f of Object.keys(arrRec.fields)) {
+      if (!f.startsWith('SchoolPipelineInfluence')) continue;
+      const ref = parseRef(arrRec[f]);
+      if (!ref) continue;
+      const pRec = pipelineTable.records[ref.row];
+      if (!pRec || pRec.isEmpty) continue;
+      const lvl = pRec.InfluenceLevel as string;
+      if (lvl === 'Unrecognized') continue; // skip zero-value
+      entries.push({ pipeline: pRec.Pipeline as string, level: lvl, value: pRec.InfluenceValue as number });
+    }
+    return entries;
+  }
 
   const confMap = await resolveConferences(franchise, teamTable);
   const { byTeam: recruitData, posRecruitsByTeam, pipelineRecruitsByTeam, pipelinePosRecruitsByTeam, signedRecruitsByTeam, unsignedIndividuals, unsigned, unsignedHSStars, unsignedXferStars, transfersOutByTeamIdx, prospectPool } = await analyzeRecruits(franchise, teamTable);
@@ -756,8 +772,11 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
       create: { teamId: team.id, seasonId: season.id, ...statPayload },
     });
 
-    // Upsert pipeline influence records for this team/season
-    const pipelines = pipelineMap.get(teamIdx) ?? [];
+    // Upsert pipeline influence records for this team/season — resolved via
+    // this team's own SchoolPipelineInfluenceList ref, not by TeamIndex.
+    const pipelineRef = parseRef(rec.SchoolPipelineInfluenceList);
+    const pipelineArrRec = (pipelineRef && pipelineArrTable) ? (pipelineArrTable.records[pipelineRef.row] ?? null) : null;
+    const pipelines = resolvePipelineEntries(pipelineArrRec);
     for (const p of pipelines) {
       await prisma.teamPipeline.upsert({
         where: { teamId_seasonId_pipeline: { teamId: team.id, seasonId: season.id, pipeline: p.pipeline } },
