@@ -80,6 +80,7 @@ jobs:
             - Fixed Positional Depth and Roster Ratings after Transfer Wave by reading the game's authoritative team roster arrays.
             - Saves Dynamic Conference Realignment recommendations with each Signing Day import for review on the Realignment page.
             - Updated the embedded Dynamic Conference Realignment mod to upstream V0.2.1, fixing wrong or missing Mountain West recommendations on dynasties started after EA renamed that conference's save field from `MWC` to `MW`.
+            - Fixed a crash reading properties of a season year (for example `reading '2025'`) on Realignment runs for dynasties with realignment history recorded before the V0.2.1 update above.
             - Includes both the portable single EXE and a faster-starting no-install ZIP/folder build.
 
             ## Upgrade note
