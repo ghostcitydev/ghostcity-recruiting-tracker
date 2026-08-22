@@ -52,6 +52,7 @@ model Season {
   pipelinePosRecruits     TeamPipelinePositionRecruit[]
   prospectPool            PipelineProspect[]
   realignmentMoves       ConferenceRealignmentMove[]
+  forceWinAssignments    ForceWinAssignment[]
 
   @@unique([year, snapshot])
 }
@@ -351,4 +352,44 @@ model ConferenceRealignmentMove {
   createdAt      DateTime @default(now())
 
   @@unique([seasonId, teamName, toConference])
+}
+
+// Games force-won by the Force Win stage (ported from Ace's CFB Toolkit
+// 0.9.3's "Automatic Force Win"), one row per forced game, recorded once at
+// Week 0 when the stage runs. This IS applied to the dynasty save -- the
+// ForceWin field is written for each of these games.
+model ForceWinAssignment {
+  id           String   @id @default(cuid())
+  season       Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId     String
+  week         Int
+  homeTeam     String
+  awayTeam     String
+  forcedWinner String
+
+  // Model inputs that produced the decision
+  disparity   Float?
+  probability Float?
+  roll        Float?
+
+  // The 4-5 factor breakdown surfaced as "why this win was forced"
+  talentValue    Float?
+  matchupValue   Float?
+  coachingValue  Float?
+  homeFieldValue Float?
+  homeEnvValue   Float?
+  reason         String?
+
+  rivalryApplied    Boolean @default(false)
+  rivalryMultiplier Float?
+  fcsApplied        Boolean @default(false)
+  fcsMultiplier     Float?
+
+  // Settings the run used, for context when reviewing history later
+  involvement  String
+  modelProfile String
+
+  createdAt DateTime @default(now())
+
+  @@unique([seasonId, week, homeTeam, awayTeam])
 }

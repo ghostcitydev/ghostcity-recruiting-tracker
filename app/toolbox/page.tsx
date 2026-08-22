@@ -6,10 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 
 const LS_NSD = 'gc_mod_nsd';
 const LS_TW  = 'gc_mod_tw';
-const LS_RB  = 'gc_mod_rb';
 const LS_PIPELINE = 'gc_mod_pipeline';
 const LS_FANG = 'gc_mod_fang';
 const LS_REALIGNMENT = 'gc_mod_realignment';
+const LS_FORCE_WIN = 'gc_mod_force_win';
 
 // NSD position keys (PocketScout)
 const NSD_POSITIONS = ['QB','HB','FB','WR','TE','LT','LG','C','RG','RT','EDGE','DT','LB','CB','S','K','P'] as const;
@@ -84,6 +84,27 @@ type PipelineSettings = {
 type FangSettings = { enabled: boolean; fileName: string; config: Record<string, unknown> | null };
 type RealignmentSettings = { enabled: boolean; moratoriumPeriod: number; applicationProcessingLength: number; prestigeAvgLength: number; NDlock: number; shawaiiBonus: number; P4confsize: number; PAC12confsize: number; G5confsize: number };
 const REALIGNMENT_DEFAULTS: RealignmentSettings = { enabled: false, moratoriumPeriod: 1, applicationProcessingLength: 3, prestigeAvgLength: 5, NDlock: 1, shawaiiBonus: 100, P4confsize: 16, PAC12confsize: 12, G5confsize: 12 };
+
+// Force Win involvement/model-profile option shape mirrors runner.js's
+// prepareForceWin() output — fetched live per save, with these as fallbacks
+// before that fetch resolves (or if it fails).
+type ForceWinOption = { value: string; label: string; description?: string };
+const FORCE_WIN_INVOLVEMENT_FALLBACK: ForceWinOption[] = [
+  { value: 'minimum', label: 'Minimum' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'maximum', label: 'Maximum' },
+];
+const FORCE_WIN_PROFILE_FALLBACK: ForceWinOption[] = [
+  { value: 'ratings', label: 'Ratings First', description: 'Weighs raw team talent most heavily.' },
+  { value: 'balanced', label: 'Balanced', description: 'Even mix of talent, matchups, and coaching.' },
+  { value: 'coaching', label: 'Coaching Heavy', description: 'Weighs coaching quality most heavily.' },
+  { value: 'matchup', label: 'Matchup Heavy', description: 'Weighs positional unit matchups most heavily.' },
+  { value: 'chaos', label: 'Chaos', description: 'Adds the most randomness to outcomes.' },
+];
+type ForceWinSettings = { enabled: boolean; involvement: string; modelProfile: string; forceAllTeams: boolean; skippedTeams: string[] };
+const FORCE_WIN_DEFAULTS: ForceWinSettings = { enabled: false, involvement: 'medium', modelProfile: 'balanced', forceAllTeams: true, skippedTeams: [] };
 const PIPELINE_DEFAULTS: PipelineSettings = { enabled:false, preset:'rosterDriven', wRoster:.35,wStar:.35,wCoach:.2,wGeo:.1,decay:.75,geoRadius:300,maxPipelines:10,coachRampMode:'ramp',coachRampSeasons:3,coachInclude:{HeadCoach:true,OffensiveCoordinator:true,DefensiveCoordinator:true},academyMode:false,academyTargetCount:42,academyUniform:true,academyUniformTier:'Respected',academyExempt:true,showAdvanced:false };
 
 const NSD_DEFAULTS: NsdSettings = {
@@ -156,6 +177,8 @@ function loadFang(): FangSettings { try { const s = JSON.parse(localStorage.getI
 function saveFang(s: FangSettings) { localStorage.setItem(LS_FANG, JSON.stringify(s)); }
 function loadRealignment(): RealignmentSettings { try { return { ...REALIGNMENT_DEFAULTS, ...JSON.parse(localStorage.getItem(LS_REALIGNMENT) ?? '{}') }; } catch { return REALIGNMENT_DEFAULTS; } }
 function saveRealignment(s: RealignmentSettings) { localStorage.setItem(LS_REALIGNMENT, JSON.stringify(s)); }
+function loadForceWin(): ForceWinSettings { try { const s = JSON.parse(localStorage.getItem(LS_FORCE_WIN) ?? '{}'); return { ...FORCE_WIN_DEFAULTS, ...s, skippedTeams: Array.isArray(s.skippedTeams) ? s.skippedTeams : [] }; } catch { return FORCE_WIN_DEFAULTS; } }
+function saveForceWin(s: ForceWinSettings) { localStorage.setItem(LS_FORCE_WIN, JSON.stringify(s)); }
 
 // ── Page ───────────────────────────────────────────────────
 
@@ -173,7 +196,7 @@ export default function ToolboxPage() {
       <RealignmentModCard />
       <FangModCard />
       <TwModCard />
-      <RbModCard />
+      <ForceWinModCard />
       <PipelineModCard />
     </div>
   );
@@ -229,7 +252,7 @@ function FangModCard() {
     };
     reader.readAsText(file);
   };
-  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Fang's Recruiting Generator" author="Fang / RO27 Official V3.4" snapshot="preseason" description="Regenerates preseason recruits using Fang's selected settings profile. It runs first, before Pipelines, Transfer Wave, Rebalance, and the Ghost City import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created before changes.">
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Fang's Recruiting Generator" author="Fang / RO27 Official V3.4" snapshot="preseason" description="Regenerates preseason recruits using Fang's selected settings profile. It runs first, before Pipelines and Transfer Wave, then the Ghost City import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created before changes.">
     <Section label="Settings JSON">
       <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={(event) => chooseFile(event.target.files?.[0])} className="hidden" />
       <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--ocean-700)', color: 'var(--ocean-100)', border: '1px solid var(--ocean-600)', cursor: 'pointer' }}>Browse…</button>
@@ -570,66 +593,139 @@ function TwModCard() {
   );
 }
 
-// ── CFB Rebalance Setup ────────────────────────────────────
+// ── Force Win ───────────────────────────────────────────────
 
-function RbModCard() {
-  const [enabled, setEnabled] = useState(false);
+function ForceWinModCard() {
+  const [s, setS] = useState<ForceWinSettings>(FORCE_WIN_DEFAULTS);
   const [mounted, setMounted] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'launching' | 'launched' | 'error'>('idle');
-  const [errorMsg] = useState('');
+  const [teams, setTeams] = useState<string[]>([]);
+  const [involvementOptions, setInvolvementOptions] = useState<ForceWinOption[]>(FORCE_WIN_INVOLVEMENT_FALLBACK);
+  const [profileOptions, setProfileOptions] = useState<ForceWinOption[]>(FORCE_WIN_PROFILE_FALLBACK);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState('');
+  const [readyMessage, setReadyMessage] = useState('');
 
+  useEffect(() => { setS(loadForceWin()); setMounted(true); }, []);
+
+  // Force Win's involvement levels, model profiles, and team list all come
+  // from the actual save file (via prepareForceWin), the same way the game
+  // reports them on the Import page. Toolbox has no save-file selector of
+  // its own, so — like the other direct-save Toolbox utilities — this reads
+  // the save tied to the most recently imported season.
   useEffect(() => {
-    try { setEnabled(JSON.parse(localStorage.getItem(LS_RB) ?? 'false')); } catch { /* ignore */ }
-    setMounted(true);
-  }, []);
+    if (!mounted || !s.enabled) return;
+    let cancelled = false;
+    setTeamsLoading(true);
+    setTeamsError('');
+    setReadyMessage('');
+    (async () => {
+      try {
+        const seasonsRes = await fetch('/api/seasons');
+        const seasons = await seasonsRes.json();
+        const savePath = Array.isArray(seasons)
+          ? (seasons.find((season: { sourceFile?: string | null }) => season?.sourceFile)?.sourceFile as string | undefined)
+          : undefined;
+        if (!savePath) throw new Error('Import a dynasty save first — Force Win reads its team list from the most recently imported save.');
+        const res = await fetch(`/api/mods/force-win?savePath=${encodeURIComponent(savePath)}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error ?? 'Could not read team list from the save.');
+        if (cancelled) return;
+        setTeams(Array.isArray(data.result?.teams) ? data.result.teams : []);
+        if (Array.isArray(data.result?.involvement) && data.result.involvement.length) setInvolvementOptions(data.result.involvement);
+        if (Array.isArray(data.result?.modelProfiles) && data.result.modelProfiles.length) setProfileOptions(data.result.modelProfiles);
+        // Informational only -- these settings can be configured any time.
+        // Force Win itself still only actually runs at Week 0 (RegularSeason).
+        if (data.result?.ready === false && typeof data.result?.readyMessage === 'string') setReadyMessage(data.result.readyMessage);
+      } catch (err) {
+        if (!cancelled) setTeamsError(err instanceof Error ? err.message : 'Could not load team list.');
+      } finally {
+        if (!cancelled) setTeamsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mounted, s.enabled]);
 
   if (!mounted) return <ModCardSkeleton />;
 
-  function toggle(v: boolean) {
-    setEnabled(v);
-    localStorage.setItem(LS_RB, JSON.stringify(v));
-  }
+  const update = (patch: Partial<ForceWinSettings>) => { const next = { ...s, ...patch }; setS(next); saveForceWin(next); };
+  const toggleSkip = (team: string) => {
+    const skippedTeams = s.skippedTeams.includes(team) ? s.skippedTeams.filter((t) => t !== team) : [...s.skippedTeams, team];
+    update({ skippedTeams });
+  };
 
-  function launch() {
-    // Rebalance is now invoked by the Import workflow, after Transfer Wave.
-    setStatus('launched');
-  }
+  const activeProfile = profileOptions.find((opt) => opt.value === s.modelProfile);
 
   return (
     <ModCard
-      enabled={enabled}
-      onToggle={toggle}
-      title="CFB Rebalance Setup"
-      author="Dogsh*t"
-      snapshot="preseason"
-      description="Rebalances duplicate position slots (LT↔RT, LG↔RG, WLB↔SLB, etc.) in the save file. Run this after the Transfer Wave completes, before re-importing."
-      warning="Exit the dynasty to the main menu before running; the game can remain open. Run AFTER the Transfer Wave."
+      enabled={s.enabled}
+      onToggle={(enabled) => update({ enabled })}
+      title="Force Win"
+      author="Ace's CFB Toolkit 0.9.3"
+      snapshot="week_zero"
+      description="Evaluates every remaining regular-season matchup (weeks 1-15) and forces the modeled favorite to win where the mismatch is large enough. Runs as its own Week 0 import, after you've advanced the save past Preseason into the regular season."
+      warning="Run this only once per season, as a dedicated Week 0 import — the save must have already advanced to regular-season Week 0 (not Preseason). Exit the dynasty to the main menu before running; the game can remain open. A fresh RLT Backup is created automatically before changes."
     >
-      <p className="text-xs" style={{ color: 'var(--ocean-400)' }}>
-        Enable it here, then use Import to run it after Transfer Wave and before the save is re-imported.
-      </p>
-      <div className="hidden">
-        <button
-          type="button"
-          onClick={launch}
-          disabled={status === 'launching'}
-          className="rounded px-4 py-1.5 text-sm font-semibold transition-opacity"
-          style={{
-            background: 'var(--ocean-600)', color: '#fff',
-            opacity: status === 'launching' ? 0.5 : 1,
-            cursor: status === 'launching' ? 'not-allowed' : 'pointer',
-            border: 'none',
-          }}
-        >
-          {status === 'launching' ? 'Launching…' : 'Launch CFB Rebalance'}
-        </button>
-        {status === 'launched' && (
-          <span className="text-xs" style={{ color: '#4ade80' }}>✓ Launched — close it when done, then re-import.</span>
-        )}
-        {status === 'error' && (
-          <span className="text-xs" style={{ color: '#f87171' }}>Error: {errorMsg}</span>
-        )}
-      </div>
+      {readyMessage && (
+        <p className="mb-3 rounded px-3 py-2 text-xs" style={{ background: 'var(--ocean-800)', border: '1px solid var(--ocean-700)', color: 'var(--ocean-400)' }}>
+          {readyMessage}
+        </p>
+      )}
+      <Section label="Model Settings">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--ocean-300)' }}>Involvement</label>
+            <select
+              value={s.involvement}
+              onChange={(e) => update({ involvement: e.target.value })}
+              className="w-full rounded border px-2 py-1.5 text-sm"
+              style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
+            >
+              {involvementOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--ocean-600)' }}>How often the model steps in on close-to-moderate mismatches.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--ocean-300)' }}>Model Profile</label>
+            <select
+              value={s.modelProfile}
+              onChange={(e) => update({ modelProfile: e.target.value })}
+              className="w-full rounded border px-2 py-1.5 text-sm"
+              style={{ background: 'var(--ocean-800)', borderColor: 'var(--ocean-700)', color: 'var(--ocean-100)' }}
+            >
+              {profileOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--ocean-600)' }}>{activeProfile?.description ?? 'What the model weighs most heavily when judging a mismatch.'}</p>
+          </div>
+        </div>
+      </Section>
+
+      <Setting
+        id="force-win-all-teams"
+        label="Force wins for all teams"
+        description="When off, choose specific teams below to leave entirely to the game engine — Force Win will never touch their games."
+        checked={s.forceAllTeams}
+        onChange={(forceAllTeams) => update({ forceAllTeams })}
+      />
+
+      {!s.forceAllTeams && (
+        <Section label="Teams to Skip">
+          {teamsLoading && <p className="text-xs" style={{ color: 'var(--ocean-500)' }}>Loading team list…</p>}
+          {teamsError && <p className="text-xs" style={{ color: '#f87171' }}>{teamsError}</p>}
+          {!teamsLoading && !teamsError && teams.length > 0 && (
+            <div className="flex max-h-[260px] flex-col gap-1 overflow-y-auto rounded border p-2" style={{ borderColor: 'var(--ocean-800)' }}>
+              {teams.map((team) => (
+                <label key={team} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs" style={{ color: 'var(--ocean-200)' }}>
+                  <input type="checkbox" checked={s.skippedTeams.includes(team)} onChange={() => toggleSkip(team)} className="accent-blue-500" />
+                  {team}
+                </label>
+              ))}
+            </div>
+          )}
+          {s.skippedTeams.length > 0 && (
+            <p className="text-xs mt-1" style={{ color: 'var(--ocean-500)' }}>{s.skippedTeams.length} team{s.skippedTeams.length === 1 ? '' : 's'} skipped.</p>
+          )}
+        </Section>
+      )}
     </ModCard>
   );
 }
@@ -652,13 +748,13 @@ function ModCard({
   onToggle: (v: boolean) => void;
   title: string;
   author: string;
-  snapshot: 'signing_day' | 'preseason';
+  snapshot: 'signing_day' | 'preseason' | 'week_zero';
   description: string;
   warning?: string;
   children?: React.ReactNode;
 }) {
-  const snapshotLabel = snapshot === 'signing_day' ? 'Signing Day' : 'Preseason';
-  const snapshotColor = snapshot === 'signing_day' ? '#60a5fa' : '#4ade80';
+  const snapshotLabel = snapshot === 'signing_day' ? 'Signing Day' : snapshot === 'preseason' ? 'Preseason' : 'Week 0';
+  const snapshotColor = snapshot === 'signing_day' ? '#60a5fa' : snapshot === 'preseason' ? '#4ade80' : '#fbbf24';
 
   return (
     <div
@@ -820,7 +916,7 @@ function PipelineModCard() {
     update({ preset:name, wRoster:values[0], wStar:values[1], wCoach:values[2], wGeo:values[3] });
   };
   const weight = (key: 'wRoster'|'wStar'|'wCoach'|'wGeo', value: number) => update({ [key]: value, preset:'custom' } as Partial<PipelineSettings>);
-  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Dynamic Recruiting Pipelines" author="Dynamic Recruiting Pipeline Tool v1.1.0" snapshot="preseason" description="Recomputes recruiting pipelines from roster makeup, star quality, coaches, geography, and prior pipelines. It runs after Fang and before Transfer Wave, Rebalance, and import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh Pipeline Backup is created before changes.">
+  return <ModCard enabled={s.enabled} onToggle={(enabled) => update({ enabled })} title="Dynamic Recruiting Pipelines" author="Dynamic Recruiting Pipeline Tool v1.1.0" snapshot="preseason" description="Recomputes recruiting pipelines from roster makeup, star quality, coaches, geography, and prior pipelines. It runs after Fang and before Transfer Wave and import." warning="Exit the dynasty to the main menu before running; the game can remain open. A fresh Pipeline Backup is created before changes.">
     <Section label="Preset & Core Settings">
       <div className="grid grid-cols-2 gap-3">
         <div><label className="block text-xs font-medium mb-1" style={{color:'var(--ocean-300)'}}>Preset</label><select value={s.preset} onChange={e => preset(e.target.value as PipelineSettings['preset'])} className="w-full rounded border px-2 py-1.5 text-sm" style={{background:'var(--ocean-800)',borderColor:'var(--ocean-700)',color:'var(--ocean-100)'}}><option value="rosterDriven">Roster-driven</option><option value="blueChipFocused">Blue-chip focused</option><option value="coachLegacy">Coach-legacy</option><option value="grounded">Grounded</option><option value="custom">Custom</option></select></div>

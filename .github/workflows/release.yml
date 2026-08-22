@@ -74,18 +74,16 @@ jobs:
           body: |
             ## ${{ steps.pkg.outputs.VERSION }}
 
-            - Embedded PocketScout Utilities 0.9.12's complete National Signing Day workflow: combined assignment and roster-plan preview, explicit confirmation, roster-plan application, and final roster/depth-chart reconciliation.
-            - Preserves normal incoming-freshman dealbreakers and NIL requirements by default, now correctly applied across every NSD path (manual recruit commits, board hard-commits, unsigned/transfer shortage fills, and Final Talent Rescue swaps); the legacy Invalid-dealbreaker behavior is now optional.
-            - Creates a full pre-PocketScout restore point before changing the selected save.
-            - Fixed Positional Depth and Roster Ratings after Transfer Wave by reading the game's authoritative team roster arrays.
-            - Saves Dynamic Conference Realignment recommendations with each Signing Day import for review on the Realignment page.
-            - Updated the embedded Dynamic Conference Realignment mod to upstream V0.2.1, fixing wrong or missing Mountain West recommendations on dynasties started after EA renamed that conference's save field from `MWC` to `MW`.
-            - Fixed a crash reading properties of a season year (for example `reading '2025'`) on Realignment runs for dynasties with realignment history recorded before the V0.2.1 update above.
+            - Added **Force Win**, ported from Ace's CFB Toolkit 0.9.3's "Automatic Force Win," replacing CFB Rebalance (now fully removed). Evaluates every remaining regular-season matchup (weeks 1-15) and forces the modeled favorite to win where the mismatch is large enough.
+            - Force Win runs as its own **Week 0** import stage, since it needs the save's CurrentWeekType to already be RegularSeason -- something that only happens once you've advanced the dynasty past Preseason and Signing Day in-game.
+            - Toolbox exposes involvement level, model profile, and a per-team force/skip toggle for Force Win as configurable settings, available any time regardless of the save's current week. Creates an RLT backup before writing to the save.
+            - Renamed the Realignment page to **Toolbox Outputs**, with sortable, team-logo tables and subtabs for Conference Realignment and Force Win history.
+            - Import now offers three snapshot stages -- Preseason, Signing Day, and Week 0 -- and the Imported Seasons list shows each entry's source file name.
+            - Fixed a `Map maximum size exceeded` crash on Signing Day imports with a large zero-offer-transfer class, caused by a redundant league-wide board scan on every transfer placement.
             - Includes both the portable single EXE and a faster-starting no-install ZIP/folder build.
 
             ## Upgrade note
 
-            Replace your old portable exe with the new one; your existing tracker data remains intact.
-            Existing preseason data can be refreshed by reimporting the already-modified save with Transfer Wave disabled.
+            Replace your old portable exe with the new one; your existing tracker data, settings, and backups remain intact.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

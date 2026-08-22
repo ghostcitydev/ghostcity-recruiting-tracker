@@ -40,7 +40,7 @@ export default function RootLayout({
               <NavLink href="/players">Players</NavLink>
               <NavLink href="/unsigned">Unsigned</NavLink>
               <NavLink href="/pipelines">Pipelines</NavLink>
-              <NavLink href="/realignment">Realignment</NavLink>
+              <NavLink href="/realignment">Toolbox Outputs</NavLink>
               <NavLink href="/toolbox">Toolbox</NavLink>
               <NavLink href="/import">Import</NavLink>
             </nav>

@@ -18,9 +18,8 @@ The portable EXE unpacks itself before the app window appears. A first launch ca
 
 If you prefer a browser window instead of the portable app, download the project folder and install Node.js LTS.
 
-1. Double-click `setup-ghost-city-rlt.bat` once.
-2. After setup, double-click `run-ghost-city-rlt.bat` whenever you want to use the tracker.
-3. Keep the command window open while using `http://localhost:3000`.
+1. Double-click `start.bat`. The first run installs dependencies and sets up the database; every run after that just starts the tracker.
+2. Keep the command window open while using `http://localhost:3000`, which opens automatically.
 
 This is still completely local and supports the same save-file and mod workflow.
 
@@ -31,13 +30,13 @@ This is still completely local and supports the same save-file and mod workflow.
 - **Unsigned:** remaining high-school/JUCO and transfer-portal prospects, including star/source breakdowns and previous teams for transfers.
 - **Pipelines:** team and region pipeline influence, recruiting reach, and preseason pipeline changes.
 - **Charts:** multi-season team trends, national distributions, recruit composition, and sortable/exportable data views.
-- **History:** one Preseason and one Signing Day snapshot per season, with CSV export, season deletion, and full import-history backup/restore packages from Import.
+- **History:** one Preseason, one Signing Day, and (optionally) one Week 0 snapshot per season, with CSV export, season deletion, and full import-history backup/restore packages from Import.
 
 ## Import a save
 
 1. Save your dynasty in-game.
 2. On **Import**, choose the dynasty save from the automatically detected EA saves folder. Use **Change** if your saves are elsewhere.
-3. Select **Preseason** or **Signing Day** and import.
+3. Select **Preseason**, **Signing Day**, or **Week 0** and import.
 4. Open Dashboard, Players, Pipelines, Charts, or Unsigned to explore the snapshot.
 
 Normal imports read the save and create a local tracker snapshot. They do not change the save file.
@@ -55,13 +54,18 @@ Mods are configured in **Toolbox** and run automatically as part of the appropri
 1. **Fang's Recruiting Generator** — optional; select a Fang settings JSON in Toolbox. Fang runs first and creates an RLT backup.
 2. **Dynamic Recruiting Pipelines** — optional; runs after Fang and refreshes pipeline influence data.
 3. **Preseason Transfer Wave** — optional; recommended for Year 2–3 and beyond. It redistributes transfer-portal players using roster need and prestige rules.
-4. **CFB Rebalance** — optional; runs after Transfer Wave and refreshes its backup in `RLT Backups`.
-5. **Ghost City import** — records the final preseason snapshot.
+4. **Ghost City import** — records the final preseason snapshot.
 
 ### Signing Day
 
 1. **PocketScout NSD Assign + Roster Plan** — optional; previews unsigned-player assignments together with the complete projected roster plan. Review the totals before confirming. On confirmation, Ghost City applies the assignments once, applies the selected roster plan, reconciles roster storage, depth charts, jersey numbers, and weight development, then imports the finished save. A full restore point is created first under `backups/pocketscout-backups`.
-2. **Dynamic Conference Realignment** — optional; runs after PocketScout and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review saved results on the **Realignment** page after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
+2. **Dynamic Conference Realignment** — optional; runs after PocketScout and generates conference-movement recommendations from geography, prestige, tenure, conference-size targets, and multi-season history. It never edits the dynasty save. Review saved results on the **Toolbox Outputs** page after import, then apply any moves you accept through CFB 27's **Custom Conferences** menu during the offseason.
+
+### Week 0
+
+Force Win requires the save's current week to already be regular-season Week 0 — something that only happens once you've advanced the game past Preseason yourself. It doesn't fit in the Preseason batch above (which runs while the save is still in the offseason), so it's its own import stage:
+
+1. **Force Win** — optional; evaluates every remaining regular-season matchup (weeks 1–15) and forces the modeled favorite to win where the mismatch is large enough. Configure involvement, model profile, and which teams (if any) to leave to the game engine in Toolbox at any time; the save itself must be at Week 0 when you actually run this import. Creates an RLT backup first. Review saved results on the **Toolbox Outputs** page after import.
 
 ### Important timing rules
 
@@ -93,7 +97,7 @@ Import that dynasty first. Toolbox works with the save tied to the most recently
 
 **Local browser mode will not start**
 
-Run `setup-ghost-city-rlt.bat` again, ensure Node.js LTS is installed, and keep the command window open after launching.
+Run `start.bat` again, ensure Node.js LTS is installed, and keep the command window open after launching.
 
 ## Updating
 
@@ -107,5 +111,5 @@ For the portable app, download the newest exe and replace the old one. Your trac
 - Dynamic Conference Realignment by Slappey47
 - Preseason Transfer Wave by Balla / Aball1495
 - Dynamic Recruiting Pipelines by Balla / Aball1495
-- CFB Rebalance by Dogsh*t
+- Force Win, ported from Ace's CFB Toolkit 0.9.3
 - Ghost City RLT is built with Next.js, Prisma, Chart.js, and Tailwind CSS

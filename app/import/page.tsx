@@ -6,17 +6,24 @@ import { safeJson } from '@/lib/safeFetch';
 
 type SaveFile = { name: string; path: string };
 type UploadedSave = { name: string; url: string };
-type ModLogType = 'nsd' | 'nsd-roster-plan' | 'tw' | 'rebalance' | 'pipeline' | 'fang' | 'realignment';
+type ModLogType = 'nsd' | 'nsd-roster-plan' | 'tw' | 'force-win' | 'pipeline' | 'fang' | 'realignment';
 type CloudWorkflowResult = { importResult: ImportResult; modLogs: { type: ModLogType; data: Record<string, unknown> }[]; downloadPath: string };
 type CloudJob = { state: 'queued' | 'running' | 'complete' | 'failed'; result?: CloudWorkflowResult; error?: string };
-type Season = { id: string; year: number; label: string };
+type Season = { id: string; year: number; label: string; sourceFile?: string | null };
+
+function fileNameOf(path?: string | null) {
+  if (!path) return '';
+  return path.split(/[\\/]/).pop() ?? path;
+}
+type SnapshotType = 'preseason' | 'signing_day' | 'week_zero';
 type ImportResult = {
   seasonYear: number;
-  snapshot: 'preseason' | 'signing_day';
+  snapshot: SnapshotType;
   teamsImported: number;
   teamsSkipped: string[];
   unsignedWritten?: number;
 };
+const SNAPSHOT_LABELS: Record<SnapshotType, string> = { signing_day: 'Signing Day', preseason: 'Preseason', week_zero: 'Week 0' };
 type ImportPackageResult = { ok: true; seasons: number; teams: number };
 
 // ── Mod settings (read from localStorage) ─────────────────
@@ -26,7 +33,7 @@ type NsdSettings = { enabled: boolean; signingLimit: number; finalRosterLimit: n
 type NsdPlanPreview = { unsigned: Record<string, unknown>; roster: Record<string, unknown>; proposalIds: string[]; savePath: string };
 type TwCheckOverride = { min: number; max: number };
 type TwSettings = { enabled: boolean; thresholdOverrides?: Record<string, TwCheckOverride>; severeThresholdOverrides?: Record<string, number>; enableTier2?: boolean; prestigeGapCap?: number; allowTopTwoException?: boolean; zeroNil?: boolean };
-type RebalanceSettings = { enabled: boolean };
+type ForceWinSettings = { enabled: boolean; involvement: string; modelProfile: string; forceAllTeams: boolean; skippedTeams: string[] };
 type PipelineSettings = { enabled: boolean; [key: string]: unknown };
 type FangSettings = { enabled: boolean; fileName?: string; config?: Record<string, unknown> | null };
 type RealignmentSettings = { enabled: boolean; [key: string]: unknown };
@@ -41,9 +48,17 @@ function readTw(): TwSettings {
   try { return JSON.parse(localStorage.getItem('gc_mod_tw') ?? '{}'); }
   catch { return { enabled: false }; }
 }
-function readRebalance(): RebalanceSettings {
-  try { return { enabled: Boolean(JSON.parse(localStorage.getItem('gc_mod_rb') ?? 'false')) }; }
-  catch { return { enabled: false }; }
+function readForceWin(): ForceWinSettings {
+  try {
+    const s = JSON.parse(localStorage.getItem('gc_mod_force_win') ?? '{}');
+    return {
+      enabled: Boolean(s.enabled),
+      involvement: typeof s.involvement === 'string' ? s.involvement : 'medium',
+      modelProfile: typeof s.modelProfile === 'string' ? s.modelProfile : 'balanced',
+      forceAllTeams: s.forceAllTeams !== false,
+      skippedTeams: Array.isArray(s.skippedTeams) ? s.skippedTeams : [],
+    };
+  } catch { return { enabled: false, involvement: 'medium', modelProfile: 'balanced', forceAllTeams: true, skippedTeams: [] }; }
 }
 function readPipeline(): PipelineSettings {
   try { return JSON.parse(localStorage.getItem('gc_mod_pipeline') ?? '{}'); }
@@ -68,7 +83,7 @@ export default function ImportPage() {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const importPackageInputRef = useRef<HTMLInputElement>(null);
   const [loadError, setLoadError] = useState('');
-  const [snapshot, setSnapshot] = useState<'signing_day' | 'preseason'>('signing_day');
+  const [snapshot, setSnapshot] = useState<SnapshotType>('signing_day');
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -83,7 +98,7 @@ export default function ImportPage() {
   // Mod state
   const [nsd, setNsd] = useState<NsdSettings>({ enabled: false, signingLimit: 35, finalRosterLimit: 95, classTarget: 25, clearRecruitingDealbreakers: false, runRosterPlan: true, includeUserControlledTeams: true, createRosterPlanCsv: false });
   const [tw, setTw] = useState<TwSettings>({ enabled: false });
-  const [rebalance, setRebalance] = useState<RebalanceSettings>({ enabled: false });
+  const [forceWin, setForceWin] = useState<ForceWinSettings>({ enabled: false, involvement: 'medium', modelProfile: 'balanced', forceAllTeams: true, skippedTeams: [] });
   const [pipeline, setPipeline] = useState<PipelineSettings>({ enabled: false });
   const [fang, setFang] = useState<FangSettings>({ enabled: false });
   const [realignment, setRealignment] = useState<RealignmentSettings>({ enabled: false });
@@ -127,7 +142,7 @@ export default function ImportPage() {
     loadSeasons();
     setNsd(readNsd());
     setTw(readTw());
-    setRebalance(readRebalance());
+    setForceWin(readForceWin());
     setPipeline(readPipeline());
     setFang(readFang());
     setRealignment(readRealignment());
@@ -198,7 +213,7 @@ export default function ImportPage() {
     }
   }
 
-  async function runImport(realignmentResult?: Record<string, unknown>) {
+  async function runImport(realignmentResult?: Record<string, unknown>, forceWinResult?: Record<string, unknown>) {
     if (cloudMode) {
       const response = await safeJson<CloudWorkflowResult | { jobId: string }>('/api/cloud/process', {
         method: 'POST',
@@ -206,7 +221,7 @@ export default function ImportPage() {
         body: JSON.stringify({
           blobUrl: uploadedSave?.url,
           snapshot,
-          mods: { fang, tw, rebalance, pipeline, nsd, realignment },
+          mods: { fang, tw, forceWin, pipeline, nsd, realignment },
         }),
       });
       if (!response.ok || !response.data) throw new Error(response.error || 'Cloud processing failed');
@@ -228,7 +243,7 @@ export default function ImportPage() {
     const response = await safeJson<ImportResult>('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot, realignment: realignmentResult }),
+      body: JSON.stringify(cloudMode ? { blobUrl: uploadedSave?.url, snapshot } : { path: selectedPath, snapshot, realignment: realignmentResult, forceWin: forceWinResult }),
     });
     if (!response.ok || !response.data) throw new Error(response.error || 'Import failed');
     return response.data;
@@ -240,13 +255,14 @@ export default function ImportPage() {
 
     const nsdActive = nsd.enabled && snapshot === 'signing_day';
     const twActive  = tw.enabled  && snapshot === 'preseason';
-    const rebalanceActive = rebalance.enabled && snapshot === 'preseason';
+    const forceWinActive = forceWin.enabled && snapshot === 'week_zero';
     const pipelineActive = pipeline.enabled && snapshot === 'preseason';
     const fangActive = fang.enabled && snapshot === 'preseason';
     const realignmentActive = realignment.enabled && snapshot === 'signing_day';
 
     try {
       let realignmentResult: Record<string, unknown> | undefined;
+      let forceWinResult: Record<string, unknown> | undefined;
       if (cloudMode) {
         setFlow('running_cloud');
         const importResult = await runImport();
@@ -254,7 +270,10 @@ export default function ImportPage() {
         setFlow('done');
         return;
       }
-      // Preseason order: Fang, Pipelines, Transfer Wave, Rebalance, then import.
+      // Preseason order: Fang, Pipelines, Transfer Wave, then import.
+      // Force Win is a separate Week 0 import (see below) -- it needs the
+      // save's CurrentWeekType to be RegularSeason, which Preseason saves
+      // (still OffSeason) aren't yet, so it can't run in this same batch.
       if (fangActive) {
         if (!fang.config) throw new Error("Fang's Recruiting Generator is enabled, but no settings JSON is loaded in Toolbox.");
         setModStatus("Running Fang's Recruiting Generator…");
@@ -299,13 +318,30 @@ export default function ImportPage() {
       }
 
 
-      if (rebalanceActive) {
-        setModStatus('Running CFB Rebalance…');
+      // Week 0 import: Force Win is the only stage that runs here, in the
+      // slot the old CFB Rebalance stage occupied under Preseason -- it just
+      // happens at a later point in the calendar (regular season Week 0
+      // instead of the OffSeason weeks Preseason imports run during).
+      if (forceWinActive) {
+        setModStatus('Running Force Win…');
         setFlow('running_mod');
-        const rebalanceRes = await fetch('/api/mods/rebalance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savePath: selectedPath }) });
-        const rebalanceData = await rebalanceRes.json();
-        if (!rebalanceRes.ok) throw new Error(rebalanceData.error ?? 'CFB Rebalance failed');
-        setModLogs((logs) => [...logs, { type: 'rebalance', data: rebalanceData.result ?? {} }]);
+        const forceWinRes = await fetch('/api/mods/force-win', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            savePath: selectedPath,
+            settings: {
+              involvement: forceWin.involvement,
+              modelProfile: forceWin.modelProfile,
+              forceAllTeams: forceWin.forceAllTeams,
+              skippedTeams: forceWin.skippedTeams,
+            },
+          }),
+        });
+        const forceWinData = await forceWinRes.json();
+        if (!forceWinRes.ok) throw new Error(forceWinData.error ?? 'Force Win failed');
+        forceWinResult = forceWinData.result ?? {};
+        setModLogs((logs) => [...logs, { type: 'force-win', data: forceWinResult ?? {} }]);
       }
       // NSD: preview the complete plan first, then apply it only after confirmation.
       if (nsdActive) {
@@ -386,7 +422,7 @@ export default function ImportPage() {
 
       // Import the (now-modified) save
       setFlow('running_import');
-      const importResult = await runImport(realignmentResult);
+      const importResult = await runImport(realignmentResult, forceWinResult);
       setResult(importResult);
       setFlow('done');
     } catch (err) {
@@ -405,11 +441,11 @@ export default function ImportPage() {
   // Which mods are active for the selected snapshot — only after localStorage loads
   const nsdActive = modsMounted && nsd.enabled && snapshot === 'signing_day';
   const twActive  = modsMounted && tw.enabled  && snapshot === 'preseason';
-  const rebalanceActive = modsMounted && rebalance.enabled && snapshot === 'preseason';
+  const forceWinActive = modsMounted && forceWin.enabled && snapshot === 'week_zero';
   const pipelineActive = modsMounted && pipeline.enabled && snapshot === 'preseason';
   const fangActive = modsMounted && fang.enabled && snapshot === 'preseason';
   const realignmentActive = modsMounted && realignment.enabled && snapshot === 'signing_day';
-  const anyModActive = nsdActive || twActive || rebalanceActive || pipelineActive || fangActive || realignmentActive;
+  const anyModActive = nsdActive || twActive || forceWinActive || pipelineActive || fangActive || realignmentActive;
 
   const isIdle = flow === 'idle';
 
@@ -417,9 +453,10 @@ export default function ImportPage() {
     <div className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-xl font-bold" style={{ color: 'var(--ocean-100)' }}>Import Dynasty Save</h1>
       <p className="mt-2 text-sm" style={{ color: 'var(--ocean-400)' }}>
-        Select a dynasty save file below. Import twice per season: once at{' '}
-        <strong style={{ color: 'var(--ocean-200)' }}>Preseason</strong> and once after{' '}
-        <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong>.
+        Select a dynasty save file below. Import up to three times per season: once after{' '}
+        <strong style={{ color: 'var(--ocean-200)' }}>National Signing Day</strong>, once at{' '}
+        <strong style={{ color: 'var(--ocean-200)' }}>Preseason</strong>, and once the save has advanced to{' '}
+        <strong style={{ color: 'var(--ocean-200)' }}>Week 0</strong> to run Force Win.
       </p>
 
       {/* Active mods banner */}
@@ -433,7 +470,7 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Fang's Recruiting Generator</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs first, before Pipelines, Transfer Wave, Rebalance, and import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs first, before Pipelines and Transfer Wave, then import.</span>
             </p>
           )}
           {nsdActive && (
@@ -454,21 +491,21 @@ export default function ImportPage() {
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Preseason Transfer Wave</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Pipelines and before Rebalance and import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Pipelines and before import.</span>
             </p>
           )}
-          {rebalanceActive && (
+          {forceWinActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
-              <strong>CFB Rebalance</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Transfer Wave and immediately before import. A backup is created first.</span>
+              <strong>Force Win</strong>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs immediately before this Week 0 import. A backup is created first.</span>
             </p>
           )}
           {pipelineActive && (
             <p className="text-xs" style={{ color: 'var(--ocean-200)' }}>
               <span className="inline-block w-2 h-2 rounded-sm mr-2 align-middle" style={{ background: 'var(--ocean-400)' }} />
               <strong>Dynamic Recruiting Pipelines</strong>
-              <span style={{ color: 'var(--ocean-400)' }}> — runs after Fang and before Transfer Wave, Rebalance, and import.</span>
+              <span style={{ color: 'var(--ocean-400)' }}> — runs after Fang and before Transfer Wave and import.</span>
             </p>
           )}
         </div>
@@ -555,7 +592,7 @@ export default function ImportPage() {
             Snapshot Type
           </label>
           <div className="flex gap-3">
-            {(['signing_day', 'preseason'] as const).map((s) => (
+            {(['signing_day', 'preseason', 'week_zero'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -568,14 +605,16 @@ export default function ImportPage() {
                   color: snapshot === s ? '#fff' : 'var(--ocean-400)',
                 }}
               >
-                {s === 'signing_day' ? 'Signing Day' : 'Preseason'}
+                {SNAPSHOT_LABELS[s]}
               </button>
             ))}
           </div>
           <p className="mt-1.5 text-xs" style={{ color: 'var(--ocean-500)' }}>
             {snapshot === 'signing_day'
               ? 'Import after National Signing Day to capture final class commitments.'
-              : 'Import at season start to capture preseason roster and pipeline state.'}
+              : snapshot === 'preseason'
+              ? 'Import at season start to capture preseason roster and pipeline state.'
+              : 'Import once the season has advanced to Week 0 (RegularSeason) to run Force Win.'}
           </p>
         </div>
 
@@ -590,23 +629,17 @@ export default function ImportPage() {
             {nsdActive && nsd.runRosterPlan
               ? 'Preview NSD Assignments + Roster Plan'
               : fangActive
-              ? (pipelineActive || twActive || rebalanceActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
+              ? (pipelineActive || twActive ? 'Run Fang + Mods + Import' : 'Run Fang + Import')
               : nsdActive && realignmentActive
               ? 'Run NSD + Realignment + Import'
               : realignmentActive
               ? 'Run Realignment + Import'
-              : pipelineActive && twActive && rebalanceActive
-              ? 'Run Pipelines + Transfer Wave + Rebalance + Import'
-              : pipelineActive && rebalanceActive
-              ? 'Run Pipelines + Rebalance + Import'
+              : forceWinActive
+              ? 'Run Force Win + Import'
+              : pipelineActive && twActive
+              ? 'Run Pipelines + Transfer Wave + Import'
               : pipelineActive
               ? 'Run Pipeline Tool + Import'
-              : rebalanceActive && twActive
-              ? 'Run Transfer Wave + Rebalance + Import'
-              : rebalanceActive
-              ? 'Run CFB Rebalance + Import'
-              : nsdActive && twActive
-              ? 'Run Mods + Import'
               : nsdActive
               ? 'Run NSD Assign + Import'
               : twActive
@@ -692,7 +725,7 @@ export default function ImportPage() {
           <div className="space-y-3">
             {/* Import summary */}
             <div className="rounded-lg border px-4 py-3 text-sm space-y-1.5" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)', color: 'var(--ocean-200)' }}>
-              <p><span style={{ color: '#4ade80' }}>✓</span> Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {result.snapshot === 'preseason' ? 'Preseason' : 'Signing Day'}</strong> · {result.teamsImported} teams updated in Ghost City.</p>
+              <p><span style={{ color: '#4ade80' }}>✓</span> Imported <strong style={{ color: 'var(--ocean-100)' }}>Season {result.seasonYear} — {SNAPSHOT_LABELS[result.snapshot]}</strong> · {result.teamsImported} teams updated in Ghost City.</p>
               {result.snapshot === 'signing_day' && (
                 <p className="text-xs" style={{ color: Number(result.unsignedWritten ?? 0) > 0 ? 'var(--ocean-400)' : 'var(--ocean-600)' }}>
                   {Number(result.unsignedWritten ?? 0) > 0
@@ -780,7 +813,12 @@ export default function ImportPage() {
           <div className="mt-3 flex flex-col gap-2">
             {seasons.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border px-4 py-2.5" style={{ borderColor: 'var(--ocean-800)', background: 'var(--ocean-900)' }}>
-                <span className="text-sm font-medium" style={{ color: 'var(--ocean-200)' }}>{s.label}</span>
+                <div>
+                  <span className="text-sm font-medium" style={{ color: 'var(--ocean-200)' }}>{s.label}</span>
+                  {s.sourceFile && (
+                    <p className="mt-0.5 text-[11px]" style={{ color: 'var(--ocean-600)' }} title={s.sourceFile}>{fileNameOf(s.sourceFile)}</p>
+                  )}
+                </div>
                 {confirmDeleteId === s.id ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs" style={{ color: 'var(--ocean-400)' }}>Delete all data?</span>
@@ -863,15 +901,35 @@ function ModLogPanel({ log }: { log: { type: ModLogType; data: Record<string, un
     );
   }
 
-  if (log.type === 'rebalance') {
-    const groups = Array.isArray(d.groups) ? d.groups as { label: string; moves: number; unresolved: string[] }[] : [];
+  if (log.type === 'force-win') {
+    const forcedGames = Array.isArray(d.forcedGames) ? d.forcedGames as { week: number; homeTeam: string; awayTeam: string; forcedWinner: string; reason?: string }[] : [];
+    const summary = d.summary && typeof d.summary === 'object' ? d.summary as Record<string, unknown> : {};
     return (
       <div className="rounded-lg border px-4 py-3 space-y-3 text-xs" style={{ borderColor: 'var(--ocean-700)', background: 'var(--ocean-900)' }}>
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>CFB Rebalance — Mod Log</p>
-        <p style={{ color: 'var(--ocean-200)' }}>Changed <strong>{Number(d.totalMoves ?? 0)}</strong> position slots across <strong>{Number(d.teamsChanged ?? 0)}</strong> of {Number(d.teamsProcessed ?? 0)} teams.</p>
-        <div className="space-y-1" style={{ color: 'var(--ocean-400)' }}>
-          {groups.map((group) => <p key={group.label}>{group.label}: {group.moves} change{group.moves === 1 ? '' : 's'}{group.unresolved?.length ? ` · still short: ${group.unresolved.join(', ')}` : ''}</p>)}
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ocean-400)' }}>Force Win — Mod Log</p>
+        <p style={{ color: 'var(--ocean-200)' }}>
+          Forced <strong>{forcedGames.length}</strong> game{forcedGames.length === 1 ? '' : 's'} for the remainder of Season {String(d.season ?? '—')}
+          {' '}· involvement <strong>{String(d.involvement ?? '—')}</strong> · model <strong>{String(d.modelProfile ?? '—')}</strong>
+        </p>
+        {(Number(summary.gamesFound ?? 0) > 0 || Number(summary.gamesEligible ?? 0) > 0) && (
+          <p style={{ color: 'var(--ocean-400)' }}>{Number(summary.gamesFound ?? 0)} games in scope, {Number(summary.gamesEligible ?? 0)} eligible, {Number(summary.gamesSkipped ?? 0)} skipped.</p>
+        )}
+        {d.forceAllTeams === false && Array.isArray(d.skippedTeams) && (d.skippedTeams as string[]).length > 0 && (
+          <p style={{ color: 'var(--ocean-500)' }}>Left to the game engine: {(d.skippedTeams as string[]).join(', ')}</p>
+        )}
+        {forcedGames.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-xs" style={{ color: 'var(--ocean-500)' }}>Show forced games ({forcedGames.length})</summary>
+            <div className="mt-2 space-y-0.5" style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {forcedGames.map((game, i) => (
+                <p key={i} style={{ color: 'var(--ocean-300)' }}>
+                  Wk {game.week}: {game.awayTeam} @ {game.homeTeam} → <strong style={{ color: 'var(--ocean-100)' }}>{game.forcedWinner}</strong>
+                  {game.reason ? <span style={{ color: 'var(--ocean-500)' }}> ({game.reason})</span> : null}
+                </p>
+              ))}
+            </div>
+          </details>
+        )}
         <p style={{ color: 'var(--ocean-600)' }}>Backup created: {String(d.backupPath ?? 'not reported')}</p>
       </div>
     );

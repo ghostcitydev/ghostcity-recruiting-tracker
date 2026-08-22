@@ -427,7 +427,7 @@ async function extractSettings(franchise: any) {
   };
 }
 
-export type SnapshotType = 'preseason' | 'signing_day';
+export type SnapshotType = 'preseason' | 'signing_day' | 'week_zero';
 
 export type ImportResult = {
   seasonYear: number;
@@ -635,7 +635,7 @@ export async function importSaveFile(savePath: string, snapshot: SnapshotType = 
   } catch { /* player table absent — skip */ }
   const settings = await extractSettings(franchise);
 
-  const snapshotLabel = snapshot === 'preseason' ? 'Preseason' : 'Signing Day';
+  const snapshotLabel = snapshot === 'preseason' ? 'Preseason' : snapshot === 'week_zero' ? 'Week 0' : 'Signing Day';
   const season = await prisma.season.upsert({
     where: { year_snapshot: { year, snapshot } },
     update: { sourceFile: savePath },
